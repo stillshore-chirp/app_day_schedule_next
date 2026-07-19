@@ -30,14 +30,18 @@ function item(id: string, start: string, end: string): Schedule {
   };
 }
 
+function localIso(day: number, hour: number, minute = 0): string {
+  return new Date(2026, 6, day, hour, minute).toISOString();
+}
+
 describe("layoutOverview", () => {
   it("groups a transitive overlap component only at five minutes or more", () => {
-    const date = new Date("2026-07-20T00:00:00+09:00");
+    const date = new Date(2026, 6, 20);
     const result = layoutOverview(
       [
-        item("a", "2026-07-20T09:00:00+09:00", "2026-07-20T10:00:00+09:00"),
-        item("b", "2026-07-20T09:55:00+09:00", "2026-07-20T10:30:00+09:00"),
-        item("c", "2026-07-20T10:25:00+09:00", "2026-07-20T11:00:00+09:00"),
+        item("a", localIso(20, 9), localIso(20, 10)),
+        item("b", localIso(20, 9, 55), localIso(20, 10, 30)),
+        item("c", localIso(20, 10, 25), localIso(20, 11)),
       ],
       date,
     );
@@ -49,11 +53,11 @@ describe("layoutOverview", () => {
   });
 
   it("does not stack a four-minute overlap", () => {
-    const date = new Date("2026-07-20T00:00:00+09:00");
+    const date = new Date(2026, 6, 20);
     const result = layoutOverview(
       [
-        item("a", "2026-07-20T09:00:00+09:00", "2026-07-20T10:00:00+09:00"),
-        item("b", "2026-07-20T09:56:00+09:00", "2026-07-20T10:30:00+09:00"),
+        item("a", localIso(20, 9), localIso(20, 10)),
+        item("b", localIso(20, 9, 56), localIso(20, 10, 30)),
       ],
       date,
     );
