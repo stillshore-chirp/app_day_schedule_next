@@ -108,6 +108,7 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 | P0 | Long operation cancel | sync / backup / export はasyncだがuser cancel tokenがない | NFR-PF-006 | cancellable background operation contractが必要。Open release gate |
 | P0 | Visual regression | 5主要surfaceのnative screenshotはあるがpixel baseline / tolerance comparisonがない | NFR-TS-006 | 安定fixtureと許容差付きbaseline checkが必要。Open release gate |
 | P0 | Localization structure | navigation等のcatalogはあるがUI文言がTSXへ散在 | FR-SH-009 | ja catalogへ全表示文言を移しkey auditをCI化する必要。Open release gate |
+| P1 | CI runtime | GitHub Actions v4がNode.js 20廃止警告を生成 | latest head CI annotation | 公式current majorのcheckout / setup-node / upload-artifact v7へ更新。Fixed; latest head CIで再検証 |
 
 ## 9. Evidence
 
@@ -132,8 +133,8 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 
 - [x] Issue #4 exists.
 - [x] `codex/complete-v1-spec` branch.
-- [ ] Changes committed and pushed.
-- [ ] Non-draft PR exists.
+- [x] Changes committed and pushed.
+- [x] Non-draft PR #5 exists.
 - [ ] Latest head CI successful on macOS arm64 / x64 and Windows x64.
 - [ ] Codex review and unresolved review threads checked after CI.
 - [ ] Clean install / permission / keyring / OAuth / sleep manual matrix recorded.
@@ -144,7 +145,7 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 |---|---|---|---|
 | Windows Credential Manager / notification / OAuth real flow | Windows実機なし | OS adapter / permission差 | Windows release smoke |
 | macOS x64 Keychain / notification / OAuth | x64実機なし | Rosetta / x64 adapter差 | x64 release smoke |
-| clean installer upgrade / uninstall | unsigned artifact未生成、CI前 | bundle / data retention差 | CI artifactでmanual smoke |
+| clean installer upgrade / uninstall | unsigned CI artifactは生成、clean install未実施 | bundle / data retention差 | CI artifactでmanual smoke |
 | sleep / resume / clock jump actual OS | deterministic testsのみ | lifecycle delivery差 | 10分以内／超の実機sleep test |
 | 200% text / high DPI / multi-monitor | local automated suite対象外 | clipping / window restore | platform visual matrix |
 | signed / notarized distribution | personal unsigned v0.1 scope | OS reputation warning | signing Issue before third-party release |
