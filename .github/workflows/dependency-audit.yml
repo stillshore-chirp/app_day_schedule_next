@@ -43,10 +43,12 @@ jobs:
           corepack prepare pnpm@10.13.1 --activate
       - name: Audit JavaScript dependencies
         run: pnpm audit --audit-level moderate
+      - name: Install Rust advisory scanner
+        run: cargo install cargo-audit --version 0.22.2 --locked
       - name: Audit Rust advisories
-        uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+        # sqlx 0.8 keeps its disabled MySQL/RSA optional package in Cargo.lock.
+        # cargo-deny below audits the actual macOS/Windows target graphs without this exception.
+        run: cargo audit --ignore RUSTSEC-2023-0071
       - name: Verify Rust licenses and sources
         uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
