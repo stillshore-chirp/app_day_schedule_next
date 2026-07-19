@@ -1,0 +1,858 @@
+use std::path::PathBuf;
+
+use chrono::{DateTime, NaiveDate, Utc};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_opener::OpenerExt;
+use uuid::Uuid;
+
+use crate::{
+    application::{AppService, Bootstrap},
+    domain::{
+        DayTemplate, DayTemplateDraft, FocusCommand, FocusState, FreeAlarm, FreeAlarmDraft,
+        LocalTimeResolution, Priority, QuickBlock, QuickBlockDraft, RecurrenceEditScope,
+        RecurrencePreview, Schedule, ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery,
+        ScheduleStatus, Settings, SyncStatus, SyncSummary, TemplateApplyMode, TemplatePreview,
+        UserSafeError,
+    },
+    infrastructure::{
+        BackupRecord, ChangeResult, ConflictChoice, DeliveryResult, DiagnosticsExportResult,
+        DiagnosticsSnapshot, DisconnectMode, ExportResult, FocusHistoryReport, GoogleCalendar,
+        GoogleConnection, ImportMode, ImportPreview, ImportResult, LegacyImportPreview,
+        LegacyImportResult, NotificationDelivery, NotificationLedgerItem, OAuthConfigResult,
+        RestoreStageResult, SyncConflictItem, SyncQueueItem,
+    },
+};
+
+type CommandResult<T> = Result<T, UserSafeError>;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleQueryDto {
+    start_utc: DateTime<Utc>,
+    end_utc: DateTime<Utc>,
+    search: Option<String>,
+    #[serde(default)]
+    include_deleted: bool,
+    limit: Option<u32>,
+    offset: Option<u32>,
+    status: Option<ScheduleStatus>,
+    project: Option<String>,
+    category: Option<String>,
+    tag: Option<String>,
+    priority: Option<Priority>,
+    sync_status: Option<SyncStatus>,
+    sync_target: Option<String>,
+    completion: Option<String>,
+    sort_by: Option<String>,
+    #[serde(default)]
+    sort_descending: bool,
+}
+
+impl From<ScheduleQueryDto> for ScheduleQuery {
+    fn from(value: ScheduleQueryDto) -> Self {
+        Self {
+            start_utc: value.start_utc,
+            end_utc: value.end_utc,
+            search: value.search,
+            include_deleted: value.include_deleted,
+            limit: value.limit.unwrap_or(500),
+            offset: value.offset.unwrap_or(0),
+            status: value.status,
+            project: value.project,
+            category: value.category,
+            tag: value.tag,
+            priority: value.priority,
+            sync_status: value.sync_status,
+            sync_target: value.sync_target,
+            completion: value.completion.unwrap_or_else(|| "all".into()),
+            sort_by: value.sort_by.unwrap_or_else(|| "start".into()),
+            sort_descending: value.sort_descending,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SchedulePage {
+    items: Vec<Schedule>,
+    total: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduleUpdateDto {
+    id: Uuid,
+    expected_version: u64,
+    draft: ScheduleDraft,
+    #[serde(default)]
+    recurrence_scope: RecurrenceEditScope,
+    occurrence_start_utc: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BulkClassifyRequest {
+    ids: Vec<Uuid>,
+    patch: ScheduleClassificationPatch,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteRequest {
+    id: Uuid,
+    expected_version: u64,
+    #[serde(default)]
+    recurrence_scope: RecurrenceEditScope,
+    occurrence_start_utc: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReorderRequest {
+    ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusRequest {
+    command: FocusCommand,
+    linked_schedule_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusScheduleSummary {
+    schedule_item_id: Uuid,
+    work_seconds: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionedSave<T> {
+    id: Option<Uuid>,
+    expected_version: Option<u64>,
+    draft: T,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplateTargetRequest {
+    template_id: Uuid,
+    date: NaiveDate,
+    timezone_id: String,
+    mode: Option<TemplateApplyMode>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowPreferenceRequest {
+    label: String,
+    always_on_top: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportCommitRequest {
+    path: String,
+    fingerprint: String,
+    mode: ImportMode,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacyImportCommitRequest {
+    path: String,
+    fingerprint: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiagnosticsExportRequest {
+    path: String,
+    webview: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationResultRequest {
+    delivery_key: String,
+    result: DeliveryResult,
+    error_category: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRetryRequest {
+    id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictResolveRequest {
+    id: Uuid,
+    choices: Vec<ConflictChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoogleCalendarUpdateRequest {
+    id: Uuid,
+    selected: bool,
+    default_write_target: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OAuthLaunchResult {
+    opened_in_system_browser: bool,
+    expires_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalTimeRequest {
+    local: String,
+    timezone_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecurrencePreviewRequest {
+    start_utc: DateTime<Utc>,
+    end_utc: DateTime<Utc>,
+    timezone_id: String,
+    recurrence_rule: String,
+}
+
+#[tauri::command]
+pub fn time_local_resolve(request: LocalTimeRequest) -> CommandResult<LocalTimeResolution> {
+    crate::domain::resolve_local_time(&request.local, &request.timezone_id).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn recurrence_preview_get(
+    request: RecurrencePreviewRequest,
+) -> CommandResult<RecurrencePreview> {
+    let mut draft = ScheduleDraft {
+        title: "繰り返しプレビュー".into(),
+        description: String::new(),
+        location: String::new(),
+        start_utc: request.start_utc,
+        end_utc: request.end_utc,
+        timezone_id: request.timezone_id,
+        all_day: false,
+        all_day_start_date: None,
+        all_day_end_date_exclusive: None,
+        status: ScheduleStatus::Scheduled,
+        project: String::new(),
+        category: String::new(),
+        tags: Vec::new(),
+        color: "#6F96F4".into(),
+        priority: Priority::Normal,
+        recurrence_rule: Some(request.recurrence_rule),
+        recurrence_exdates: Vec::new(),
+        start_notification_minutes: None,
+        end_notification_minutes: None,
+    };
+    draft.validate().map_err(UserSafeError::from)?;
+    crate::domain::recurrence_preview(
+        &Schedule {
+            id: Uuid::nil(),
+            draft,
+            sync_status: SyncStatus::LocalOnly,
+            version: 0,
+            deleted_at: None,
+        },
+        10,
+    )
+    .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn bootstrap_get(service: State<'_, AppService>) -> CommandResult<Bootstrap> {
+    service.bootstrap().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn schedule_list(
+    service: State<'_, AppService>,
+    query: ScheduleQueryDto,
+) -> CommandResult<SchedulePage> {
+    let (items, total) = service
+        .list_schedules(query.into())
+        .await
+        .map_err(UserSafeError::from)?;
+    Ok(SchedulePage { items, total })
+}
+
+#[tauri::command]
+pub async fn schedule_create(
+    service: State<'_, AppService>,
+    draft: ScheduleDraft,
+) -> CommandResult<Schedule> {
+    service.create_schedule(draft).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn schedule_update(
+    service: State<'_, AppService>,
+    update: ScheduleUpdateDto,
+) -> CommandResult<Schedule> {
+    service
+        .update_schedule(
+            update.id,
+            update.expected_version,
+            update.draft,
+            update.recurrence_scope,
+            update.occurrence_start_utc,
+        )
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn schedule_bulk_classify(
+    service: State<'_, AppService>,
+    request: BulkClassifyRequest,
+) -> CommandResult<ChangeResult> {
+    service
+        .bulk_classify_schedules(request.ids, request.patch)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn schedule_delete(
+    service: State<'_, AppService>,
+    request: DeleteRequest,
+) -> CommandResult<ChangeResult> {
+    service
+        .delete_schedule(
+            request.id,
+            request.expected_version,
+            request.recurrence_scope,
+            request.occurrence_start_utc,
+        )
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn history_undo(service: State<'_, AppService>) -> CommandResult<ChangeResult> {
+    service.undo().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn history_redo(service: State<'_, AppService>) -> CommandResult<ChangeResult> {
+    service.redo().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn settings_update(
+    service: State<'_, AppService>,
+    settings: Settings,
+) -> CommandResult<Settings> {
+    service.save_settings(settings).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn focus_command(
+    service: State<'_, AppService>,
+    request: FocusRequest,
+) -> CommandResult<FocusState> {
+    service
+        .focus_command(request.command, request.linked_schedule_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn focus_state_get(service: State<'_, AppService>) -> CommandResult<FocusState> {
+    service.current_focus().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn focus_history_today(
+    service: State<'_, AppService>,
+) -> CommandResult<FocusHistoryReport> {
+    service.focus_history_today().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn focus_schedule_summary(
+    service: State<'_, AppService>,
+    schedule_item_id: Uuid,
+) -> CommandResult<FocusScheduleSummary> {
+    let work_seconds = service
+        .focus_work_seconds(schedule_item_id)
+        .await
+        .map_err(UserSafeError::from)?;
+    Ok(FocusScheduleSummary {
+        schedule_item_id,
+        work_seconds,
+    })
+}
+
+#[tauri::command]
+pub async fn sync_run(service: State<'_, AppService>) -> CommandResult<SyncSummary> {
+    service.run_sync().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn sync_queue_list(service: State<'_, AppService>) -> CommandResult<Vec<SyncQueueItem>> {
+    service.sync_queue().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn sync_queue_retry(
+    service: State<'_, AppService>,
+    request: SyncRetryRequest,
+) -> CommandResult<u64> {
+    service
+        .retry_sync_queue(request.id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn sync_conflict_list(
+    service: State<'_, AppService>,
+) -> CommandResult<Vec<SyncConflictItem>> {
+    service.sync_conflicts().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn sync_conflict_resolve(
+    service: State<'_, AppService>,
+    request: ConflictResolveRequest,
+) -> CommandResult<Schedule> {
+    service
+        .resolve_sync_conflict(request.id, request.choices)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn diagnostics_snapshot(
+    service: State<'_, AppService>,
+) -> CommandResult<DiagnosticsSnapshot> {
+    service.diagnostics().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn diagnostics_export(
+    service: State<'_, AppService>,
+    request: DiagnosticsExportRequest,
+) -> CommandResult<DiagnosticsExportResult> {
+    let path = checked_path(request.path)?;
+    service
+        .export_diagnostics(&path, &request.webview)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn data_export(
+    service: State<'_, AppService>,
+    path: String,
+) -> CommandResult<ExportResult> {
+    let path = checked_path(path)?;
+    service.export_data(&path).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn data_delete_all(
+    service: State<'_, AppService>,
+    confirmation: String,
+) -> CommandResult<u64> {
+    service
+        .delete_all_user_data(&confirmation)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn data_import_preview(
+    service: State<'_, AppService>,
+    path: String,
+) -> CommandResult<ImportPreview> {
+    let path = checked_path(path)?;
+    service.preview_import(&path).map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn data_import_commit(
+    service: State<'_, AppService>,
+    request: ImportCommitRequest,
+) -> CommandResult<ImportResult> {
+    let path = checked_path(request.path)?;
+    service
+        .import_data(&path, &request.fingerprint, request.mode)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn legacy_import_preview(
+    service: State<'_, AppService>,
+    path: String,
+) -> CommandResult<LegacyImportPreview> {
+    let path = checked_path(path)?;
+    service
+        .preview_legacy_import(&path)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn legacy_import_commit(
+    service: State<'_, AppService>,
+    request: LegacyImportCommitRequest,
+) -> CommandResult<LegacyImportResult> {
+    let path = checked_path(request.path)?;
+    service
+        .import_legacy(&path, &request.fingerprint)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn backup_create(service: State<'_, AppService>) -> CommandResult<BackupRecord> {
+    service.create_backup().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn backup_list(service: State<'_, AppService>) -> CommandResult<Vec<BackupRecord>> {
+    service.backups().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn backup_restore_stage(
+    service: State<'_, AppService>,
+    backup_id: Uuid,
+) -> CommandResult<RestoreStageResult> {
+    service.stage_restore(backup_id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn notification_poll(
+    service: State<'_, AppService>,
+) -> CommandResult<Vec<NotificationDelivery>> {
+    service.poll_notifications().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn notification_history_list(
+    service: State<'_, AppService>,
+) -> CommandResult<Vec<NotificationLedgerItem>> {
+    service.notification_ledger().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn notification_result_record(
+    service: State<'_, AppService>,
+    request: NotificationResultRequest,
+) -> CommandResult<()> {
+    service
+        .record_notification_result(
+            &request.delivery_key,
+            request.result,
+            request.error_category.as_deref(),
+        )
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_oauth_config_import(
+    service: State<'_, AppService>,
+    path: String,
+) -> CommandResult<OAuthConfigResult> {
+    let path = checked_path(path)?;
+    service
+        .import_google_config(&path)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_oauth_begin(
+    app: AppHandle,
+    service: State<'_, AppService>,
+) -> CommandResult<OAuthLaunchResult> {
+    let flow = service
+        .begin_google_oauth()
+        .await
+        .map_err(UserSafeError::from)?;
+    app.opener()
+        .open_url(flow.authorization_url, None::<String>)
+        .map_err(|_| UserSafeError {
+            code: "browser",
+            message: "システムブラウザを開けませんでした。".into(),
+            recovery: "既定ブラウザを設定してから、Google接続をもう一度開始してください。".into(),
+            retryable: true,
+            diagnostic_id: None,
+        })?;
+    Ok(OAuthLaunchResult {
+        opened_in_system_browser: true,
+        expires_at: flow.expires_at,
+    })
+}
+
+#[tauri::command]
+pub async fn google_connection_get(
+    service: State<'_, AppService>,
+) -> CommandResult<GoogleConnection> {
+    service.google_connection().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_calendar_update(
+    service: State<'_, AppService>,
+    request: GoogleCalendarUpdateRequest,
+) -> CommandResult<GoogleCalendar> {
+    service
+        .update_google_calendar(request.id, request.selected, request.default_write_target)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_disconnect(
+    service: State<'_, AppService>,
+    mode: DisconnectMode,
+) -> CommandResult<u64> {
+    service.disconnect_google(mode).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn compact_window_open(
+    app: AppHandle,
+    service: State<'_, AppService>,
+) -> CommandResult<()> {
+    if let Some(window) = app.get_webview_window("compact") {
+        window.show().map_err(|_| window_error())?;
+        window.set_focus().map_err(|_| window_error())?;
+        return Ok(());
+    }
+    let always_on_top = service
+        .window_always_on_top("compact")
+        .await
+        .map_err(UserSafeError::from)?;
+    WebviewWindowBuilder::new(
+        &app,
+        "compact",
+        WebviewUrl::App("index.html?window=compact".into()),
+    )
+    .title("Day Schedule Next — コンパクト")
+    .inner_size(420.0, 640.0)
+    .min_inner_size(360.0, 420.0)
+    .resizable(true)
+    .always_on_top(always_on_top)
+    .build()
+    .map_err(|_| window_error())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn main_window_show(app: AppHandle) -> CommandResult<()> {
+    let Some(window) = app.get_webview_window("main") else {
+        return Err(window_error());
+    };
+    window.show().map_err(|_| window_error())?;
+    window.unminimize().map_err(|_| window_error())?;
+    window.set_focus().map_err(|_| window_error())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn window_always_on_top_set(
+    app: AppHandle,
+    service: State<'_, AppService>,
+    request: WindowPreferenceRequest,
+) -> CommandResult<()> {
+    if !matches!(request.label.as_str(), "main" | "compact") {
+        return Err(UserSafeError {
+            code: "validation",
+            message: "対象ウィンドウが正しくありません。".into(),
+            recovery: "メインまたはコンパクトを選んでください。".into(),
+            retryable: false,
+            diagnostic_id: None,
+        });
+    }
+    service
+        .save_window_always_on_top(&request.label, request.always_on_top)
+        .await
+        .map_err(UserSafeError::from)?;
+    if let Some(window) = app.get_webview_window(&request.label) {
+        window
+            .set_always_on_top(request.always_on_top)
+            .map_err(|_| window_error())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn template_list(service: State<'_, AppService>) -> CommandResult<Vec<DayTemplate>> {
+    service.templates().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn template_save(
+    service: State<'_, AppService>,
+    input: VersionedSave<DayTemplateDraft>,
+) -> CommandResult<DayTemplate> {
+    service
+        .save_template(input.id, input.expected_version, input.draft)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn template_delete(
+    service: State<'_, AppService>,
+    request: DeleteRequest,
+) -> CommandResult<()> {
+    service
+        .delete_template(request.id, request.expected_version)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn template_reorder(
+    service: State<'_, AppService>,
+    request: ReorderRequest,
+) -> CommandResult<()> {
+    service
+        .reorder_templates(&request.ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn quick_block_list(service: State<'_, AppService>) -> CommandResult<Vec<QuickBlock>> {
+    service.quick_blocks().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn quick_block_save(
+    service: State<'_, AppService>,
+    input: VersionedSave<QuickBlockDraft>,
+) -> CommandResult<QuickBlock> {
+    service
+        .save_quick_block(input.id, input.expected_version, input.draft)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn quick_block_delete(
+    service: State<'_, AppService>,
+    request: DeleteRequest,
+) -> CommandResult<()> {
+    service
+        .delete_quick_block(request.id, request.expected_version)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn quick_block_reorder(
+    service: State<'_, AppService>,
+    request: ReorderRequest,
+) -> CommandResult<()> {
+    service
+        .reorder_quick_blocks(&request.ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn free_alarm_list(service: State<'_, AppService>) -> CommandResult<Vec<FreeAlarm>> {
+    service.free_alarms().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn free_alarm_save(
+    service: State<'_, AppService>,
+    input: VersionedSave<FreeAlarmDraft>,
+) -> CommandResult<FreeAlarm> {
+    service
+        .save_free_alarm(input.id, input.expected_version, input.draft)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn free_alarm_delete(
+    service: State<'_, AppService>,
+    request: DeleteRequest,
+) -> CommandResult<()> {
+    service
+        .delete_free_alarm(request.id, request.expected_version)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn free_alarm_reorder(
+    service: State<'_, AppService>,
+    request: ReorderRequest,
+) -> CommandResult<()> {
+    service
+        .reorder_free_alarms(&request.ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn template_preview(
+    service: State<'_, AppService>,
+    request: TemplateTargetRequest,
+) -> CommandResult<TemplatePreview> {
+    service
+        .preview_template(request.template_id, request.date, &request.timezone_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn template_apply(
+    service: State<'_, AppService>,
+    request: TemplateTargetRequest,
+) -> CommandResult<ChangeResult> {
+    service
+        .apply_template(
+            request.template_id,
+            request.date,
+            &request.timezone_id,
+            request.mode.unwrap_or(TemplateApplyMode::Add),
+        )
+        .await
+        .map_err(Into::into)
+}
+
+fn window_error() -> UserSafeError {
+    UserSafeError {
+        code: "window",
+        message: "コンパクトウィンドウを開けませんでした。".into(),
+        recovery: "メインウィンドウを開いたまま、もう一度試してください。".into(),
+        retryable: true,
+        diagnostic_id: None,
+    }
+}
+
+fn checked_path(value: String) -> CommandResult<PathBuf> {
+    if value.is_empty() || value.len() > 4_096 || value.contains('\0') {
+        return Err(UserSafeError {
+            code: "validation",
+            message: "ファイルの場所が正しくありません。".into(),
+            recovery: "ファイル選択画面から選び直してください。".into(),
+            retryable: false,
+            diagnostic_id: None,
+        });
+    }
+    Ok(PathBuf::from(value))
+}

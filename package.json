@@ -1,7 +1,7 @@
 {
   "name": "day-schedule-next",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Local-first minute-precision day scheduling desktop app",
   "scripts": {
     "verify:harness": "node scripts/verify-agent-harness.mjs",

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "compact",
+  "description": "Compact window can receive application events and invoke allowlisted app commands.",
+  "windows": ["compact"],
+  "permissions": ["core:event:default"]
+}

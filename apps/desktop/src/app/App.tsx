@@ -1,0 +1,264 @@
+import { useCallback, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
+import { addDays } from "date-fns";
+import type { AppClient } from "../shared/ipc/client";
+import { messages } from "../shared/i18n/messages";
+import { formatDateHeading } from "../shared/time";
+import { StatusMessage } from "../shared/ui/StatusMessage";
+import { TodayView } from "../features/schedule/TodayView";
+import { ListView, MonthView, WeekView } from "../features/views/CalendarViews";
+import { DiagnosticsView, FocusView, SettingsView } from "../features/views/OperationalViews";
+import { AlarmsView, TemplatesView } from "../features/views/LibraryViews";
+import { useUiStore, type AppView } from "./ui-store";
+import { NotificationRuntime } from "./NotificationRuntime";
+import { SyncRuntime } from "./SyncRuntime";
+
+const navItems: Array<{ view: AppView; label: string; symbol: string }> = [
+  { view: "today", label: messages.navigation.today, symbol: "●" },
+  { view: "week", label: messages.navigation.week, symbol: "▥" },
+  { view: "month", label: messages.navigation.month, symbol: "▦" },
+  { view: "list", label: messages.navigation.list, symbol: "≡" },
+  { view: "templates", label: messages.navigation.templates, symbol: "◇" },
+  { view: "focus", label: messages.navigation.focus, symbol: "◎" },
+  { view: "alarms", label: messages.navigation.alarms, symbol: "◷" },
+  { view: "settings", label: messages.navigation.settings, symbol: "⚙" },
+  { view: "diagnostics", label: messages.navigation.diagnostics, symbol: "▤" },
+];
+
+export function App({ client }: { client: AppClient }) {
+  const bootstrapQuery = useQuery({ queryKey: ["bootstrap"], queryFn: () => client.bootstrap() });
+  const refreshBootstrap = useCallback(() => {
+    void bootstrapQuery.refetch();
+  }, [bootstrapQuery.refetch]);
+  const {
+    activeView,
+    selectedDate,
+    search,
+    setActiveView,
+    setSelectedDate,
+    setSearch,
+    openCreate,
+  } = useUiStore();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const command = event.metaKey || event.ctrlKey;
+      if (command && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        setActiveView("today");
+        openCreate();
+      }
+      if (event.altKey && event.key === "ArrowLeft") {
+        event.preventDefault();
+        setSelectedDate(addDays(selectedDate, -1));
+      }
+      if (event.altKey && event.key === "ArrowRight") {
+        event.preventDefault();
+        setSelectedDate(addDays(selectedDate, 1));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [openCreate, selectedDate, setActiveView, setSelectedDate]);
+
+  useEffect(() => {
+    const theme = bootstrapQuery.data?.settings.theme ?? "system";
+    document.documentElement.dataset.theme = theme;
+  }, [bootstrapQuery.data?.settings.theme]);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let active = true;
+    const stops: Array<() => void> = [];
+    const handleAction = (action: string) => {
+      if (action === "today") setActiveView("today");
+      if (action === "quick-add") {
+        setActiveView("today");
+        openCreate();
+      }
+      if (action === "focus") setActiveView("focus");
+      if (action === "sync") void bootstrapQuery.refetch();
+    };
+    const register = (eventName: "tray-action" | "compact-action") =>
+      listen<string>(eventName, (event) => {
+        handleAction(event.payload);
+      }).then((unlisten) => {
+        if (active) stops.push(unlisten);
+        else unlisten();
+      });
+    void register("tray-action");
+    void register("compact-action");
+    return () => {
+      active = false;
+      stops.forEach((stop) => stop());
+    };
+  }, [bootstrapQuery.refetch, openCreate, setActiveView]);
+
+  const syncLabel = useMemo(() => {
+    const state = bootstrapQuery.data?.sync.state;
+    if (!state) return "状態を確認中";
+    switch (state) {
+      case "disconnected":
+        return messages.states.disconnected;
+      case "connecting":
+        return "Google に接続中";
+      case "synced":
+        return messages.states.synced;
+      case "pending":
+        return messages.states.pending;
+      case "syncing":
+        return messages.states.syncing;
+      case "offline":
+        return messages.states.offline;
+      case "retry_scheduled":
+        return "同期を再試行します";
+      case "conflict":
+        return messages.states.conflict;
+      case "auth_required":
+        return messages.states.authRequired;
+    }
+  }, [bootstrapQuery.data?.sync.state]);
+
+  if (bootstrapQuery.isLoading) {
+    return (
+      <main className="boot-screen">
+        <div className="brand-mark" aria-hidden="true">
+          24
+        </div>
+        <h1>Day Schedule Next</h1>
+        <p role="status">この端末の予定を安全に開いています…</p>
+      </main>
+    );
+  }
+
+  if (bootstrapQuery.isError || !bootstrapQuery.data) {
+    return (
+      <main className="boot-screen boot-screen--error">
+        <div className="brand-mark" aria-hidden="true">
+          !
+        </div>
+        <StatusMessage
+          tone="danger"
+          title="アプリを開始できませんでした"
+          action={
+            <button className="button" onClick={() => void bootstrapQuery.refetch()}>
+              もう一度開始
+            </button>
+          }
+        >
+          この端末の予定は変更されていません。デスクトップアプリとして起動し、続く場合はバックアップからの復旧を確認してください。
+        </StatusMessage>
+      </main>
+    );
+  }
+
+  const bootstrap = bootstrapQuery.data;
+  return (
+    <div className="app-shell">
+      <NotificationRuntime client={client} />
+      <SyncRuntime client={client} onSettled={refreshBootstrap} />
+      <header className="topbar">
+        <div className="topbar__brand">
+          <div className="brand-mark" aria-hidden="true">
+            24
+          </div>
+          <strong>{messages.appName}</strong>
+        </div>
+        <div className="date-navigation" aria-label="表示日の移動">
+          <button
+            className="icon-button"
+            aria-label="前の日"
+            onClick={() => setSelectedDate(addDays(selectedDate, -1))}
+          >
+            ‹
+          </button>
+          <button className="date-navigation__date" onClick={() => setSelectedDate(new Date())}>
+            {formatDateHeading(selectedDate)}
+          </button>
+          <button
+            className="icon-button"
+            aria-label="次の日"
+            onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+          >
+            ›
+          </button>
+          <button className="button button--subtle" onClick={() => setSelectedDate(new Date())}>
+            今日
+          </button>
+        </div>
+        <div className="topbar__actions">
+          <label className="global-search">
+            <span className="sr-only">予定を検索</span>
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="予定を検索"
+              type="search"
+            />
+          </label>
+          <button
+            className="button button--primary"
+            onClick={() => {
+              setActiveView("today");
+              openCreate();
+            }}
+          >
+            ＋ 予定
+          </button>
+          <button
+            className="sync-indicator"
+            type="button"
+            onClick={() => setActiveView("settings")}
+          >
+            <i data-state={bootstrap.sync.state} /> {syncLabel}
+          </button>
+        </div>
+      </header>
+      <aside className="sidebar" aria-label="主要画面">
+        <nav>
+          {navItems.map((item) => (
+            <button
+              key={item.view}
+              type="button"
+              aria-current={activeView === item.view ? "page" : undefined}
+              onClick={() => setActiveView(item.view)}
+            >
+              <span aria-hidden="true">{item.symbol}</span>
+              {item.label}
+              {item.view === "diagnostics" && bootstrap.sync.conflictCount > 0 ? (
+                <strong className="count-badge">{bootstrap.sync.conflictCount}</strong>
+              ) : null}
+            </button>
+          ))}
+        </nav>
+        <button
+          className="compact-button"
+          type="button"
+          onClick={() => void client.openCompactWindow()}
+        >
+          ▱ コンパクト表示
+        </button>
+      </aside>
+      <div className="app-content">
+        {activeView === "today" ? <TodayView client={client} bootstrap={bootstrap} /> : null}
+        {activeView === "week" ? <WeekView client={client} /> : null}
+        {activeView === "month" ? <MonthView client={client} /> : null}
+        {activeView === "list" ? <ListView client={client} /> : null}
+        {activeView === "focus" ? <FocusView client={client} bootstrap={bootstrap} /> : null}
+        {activeView === "settings" ? <SettingsView client={client} bootstrap={bootstrap} /> : null}
+        {activeView === "diagnostics" ? <DiagnosticsView client={client} /> : null}
+        {activeView === "templates" ? (
+          <TemplatesView
+            client={client}
+            timezoneId={bootstrap.timezoneId}
+            settings={bootstrap.settings}
+          />
+        ) : null}
+        {activeView === "alarms" ? (
+          <AlarmsView client={client} timezoneId={bootstrap.timezoneId} />
+        ) : null}
+      </div>
+    </div>
+  );
+}

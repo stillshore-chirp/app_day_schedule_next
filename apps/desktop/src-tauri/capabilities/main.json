@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Main window can receive application events and invoke allowlisted app commands.",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "notification:default"
+  ]
+}

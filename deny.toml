@@ -1,0 +1,61 @@
+[graph]
+targets = [
+  { triple = "aarch64-apple-darwin" },
+  { triple = "x86_64-apple-darwin" },
+  { triple = "x86_64-pc-windows-msvc" },
+]
+
+[advisories]
+ignore = [
+  { id = "RUSTSEC-2025-0075", reason = "Current Tauri 2.11.5 pulls this unmaintained rust-unic crate through tauri-utils/urlpattern; no safe upgrade exists." },
+  { id = "RUSTSEC-2025-0080", reason = "Current Tauri 2.11.5 pulls this unmaintained rust-unic crate through tauri-utils/urlpattern; no safe upgrade exists." },
+  { id = "RUSTSEC-2025-0081", reason = "Current Tauri 2.11.5 pulls this unmaintained rust-unic crate through tauri-utils/urlpattern; no safe upgrade exists." },
+  { id = "RUSTSEC-2025-0098", reason = "Current Tauri 2.11.5 pulls this unmaintained rust-unic crate through tauri-utils/urlpattern; no safe upgrade exists." },
+  { id = "RUSTSEC-2025-0100", reason = "Current Tauri 2.11.5 pulls this unmaintained rust-unic crate through tauri-utils/urlpattern; no safe upgrade exists." },
+]
+
+[licenses]
+allow = [
+  "0BSD",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "CC0-1.0",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MIT-0",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.8
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow = []
+allow-workspace = true
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = []
+gitlab = []
+bitbucket = []

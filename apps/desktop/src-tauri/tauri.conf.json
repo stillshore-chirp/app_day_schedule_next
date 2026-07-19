@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Day Schedule Next",
+  "version": "0.1.0",
+  "identifier": "com.stillshorechirp.dayschedulenext",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Day Schedule Next",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 720,
+        "minHeight": 600,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'",
+      "capabilities": ["main", "compact"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "nsis"],
+    "category": "Productivity",
+    "shortDescription": "分単位で一日を設計するローカルファーストの予定管理",
+    "longDescription": "Day Schedule Next は、現在・次・残り・空き時間を確認しながら一日を分単位で設計できる個人用デスクトップアプリです。",
+    "copyright": "Copyright 2026 stillshore-chirp",
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}
