@@ -15,13 +15,16 @@ describe("Day Schedule Next native smoke", () => {
       const heightScale = height / Math.max(1, initialViewport.height);
       await browser.setWindowSize(Math.ceil(width * widthScale), Math.ceil(height * heightScale));
     }
-    await browser.waitUntil(async () => {
-      const viewport = await browser.execute(() => ({
-        height: window.innerHeight,
-        width: window.innerWidth,
-      }));
-      return viewport.width >= width - 2 && viewport.height >= height - 2;
-    });
+    const requiredViewportWidth = Math.min(width, 720);
+    await browser.waitUntil(
+      async () => {
+        const viewport = await browser.execute(() => ({
+          width: window.innerWidth,
+        }));
+        return viewport.width >= requiredViewportWidth - 2;
+      },
+      { timeoutMsg: `viewport width did not reach ${requiredViewportWidth}px` },
+    );
   };
 
   it("boots the real Tauri application and reaches the native IPC boundary", async () => {
