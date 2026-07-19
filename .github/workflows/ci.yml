@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - codex/**
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: Detect scaffold
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_app: ${{ steps.detect.outputs.has_app }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: detect
+        name: Detect desktop sources
+        shell: bash
+        run: |
+          if [[ -f apps/desktop/package.json && -f apps/desktop/src-tauri/Cargo.toml && -f Cargo.toml && -f pnpm-lock.yaml ]]; then
+            echo "has_app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_app=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  harness:
+    name: Agent harness, docs and public-text security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify bootstrap harness
+        run: npm run verify:bootstrap
+
+  frontend:
+    name: Frontend quality
+    needs:
+      - detect
+      - harness
+    if: needs.detect.outputs.has_app == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Activate pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Format
+        run: pnpm format:check
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit and accessibility tests
+        run: |
+          pnpm test
+          pnpm test:a11y
+      - name: Frontend build
+        run: pnpm build
+
+  native:
+    name: Native quality (${{ matrix.os }})
+    needs:
+      - detect
+      - harness
+      - frontend
+    if: needs.detect.outputs.has_app == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Activate pnpm
+        shell: bash
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Rust format
+        run: cargo fmt --all -- --check
+      - name: Rust clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Rust tests
+        run: cargo test --workspace --all-features
+      - name: Tauri debug build
+        run: pnpm tauri:build:debug

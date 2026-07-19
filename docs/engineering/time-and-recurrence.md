@@ -1,0 +1,63 @@
+# Time and Recurrence Contract
+
+## 1. Types
+
+- `UtcInstant`: absolute point。
+- `IanaTimezone`: named timezone。
+- `LocalDate`, `LocalTime`, `LocalDateTimeInput`: user intent。
+- `MinuteOfDay(0..1439)`。
+- `DurationMinutes(1..)`。
+- `OffsetChoice`: ambiguous local time の選択。
+- `ScheduleInterval`: `[start,end)`。
+
+primitive string / integer を domain 内へそのまま流しません。
+
+## 2. Concrete schedule
+
+UI input を timezone とともに resolve し、UTC instant を保存します。表示時は schedule timezone または selected display timezone へ変換します。
+
+- gap: validation error または explicit resolution choice。
+- overlap: first / second occurrence を明示。
+- timezone change: instant-preserving change と wall-clock-preserving edit を別操作にする。
+
+## 3. Templates / Quick Blocks / Free Alarms
+
+これらは absolute instant ではなく wall-clock intent です。target date と timezone へ適用する時に concrete value を生成します。DST で apply 不能 / ambiguous の場合は preview で示します。
+
+## 4. All-day
+
+- start date inclusive、end date exclusive。
+- UTC midnight conversion を persisted truth にしない。
+- Google all-day event と date range で round-trip する。
+
+## 5. Recurrence
+
+- RFC 5545 rule を保存し、occurrence を必要範囲で展開する。
+- master と exception を identity で関連付ける。
+- edit scope: this / this-and-following / series を明示する。
+- EXDATE / moved / cancelled occurrence を保持する。
+- count / until / timezone の semantic を test する。
+
+## 6. Overlap / current / next
+
+- overlap は positive intersection。
+- current は `start <= now < end`。
+- next は current snapshot より後の最小 start。過去 recurring occurrence を再選択しない。
+- cross-midnight を day segment に分割して layout する。
+- overview の5分互換 threshold と detail side-by-side を別 pure function にする。
+
+## 7. Determinism
+
+- `Clock` と timezone database を injection / version awareness で扱う。
+- same input / same tzdata で same output。
+- test は fixed instant、timezone、locale を使用する。
+
+## 8. Boundary tests
+
+- adjacent、1分 overlap、4分、5分、multiple components。
+- 23:59、00:00、24h、cross-midnight。
+- leap day、month end、year end。
+- New York / Berlin の gap / overlap。
+- system timezone change。
+- all-day multi-day。
+- recurrence master / exception / cancellation / until。
