@@ -18,7 +18,7 @@ jobs:
     outputs:
       has_app: ${{ steps.detect.outputs.has_app }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - id: detect
@@ -42,10 +42,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: Activate pnpm
@@ -60,7 +60,7 @@ jobs:
         run: pnpm test:e2e
       - name: Upload redacted E2E artifacts
         if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-e2e-${{ matrix.os }}
           path: |
