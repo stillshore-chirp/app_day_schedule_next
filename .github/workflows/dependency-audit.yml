@@ -1,0 +1,56 @@
+name: Dependency audit
+
+on:
+  push:
+    branches:
+      - main
+      - codex/**
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+  schedule:
+    - cron: "41 17 * * 2"
+
+concurrency:
+  group: dependency-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    name: Known vulnerabilities, licenses and sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Activate pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+      - name: Audit JavaScript dependencies
+        run: pnpm audit --audit-level moderate
+      - name: Audit Rust advisories
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify Rust licenses and sources
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        with:
+          rust-version: "1.89.0"
+          command: check advisories licenses sources
+          arguments: --all-features
+          manifest-path: ./Cargo.toml

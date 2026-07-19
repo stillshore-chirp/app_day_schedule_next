@@ -1,0 +1,157 @@
+# Issue #4 Completion Gate / UI/UX Review
+
+## 1. 判定
+
+- Issue: #4
+- Branch: `codex/complete-v1-spec`
+- 対象: Day Schedule Next v0.1.0 初回実装、全画面、macOS / Windows
+- 現在の判定: Release candidate。CI、Must acceptance の残件、対象 OS の manual release matrix が終わるまで Complete / 即出荷可能とは判定しない
+- P0: 30回起動p95、500件frame pacing、長処理cancel、許容差付きvisual baseline、UI文言の翻訳キー移行、対象OS実機 gate
+- P1: 200% text / high DPI、multi-monitor、署名済み配布
+- P2: WebDriver service の embedded mode でも外部 `tauri-driver` 未導入を表示する非阻害 diagnostic
+
+## 2. User goal / value
+
+対象ユーザーは、自分一人の一日を短時間で組み、実行中も現在・次・残りを失わず、任意で Google Calendar と整合させたい macOS / Windows ユーザーです。
+
+| Job | User need | UI support | Evidence |
+|---|---|---|---|
+| Understand | 日付、現在、次、同期状態をすぐ把握 | Today heading、24時間 strip、Now Dock、同期 indicator | native Today screenshot / E2E |
+| Decide | 空き、重複、置換影響、競合を比較 | overlap lane、template preview summary、field conflict choices | domain / mock sync tests |
+| Act | 予定、型、通知、Focusを短く操作 | drag / direct / keyboard、template / Quick Block、tray | unit / native E2E |
+| Recover | 誤操作、offline、失敗、破損から戻る | Undo / Redo、Outbox retry、backup / staged restore、safe error | Rust integration tests |
+| Continue | 再起動・sleep後も文脈を維持 | SQLite、window / template preference、Focus / notification ledger | persistence tests |
+
+Without this implementation, repository には品質 harness しかなく、ユーザーは一件の予定も保存できませんでした。新しい UI は対象外機能や telemetry を追加せず、仕様書 v1.0 のローカルファースト価値へ限定しています。
+
+## 3. Novice simulation
+
+Precondition: 初回利用、Today、今日の予定なし、Google 未接続、通知権限 unknown、720px 以上。
+
+- 3秒: 「今日の予定」、現在日、左 navigation、上部の「＋予定」、空状態の説明を識別できる。
+- First action: 「＋予定」または空き時間の作成導線。
+- Prediction: タイトルと時間を入力し、「予定を作成」でこの端末へ保存される。
+- Result: 保存中表示後、24時間 strip / timeline / Now へ同じ entity が反映される。
+- Intentional mistake: 終了を開始以前、無効 timezone、DST gap にする。
+- Recovery: field error / DST explanation を表示し、入力を保持して時刻変更へ戻れる。
+- Limitation: AI simulation と automated interaction。実ユーザー観察は release usability smoke で追跡する。
+
+## 4. State matrix
+
+| State | User sees / understands | Allowed action / recovery | A11y / evidence | Result |
+|---|---|---|---|---|
+| First use / empty | 今日、空の理由、最初の作成 | 作成／別日／template | heading、status、button | Pass |
+| Normal | strip、timeline、Now、selected inspector | create / edit / duplicate / delete | role / label / visible focus | Pass |
+| Many / overlap | side-by-side lane、100件 page、500件一括変更 | select / filter / page / bulk / Undo | timeline virtualization、DB atomicity、50k DB test | Pass functional; frame pacing pending |
+| Cross-midnight / all-day | day segment、local date range | direct edit | Rust boundary tests | Pass |
+| Loading | 対象を確認中 | wait / retry | `role=status` | Pass |
+| Search none | 検索結果なしを通常 empty と区別 | filter clear | visible message | Pass |
+| Input / DST error | 原因、未保存、回復 | 値を修正 | associated form / safe error | Pass |
+| Permission denied | OS通知不可、音の独立、設定導線 | request / OS settings | state text not color-only | Pass automated; OS manual pending |
+| Google disconnected | 未接続 | JSON import / connect | explicit state | Pass |
+| Sync pending / offline | ローカル保存済み、次回 retry | local continue / retry | status + queue fields | Pass mock |
+| Auth required | 再接続が必要 | explicit reconnect | safe category only | Pass mock |
+| Conflict | count、fields、delete conflict | field choice / resolve | navigation badge / form | Pass mock + component |
+| Backup / import | preview、件数、対象、progress | cancel / commit | fieldset / status | Pass integration |
+| Fatal DB | 起動不可、予定未変更、復旧説明 | retry / backup recovery | boot main + danger status | Pass component |
+| Compact | current / next / remaining / Focus | open main / Focus | separate labeled window | Pass implementation; OS manual pending |
+| Narrow | navigation / settings usable at 720×720 | all primary navigation | native screenshot | Pass |
+| 200% / high DPI | 未観測 | release manual | pending | Release blocker until observed |
+
+## 5. Accessibility / visual hierarchy
+
+- Keyboard-only: `Command/Ctrl+N`、日移動、timeline move / resize、form direct edit、全 button / input。
+- Drag equivalent: pointer create / move / resize に direct time input と arrow key を提供。`Esc` で取消。native E2E は pointer path から作成・SQLite再検索まで実行。
+- Focus: `:focus-visible` 3px outline、semantic main / aside / nav / section / heading、accessible name。
+- Status: loading、saving、error、empty、sync、permission を text と role で伝える。
+- Contrast: dark screenshot の heading / Quick Block title の継承色問題を反証レビューで検出し、明示 `inherit` / theme token へ修正。
+- Target:主要 control は最小40px、timeline handle は focus 時にも見える。
+- Automated: axe app shell / empty state 2件、component keyboard tests 2件。
+- Manual pending: 200% text、Windows high DPI、screen reader full critical flow。
+
+Primary action は Today の「＋予定」、date / sync / current-next は固定位置です。詳細説明は primary action を押し下げず、設定・診断・help text へ配置しています。Compact は current / next / Focus に情報を限定します。
+
+## 6. Copy / expert efficiency / trust
+
+- 「この端末に保存」と「Google 同期待ち／同期済み」を分離。
+- template replace はローカル予定だけを対象とし、Google由来を保持すること、件数、Undo を表示。
+- delete all は完全一致確認文、Google disconnect は local data impact を選択。
+- notification は permission と complete exit 制約を明示。
+- repetitive flow は template / Quick Block / duplicate / saved selection / tray Quick Add で短縮。
+- timeline zoom / scroll / reference minute、last template、window settings を保持。
+- sync queue は項目／全体 retry、conflict は field choice。
+
+成功時は対象と次の action、失敗時は data retention と recovery を示し、raw error や token を表示しません。危険操作は scope、外部予定保持、Undo / backup / rollback を説明します。
+
+## 7. Domain safety review
+
+- Time: UTC instant + IANA timezone、MinuteOfDay、`[start,end)`、DST gap / overlap、all-day dates、recurrence scope を test。
+- Notification: persistent key、grace、replay limit、active Quick Block linkage、Focus history。
+- Sync: local transaction + Outbox、pagination atomic token、410 full sync、401 / 412 / 429 / 5xx / offline、same-field conflict。
+- Data: migration v1→v10、optimistic version、read-only preview / fingerprint、single transaction import、verified backup、staged restore、atomic delete.
+- Security: strict CSP、scoped capability、credential store、structured redaction、dependency / license / source audit。
+
+## 8. Counter-review findings
+
+| Severity | Area | Finding | Evidence / impact | Fix / status |
+|---|---|---|---|---|
+| P0 | Template replace | 外部予定も置換候補だった | repository query inspection; remote delete risk | local-only + no mapping に限定、preview counts追加。Fixed |
+| P0 | Quick Block notification | notification fields / candidate が未接続 | Must FR-QB-003 / FR-AL-003 | schema v10、active-only candidate、ledger test。Fixed |
+| P1 | Library efficiency | template / Quick Block / alarm の duplicate / reorder / edit不足 | Must CRUD acceptance | versioned atomic reorder + UI + E2E。Fixed |
+| P1 | Template editor | 24h / detail の双方が不足 | FR-TP-005 | strip + 1-minute drag/keyboard range + direct form。Fixed |
+| P1 | Dark contrast | heading / Quick Block title が UA inherited dark text | native screenshot | explicit inherited theme color。Fixed |
+| P0 | Cross-platform release | Windows / macOS x64 の最新 head CI と manual OS adapter未確認 | local hostはmacOS arm64のみ | CI後もmanual matrixが必要。Open release gate |
+| P1 | List classification | 絞り込みだけで一括変更が未接続 | FR-IT-002 | 最大500件、単一transaction / Outbox / one-action Undo、native E2E。Fixed |
+| P1 | Focus actual | 予定へ紐付けても実績が予定側へ集計表示されない | FR-FC-006 | `focus_history` を予定IDで集計し編集画面へ表示、DB test。Fixed |
+| P1 | 500 item render | timeline が全予定DOMを常時生成 | NFR-PF-003 | viewport前後2時間だけを描画するvirtual windowと500件test。Functional fixed; frame pacing measurement Open |
+| P0 | Performance evidence | 50k indexed searchは測定、cold/warm startup 30-run・500 item p95 frame pacingは未測定 | NFR-PF-001 / 003 | 基準端末のrelease measurementが必要。Open release gate |
+| P0 | Long operation cancel | sync / backup / export はasyncだがuser cancel tokenがない | NFR-PF-006 | cancellable background operation contractが必要。Open release gate |
+| P0 | Visual regression | 5主要surfaceのnative screenshotはあるがpixel baseline / tolerance comparisonがない | NFR-TS-006 | 安定fixtureと許容差付きbaseline checkが必要。Open release gate |
+| P0 | Localization structure | navigation等のcatalogはあるがUI文言がTSXへ散在 | FR-SH-009 | ja catalogへ全表示文言を移しkey auditをCI化する必要。Open release gate |
+
+## 9. Evidence
+
+- Before: repository に app scaffold がなく、画面差分を取得不能。最初の接続済み empty state は [`native-initial-empty.jpeg`](../../evidence/issue-4/native-initial-empty.jpeg)。
+- After: `docs/evidence/issue-4/` の Today、List、narrow Settings、Template editor / library、Focus、Week、Compact、Data / Conflict screenshots（synthetic dataのみ）。
+- Native test: real Tauri / IPC / SQLite を macOS local で6 scenarios通過。
+- Test data: `E2E予定-*` 等の synthetic label。account、calendar / event ID、token、local DB path を含まない。
+
+## 10. Executed validation
+
+| Check | Result | Evidence |
+|---|---|---|
+| Rust all-feature suite | Pass, 49 tests | domain / DB / sync mock / notification / backup / import |
+| Frontend unit | Pass, 23 tests | coverage report 87.65% statements; 500件virtual windowを含む |
+| Accessibility | Pass, 2 tests | axe app shell / empty state |
+| Native E2E macOS | Pass, 6 scenarios | real IPC / SQLite、settings restart、pointer drag、bulk classification + screenshots |
+| 50k search | Pass | Rust integration target <150ms |
+| pnpm audit moderate | Pass | no known vulnerabilities |
+| cargo-deny | Pass | advisories / licenses / sources |
+
+## 11. Repository / release gate
+
+- [x] Issue #4 exists.
+- [x] `codex/complete-v1-spec` branch.
+- [ ] Changes committed and pushed.
+- [ ] Non-draft PR exists.
+- [ ] Latest head CI successful on macOS arm64 / x64 and Windows x64.
+- [ ] Codex review and unresolved review threads checked after CI.
+- [ ] Clean install / permission / keyring / OAuth / sleep manual matrix recorded.
+
+## 12. Unexecuted validation / remaining risk
+
+| Check | Reason | Remaining risk | Next action |
+|---|---|---|---|
+| Windows Credential Manager / notification / OAuth real flow | Windows実機なし | OS adapter / permission差 | Windows release smoke |
+| macOS x64 Keychain / notification / OAuth | x64実機なし | Rosetta / x64 adapter差 | x64 release smoke |
+| clean installer upgrade / uninstall | unsigned artifact未生成、CI前 | bundle / data retention差 | CI artifactでmanual smoke |
+| sleep / resume / clock jump actual OS | deterministic testsのみ | lifecycle delivery差 | 10分以内／超の実機sleep test |
+| 200% text / high DPI / multi-monitor | local automated suite対象外 | clipping / window restore | platform visual matrix |
+| signed / notarized distribution | personal unsigned v0.1 scope | OS reputation warning | signing Issue before third-party release |
+| 30回 cold / warm start p95 | 基準端末のrelease計測未実施 | 起動性能要件を証明できない | benchmark記録を添付 |
+| 500件 scroll / drag p95 frame pacing | virtualization unitのみ | 60fps相当を証明できない | profiler traceを30回計測 |
+| sync / backup / export cancel | cancellation contract未実装 | 長処理を利用者が止められない | operation ID + cancel commandを実装 |
+| visual pixel baseline | screenshot目視のみ | 許容差超過をCIで阻止できない | deterministic fixture + baseline compare |
+| 全UI翻訳key audit | catalogは一部のみ | 英語追加時に画面文言を探索修正する必要 | ja catalog移行 + source audit |
+
+これらは実装を「存在する release candidate」とすることは妨げませんが、すべてが観測されるまで「即出荷可能」「Complete」とは判定しません。

@@ -1,6 +1,9 @@
 name: Native E2E
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
     - cron: "17 18 * * 1"
@@ -36,9 +39,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - macos-latest
-          - windows-latest
+        include:
+          - os: macos-15
+            label: macOS arm64
+          - os: macos-15-intel
+            label: macOS x64
+          - os: windows-latest
+            label: Windows x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -56,15 +63,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Build isolated WebdriverIO debug application
+        shell: bash
+        run: VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
       - name: Run native E2E with synthetic fixtures
         run: pnpm test:e2e
       - name: Upload redacted E2E artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: native-e2e-${{ matrix.os }}
+          name: native-e2e-${{ matrix.label }}
           path: |
             apps/desktop/test-results/
-            apps/desktop/playwright-report/
+            apps/desktop/logs/
+            apps/desktop/wdio-logs/
           if-no-files-found: ignore
           retention-days: 30

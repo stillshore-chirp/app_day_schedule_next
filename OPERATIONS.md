@@ -1,50 +1,93 @@
 # Operations / Diagnostics
 
-Day Schedule Next は個人端末で動くローカルファーストアプリです。この文書は、障害切り分け、データ保護、Google 同期、通知、OS 配布の運用正本です。
-
-## 基本方針
-
-- ユーザーの SQLite とバックアップを最優先で保護する。
-- 破損・migration 失敗・sync conflict を自動上書きで隠さない。
-- 診断情報は明示操作で export し、秘密・個人予定・token を redaction する。
-- 実機ログを見ていない場合は、コード上の仮説として報告する。
+Day Schedule Next は個人端末で動くローカルファーストアプリです。この文書は障害切り分け、データ保護、同期、通知、配布の運用正本です。
 
 ## 初動
 
-1. アプリ version、OS、architecture、発生操作、発生期間を確認する。
-2. DB path や account identifier の実値を公開 Issue に貼らない。
-3. 書き込みを伴う復旧前にバックアップを作成する。
-4. `diagnostics_snapshot` と mask 済みログの取得可否を確認する。
-5. local-only 問題、Google API 問題、OS notification / keyring / WebView 問題を分離する。
+1. 「データと診断」でアプリ／DB version、整合性、Outbox、競合、最終バックアップを確認します。
+2. 「バージョン情報をコピー」または「マスク済み診断 JSON」を取得します。
+3. 書き込みを伴う復旧前に「設定 > データ」でバックアップを作成します。
+4. local-only、Google API、OS notification、credential store、WebView のどこで失敗したかを分離します。
+5. 実機ログを見ていない判断は仮説として扱います。
+
+公開 Issue / PR に DB path、端末名、account、calendar / event ID、予定本文、token、authorization code、raw HTTP body、raw stack trace を貼らないでください。
+
+## 診断情報
+
+診断画面は次を読み取り専用で表示します。
+
+- app version、schema version、DB integrity
+- 有効予定、削除待ち、Outbox、未解決競合
+- 最終検証済みバックアップ
+- 通知の発火予定・試行時刻・結果・エラー分類（本文なし）
+
+export は構造化イベントだけを最大500件含めます。予定名、説明、場所、メール、remote ID、token、絶対パスは収集しません。
 
 ## データ復旧
 
-- restore は現 DB の退避後に実施する。
-- `PRAGMA integrity_check`、schema version、migration、smoke query を通過しない DB へ切り替えない。
-- legacy import は preview の件数・変換・警告を確認してから commit する。
-- sync mapping を消す操作は full resync と duplicate risk を説明する。
+- backup は SQLite online backup 後に integrity check と SHA-256 を検証し、履歴へ記録します。
+- restore は現在 DB を rollback copy として保持し、候補を staging します。即時 overwrite はしません。
+- 次回起動時に integrity check、migration、smoke query を通過した候補だけを切り替えます。
+- JSON / legacy import は preview fingerprint を再検証し、ファイル変更や不正値があれば mutation 前に拒否します。
+- replace import でも Google mapping を持つ予定を黙って削除しません。
+- downgrade は未対応です。新しい schema の DB を古い build で開かないでください。
 
-## 同期
+## Google 同期
 
-- 401 / `invalid_grant`: 再認証。token や HTTP body をログへ出さない。
-- 410: 対象 calendar の sync state を安全に再構築する。local-owned item を消さない。
-- 412: remote を再取得して 3-way merge を再実行する。
-- 429 / 5xx: backoff + jitter。手動連打で retry storm を作らない。
-- conflict: base / local / remote と解決結果を保持する。
+接続準備は [`docs/guides/google-calendar-oauth.md`](docs/guides/google-calendar-oauth.md) を参照します。
 
-## 通知・Focus
+| 分類 | 挙動と回復 |
+|---|---|
+| offline | ローカル確定済み。Outbox を保持し、接続回復後に再試行 |
+| 401 / invalid grant | `auth_required`。token を出力せず、ユーザーが再接続 |
+| 410 | calendar 単位の stale token を破棄し、安全な full sync。local-owned item は保持 |
+| 412 | remote を再取得し、3-way merge または競合画面 |
+| 429 | `Retry-After` を優先し、再試行時刻を保存 |
+| 5xx | bounded backoff。手動連打で retry storm を作らない |
+| 同一フィールド／削除競合 | silent last-write-wins を禁止し、解決結果を新しい base として同期 |
 
-- sleep / resume、timezone change、system clock jump を確認する。
-- delivery ledger の重複 key と grace window を確認する。
-- 完全終了時と tray 常駐時を区別する。
-- Focus timer は wall clock だけに依存せず、pause / resume の累積を検証する。
+同期キューは項目ごとの理由、試行回数、次回時刻を表示し、項目単位または全体で再試行できます。
+
+## 通知と Focus
+
+- `delivery_key = entity + phase + offset + occurrence` の hash で再起動後も重複を抑止します。
+- poll は永続 `last_check` と grace window を使い、古い通知を無制限に再生しません。
+- Quick Block は有効な項目だけを通知候補にします。
+- DST gap / ambiguity は通知時刻を黙ってずらさず、その occurrence をスキップします。
+- OS 通知権限がない場合もアプリ内音は独立して動作できます。
+- 完全終了中は通知できません。トレイ格納との違いを設定と終了操作に表示します。
+- Focus は phase、開始 instant、累積秒、cycle、履歴を永続化します。
+
+sleep / resume、timezone change、clock jump の調査では、通知台帳、grace、最大 replay、Focus 履歴の順で確認します。
+
+## ローカル検証
+
+```bash
+npm run verify:bootstrap
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:a11y
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+pnpm audit --audit-level moderate
+cargo deny --all-features check advisories licenses sources
+pnpm build
+pnpm tauri:build:debug
+```
+
+ネイティブ E2E は E2E 専用 build で実行します。失敗時の `apps/desktop/logs` はローカル診断用であり、public artifact へ raw のまま添付しません。
 
 ## リリース
 
-- macOS と Windows の installer、起動、権限、keyring、notification、window state、Google OAuth loopback を実機で確認する。
-- 署名・公証・配布を導入した後は、鍵や証明書をリポジトリへ置かない。
-- unsigned 個人ビルドの警告や制約を README / UserManual に明示する。
+- CI は macOS arm64、macOS x64、Windows x64 で Rust test と unsigned debug installer build を行います。
+- Native E2E は同じ3環境で synthetic fixture だけを使用します。
+- 個人利用でも、対象 OS で install、launch、quit、tray、window、notification、credential store、OAuth loopback、backup / restore を観測します。
+- unsigned build の警告を隠しません。署名・公証・code signing を導入するまで第三者向け正式配布物と呼びません。
+- signing secret、証明書、credential JSON は repository / artifact へ置きません。
 
 ## 公開報告
 
-公開 Issue / PR には、観測事実、判断、対応、未確認、残リスクだけを記載します。raw DB、backup、token、calendar ID、event content、home path、端末名、正確な log identifier は記載しません。
+公開報告は「観測事実」「判断」「対応」「未確認」「残リスク」を分けます。CI、スクリーンショット、ログについて、実施していない確認を実施済みと記載しません。

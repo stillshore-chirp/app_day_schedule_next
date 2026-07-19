@@ -1,50 +1,81 @@
 # Day Schedule Next
 
-Day Schedule Next は、分単位で一日の予定を設計し、実行中・次の予定・残り時間を把握できる、個人利用向けの macOS / Windows デスクトップアプリです。Tauri 2、React、TypeScript、Rust、SQLite を基盤とし、ローカルファーストで Google Calendar と安全に同期します。
+Day Schedule Next は、一日の予定を分単位で設計・実行し、現在・次・残り・空き時間を把握する個人利用向け macOS / Windows デスクトップアプリです。Tauri 2、React、TypeScript、Rust、SQLite を使い、ローカルを一次データとして Google Calendar と双方向同期します。
 
-このリポジトリは実装開始前の品質ハーネスを先に確立しています。AI エージェントと人間の開発者は、実装前に [`AGENTS.md`](AGENTS.md) と [`docs/product-invariants.md`](docs/product-invariants.md) を読み、変更領域に対応する Skill と完了ゲートを適用してください。
+## 実装済み機能
 
-## 現在の状態
+- Today / 週 / 月 / 一覧、24時間ストリップ、重なり表示、詳細タイムライン、日跨ぎ・終日予定
+- 予定の作成・編集・複製・削除、ドラッグ・リサイズ、キーボード等価操作、分類の原子的な一括変更、Undo / Redo
+- 日次テンプレート、適用前プレビュー、追加／安全な置換、Quick Block、自由アラーム
+- Focus の開始・一時停止・再開・休憩・終了、予定への紐付け、予定別実績集計、当日履歴
+- 永続通知台帳、重複抑止、復帰時の猶予・上限、OS 通知とアプリ内音の独立設定
+- Desktop OAuth + Authorization Code + PKCE + loopback、Outbox、差分同期、競合解決
+- SQLite migration、バックアップ、復元 staging、JSON export / import、旧 DB の read-only preview
+- Compact Window、トレイ常駐、single instance、構造化・マスク済み診断 export
 
-- エージェント実行規約、UI/UX ガバナンス、同期・時刻・移行・配布の専用レビュー手順を整備済み
-- GitHub Issue / PR テンプレートと CI 品質ゲートを整備済み
-- アプリ本体のスキャフォールドと実装は後続 Issue で行う
+詳細な操作は [`UserManual.md`](UserManual.md)、障害対応は [`OPERATIONS.md`](OPERATIONS.md)、Google 接続準備は [`docs/guides/google-calendar-oauth.md`](docs/guides/google-calendar-oauth.md) を参照してください。
 
-## 主要な設計前提
+## 開発環境
 
-- Desktop: Tauri 2
-- Frontend: React + TypeScript + Vite
-- Native / domain: Rust
-- Persistence: SQLite（Rust 側のみが直接アクセス）
-- Calendar: Google Calendar API（Desktop OAuth + PKCE、差分同期）
-- Secrets: macOS Keychain / Windows Credential Manager
-- Platforms: macOS を先行し、同一コードベースで Windows へ展開
-- Distribution: 個人利用、非販売。公開可能なコード品質と秘密情報管理を維持
-
-## 最短の確認
+- Node.js 22 以上
+- pnpm 10.13.1（Corepack）
+- Rust 1.89.0
+- macOS: Xcode Command Line Tools
+- Windows: Microsoft C++ Build Tools と WebView2 Runtime
 
 ```bash
-node scripts/verify-agent-harness.mjs
-node scripts/verify-doc-links.mjs
-node scripts/security-scan-text.mjs
-node scripts/check-repository-boundaries.mjs
+corepack enable
+pnpm install --frozen-lockfile
+pnpm --dir apps/desktop tauri dev
 ```
 
-アプリ本体が追加された後は、ルート `package.json` の `verify` と、macOS / Windows のネイティブビルドを完了条件に含めます。
+## 検証
+
+```bash
+npm run verify:bootstrap
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:a11y
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --all-features
+pnpm build
+pnpm tauri:build:debug
+```
+
+ネイティブ E2E は、E2E 専用 identifier と capability で build してから実行します。通常 build に WebDriver plugin は含まれません。
+
+```bash
+VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
+pnpm test:e2e
+```
+
+CI は macOS arm64、macOS x64、Windows x64 で Rust test、Tauri debug installer build、ネイティブ E2E を実行します。詳細は [`docs/testing/index.md`](docs/testing/index.md) と [`docs/release-quality-gates.md`](docs/release-quality-gates.md) にあります。
+
+## データとセキュリティ
+
+- React から SQLite、Google API、OS credential store を直接呼びません。
+- OAuth token は OS の秘密ストアへ保存し、SQLite や設定 export へ含めません。
+- CSP は self / IPC と同梱 asset に限定し、remote script、CDN、general shell / fs / SQL 権限を使いません。
+- 公開用診断には予定本文、メール、calendar / event ID、token、絶対パスを含めません。
+
+アプリデータや OAuth credential を Issue、PR、fixture、スクリーンショットへ掲載しないでください。
+
+## 配布
+
+個人利用向けの unsigned installer を生成できます。macOS の署名・公証と Windows code signing、自動 updater は未導入です。第三者へ配布する前に、署名、実機 install / permission smoke、checksum / provenance を [`docs/engineering/desktop-platform-and-release.md`](docs/engineering/desktop-platform-and-release.md) に従って完了してください。
 
 ## 文書案内
 
-- エージェント実行規約: [`AGENTS.md`](AGENTS.md)
+- 実行規約: [`AGENTS.md`](AGENTS.md)
 - 製品不変条件: [`docs/product-invariants.md`](docs/product-invariants.md)
-- アーキテクチャ境界: [`docs/architecture-boundaries.md`](docs/architecture-boundaries.md)
-- 品質・設計原則: [`docs/agent-principles.md`](docs/agent-principles.md)
+- アーキテクチャ: [`docs/architecture-boundaries.md`](docs/architecture-boundaries.md)
 - UI/UX ガバナンス: [`docs/ai-governance/00-index.md`](docs/ai-governance/00-index.md)
-- テスト戦略: [`docs/testing/index.md`](docs/testing/index.md)
+- テスト: [`docs/testing/index.md`](docs/testing/index.md)
 - リリースゲート: [`docs/release-quality-gates.md`](docs/release-quality-gates.md)
-- ユーザー操作説明: [`UserManual.md`](UserManual.md)
-- 障害・復旧・診断: [`OPERATIONS.md`](OPERATIONS.md)
-- コントリビューション: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ## ライセンス
 
-MIT License。第三者依存のライセンスは実装時に別途収集・確認します。
+MIT License。依存ライセンスと既知 advisory は `deny.toml` と Dependency audit workflow で継続監査します。
