@@ -1,0 +1,26 @@
+{
+  "name": "day-schedule-next",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Local-first minute-precision day scheduling desktop app",
+  "scripts": {
+    "verify:harness": "node scripts/verify-agent-harness.mjs",
+    "verify:docs": "node scripts/verify-doc-links.mjs",
+    "verify:security-text": "node scripts/security-scan-text.mjs",
+    "verify:boundaries": "node scripts/check-repository-boundaries.mjs",
+    "verify:bootstrap": "npm run verify:harness && npm run verify:docs && npm run verify:security-text && npm run verify:boundaries",
+    "format:check": "pnpm --dir apps/desktop format:check",
+    "lint": "pnpm --dir apps/desktop lint",
+    "typecheck": "pnpm --dir apps/desktop typecheck",
+    "test": "pnpm --dir apps/desktop test",
+    "test:a11y": "pnpm --dir apps/desktop test:a11y",
+    "test:e2e": "pnpm --dir apps/desktop test:e2e",
+    "build": "pnpm --dir apps/desktop build",
+    "tauri:build:debug": "pnpm --dir apps/desktop tauri build --debug",
+    "verify": "npm run verify:bootstrap && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace --all-features"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.13.1"
+}

@@ -1,0 +1,57 @@
+# Node / frontend
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Rust / Tauri
+target/
+**/target/
+*.pdb
+
+# Local application data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.backup
+backups/
+diagnostics/
+logs/
+*.log
+
+# Secrets / OAuth
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.key
+oauth-client.json
+oauth_client.json
+client_secret*.json
+*.stronghold
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Generated installers / bundles
+artifacts/
+release/
+*.dmg
+*.msi
+*.exe
+*.app
+
+# Temporary plans and local evidence
+plans/local/
+docs/evidence/local/
