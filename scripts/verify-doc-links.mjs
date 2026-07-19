@@ -2,7 +2,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 
 const root = process.cwd();
 const ignoredDirectories = new Set(['.git', 'node_modules', 'target', 'dist', 'coverage', 'artifacts', 'release']);

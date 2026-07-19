@@ -9,7 +9,7 @@
 
 ## 2. 記憶より認識
 
--空き時間、drag handle、selected block、snap、current time を見える手がかりにする。
+- 空き時間、drag handle、selected block、snap、current time を見える手がかりにする。
 - previous values、recent categories、last calendar、saved filters を必要に応じて保持する。
 - validation rule は入力後だけでなく入力中に示す。
 - shortcut は help / menu から参照できる。
