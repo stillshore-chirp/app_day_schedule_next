@@ -1,4 +1,8 @@
-use std::{fs, path::Path, time::Duration};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
@@ -316,6 +320,7 @@ impl Database {
     }
 
     pub async fn apply_pending_restore(database_path: &Path) -> AppResult<bool> {
+        recover_interrupted_restore_swap(database_path)?;
         let directory = backup_directory(database_path)?;
         let pending = directory.join(PENDING_RESTORE_NAME);
         let hash_file = directory.join(PENDING_RESTORE_HASH_NAME);
@@ -354,8 +359,7 @@ impl Database {
         fs::copy(&pending, &swap)
             .map_err(|error| AppError::database("restore-swap-copy", error))?;
         verify_database_file(&swap).await?;
-        fs::rename(&swap, database_path)
-            .map_err(|error| AppError::database("restore-swap-rename", error))?;
+        replace_existing_database(&swap, database_path)?;
         remove_sidecar(database_path, "-wal")?;
         remove_sidecar(database_path, "-shm")?;
         fs::remove_file(&pending).map_err(|error| AppError::database("restore-cleanup", error))?;
@@ -453,6 +457,53 @@ async fn schema_version(pool: &sqlx::SqlitePool) -> AppResult<u32> {
         .map_err(|error| AppError::database("backup-schema-parse", error))
 }
 
+fn restore_displaced_path(database_path: &Path) -> PathBuf {
+    database_path.with_extension("sqlite3.pre-restore-swap")
+}
+
+fn recover_interrupted_restore_swap(database_path: &Path) -> AppResult<()> {
+    let displaced = restore_displaced_path(database_path);
+    if !displaced.exists() {
+        return Ok(());
+    }
+    if database_path.exists() {
+        fs::remove_file(&displaced)
+            .map_err(|error| AppError::database("restore-stale-displaced-cleanup", error))?;
+    } else {
+        fs::rename(&displaced, database_path)
+            .map_err(|error| AppError::database("restore-interrupted-recover", error))?;
+    }
+    Ok(())
+}
+
+fn replace_existing_database(staged: &Path, database_path: &Path) -> AppResult<()> {
+    let displaced = restore_displaced_path(database_path);
+    if displaced.exists() {
+        fs::remove_file(&displaced)
+            .map_err(|error| AppError::database("restore-displaced-cleanup", error))?;
+    }
+    let had_current = database_path.exists();
+    if had_current {
+        fs::rename(database_path, &displaced)
+            .map_err(|error| AppError::database("restore-displace-current", error))?;
+    }
+    if let Err(error) = fs::rename(staged, database_path) {
+        if had_current && let Err(recovery_error) = fs::rename(&displaced, database_path) {
+            return Err(AppError::database(
+                "restore-swap-recovery",
+                format!(
+                    "replacement failed: {error}; current database recovery failed: {recovery_error}"
+                ),
+            ));
+        }
+        return Err(AppError::database("restore-swap-rename", error));
+    }
+    if had_current {
+        let _ = fs::remove_file(displaced);
+    }
+    Ok(())
+}
+
 fn backup_directory(database_path: &Path) -> AppResult<std::path::PathBuf> {
     database_path
         .parent()
@@ -496,6 +547,34 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn replacement_displaces_existing_destination_before_rename() {
+        let directory = tempdir().unwrap();
+        let database_path = directory.path().join("data.sqlite3");
+        let staged = directory.path().join("data.sqlite3.restore-part");
+        fs::write(&database_path, b"current").unwrap();
+        fs::write(&staged, b"restored").unwrap();
+
+        replace_existing_database(&staged, &database_path).unwrap();
+
+        assert_eq!(fs::read(&database_path).unwrap(), b"restored");
+        assert!(!staged.exists());
+        assert!(!restore_displaced_path(&database_path).exists());
+    }
+
+    #[test]
+    fn interrupted_replacement_recovers_displaced_current_database() {
+        let directory = tempdir().unwrap();
+        let database_path = directory.path().join("data.sqlite3");
+        let displaced = restore_displaced_path(&database_path);
+        fs::write(&displaced, b"current").unwrap();
+
+        recover_interrupted_restore_swap(&database_path).unwrap();
+
+        assert_eq!(fs::read(&database_path).unwrap(), b"current");
+        assert!(!displaced.exists());
+    }
 
     #[tokio::test]
     async fn backup_is_verified_recorded_and_rotated() {

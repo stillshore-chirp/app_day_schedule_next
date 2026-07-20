@@ -452,6 +452,12 @@ impl Database {
             .begin()
             .await
             .map_err(|error| AppError::database("google-disconnect-begin", error))?;
+        sqlx::query(
+            "UPDATE schedule_items SET sync_status = 'local_only' WHERE id IN (SELECT entity_id FROM sync_outbox WHERE entity_type = 'schedule' AND completed_at_utc IS NULL)",
+        )
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("google-disconnect-pending-local", error))?;
         if matches!(mode, DisconnectMode::DeleteMappedLocal) {
             sqlx::query(
                 "UPDATE schedule_items SET deleted_at_utc = ?, version = version + 1, sync_status = 'local_only', updated_at_utc = ? WHERE id IN (SELECT m.schedule_item_id FROM sync_mappings m JOIN google_calendars c ON c.id = m.calendar_id WHERE c.account_id = ?)",
@@ -471,6 +477,13 @@ impl Database {
             .await
             .map_err(|error| AppError::database("google-disconnect-keep-local", error))?;
         }
+        sqlx::query(
+            "UPDATE sync_outbox SET completed_at_utc = ?, error_category = 'disconnected' WHERE completed_at_utc IS NULL",
+        )
+        .bind(Utc::now().to_rfc3339())
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("google-disconnect-outbox", error))?;
         sqlx::query("DELETE FROM google_accounts WHERE id = ?")
             .bind(&account_id)
             .execute(&mut *transaction)
@@ -2621,6 +2634,30 @@ mod tests {
         calendar_id
     }
 
+    fn local_draft() -> ScheduleDraft {
+        ScheduleDraft {
+            title: "Synthetic local schedule".into(),
+            description: String::new(),
+            location: String::new(),
+            start_utc: Utc.with_ymd_and_hms(2026, 7, 20, 0, 0, 0).unwrap(),
+            end_utc: Utc.with_ymd_and_hms(2026, 7, 20, 1, 0, 0).unwrap(),
+            timezone_id: "UTC".into(),
+            all_day: false,
+            all_day_start_date: None,
+            all_day_end_date_exclusive: None,
+            status: ScheduleStatus::Scheduled,
+            project: String::new(),
+            category: String::new(),
+            tags: Vec::new(),
+            color: "#6F96F4".into(),
+            priority: Priority::Normal,
+            recurrence_rule: None,
+            recurrence_exdates: Vec::new(),
+            start_notification_minutes: None,
+            end_notification_minutes: None,
+        }
+    }
+
     fn remote_event(id: &str, title: &str) -> Value {
         serde_json::json!({
             "id": id,
@@ -2952,5 +2989,39 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(schedule_count, 0);
+    }
+
+    #[tokio::test]
+    async fn disconnect_cancels_pending_outbox_and_keeps_unsent_schedule_local() {
+        let database = Database::open_memory().await.unwrap();
+        seed_calendar(&database, None).await;
+        let schedule = database.create_schedule(local_draft()).await.unwrap();
+        let pending_before: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sync_outbox WHERE completed_at_utc IS NULL")
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        assert_eq!(pending_before, 1);
+
+        database
+            .disconnect_google(DisconnectMode::KeepLocal)
+            .await
+            .unwrap();
+
+        let pending_after: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sync_outbox WHERE completed_at_utc IS NULL")
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        assert_eq!(pending_after, 0);
+        assert_eq!(
+            database.schedule(schedule.id).await.unwrap().sync_status,
+            SyncStatus::LocalOnly
+        );
+        let account_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM google_accounts")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap();
+        assert_eq!(account_count, 0);
     }
 }

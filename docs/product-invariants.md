@@ -145,6 +145,8 @@
 - attendees、conferenceData、reminders、unknown field を意図せず破棄しない。
 - recurrence master / exception / cancellation を round-trip する。
 - 手動取消は operation ID ごとに分離し、pagination / Outbox item / local transaction の安全な境界で停止する。確定済み remote write は戻さず、未完了 Outbox と決定的 remote event ID により再試行を冪等にする。
+- Undo / Redo は古い entity version の未完了 Outbox を同一 transaction で無効化し、復元版へ単調増加する version と補償 Outbox を与える。
+- Google disconnect は未完了 Outbox を無効化し、未送信 entity を `local_only` へ戻してから account / mapping を削除する。再接続先へ古い操作を暗黙に転送しない。
 
 ## 11. Notification / Focus
 
@@ -163,6 +165,7 @@
 - backup は hash、schema version、verification result を記録する。
 - restore 前に現 DB を退避する。
 - candidate を別 path で integrity check、migration、smoke query してから切り替える。
+- restore 切替は既存 DB の上書き rename に依存せず、同一 directory の一時退避を経由する。中断時に active DB がなければ退避済み DB を次回起動時に回復する。
 - import source は read-only。
 - preview で counts、mapping、warnings、skips を表示する。
 - import commit は single transaction。source を変更しない。

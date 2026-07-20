@@ -35,9 +35,9 @@
 5. schema compatibility / migration。
 6. smoke query and essential counts。
 7. close active connections。
-8. atomic switch where platform allows。
+8. move the active DB to a same-directory displacement path before renaming the staged candidate into place; do not depend on destination-overwriting rename semantics。
 9. reopen and bootstrap。
-10. failure returns to original DB。
+10. failure returns to original DB。If interruption leaves only the displacement file, the next startup restores it before applying another staged candidate。
 
 ## 5. Legacy Python app import
 
@@ -63,7 +63,7 @@ Rules:
 
 - before / after or reversible command payload。
 - bulk template apply is one user action with atomic Undo。
-- sync side effect is represented in Outbox after Undo。
+- sync side effect is represented in Outbox after Undo。Incomplete operations for the old version are superseded before the restored version's compensating operation is enqueued。
 - redo chain invalidated after new edit。
 - history retention and personal data impact are documented。
 

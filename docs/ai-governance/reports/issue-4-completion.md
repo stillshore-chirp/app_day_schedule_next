@@ -88,7 +88,7 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 - Time: UTC instant + IANA timezone、MinuteOfDay、`[start,end)`、DST gap / overlap、all-day dates、recurrence scope を test。
 - Notification: persistent key、grace、replay limit、active Quick Block linkage、Focus history。
 - Sync: local transaction + Outbox、pagination atomic token、410 full sync、401 / 412 / 429 / 5xx / offline、same-field conflict。
-- Data: migration v1→v10、optimistic version、read-only preview / fingerprint、single transaction import、verified backup、staged restore、atomic delete.
+- Data: migration v1→v10、optimistic version、read-only preview / fingerprint、single transaction import、verified backup、staged restore、Windows-safe DB swap、atomic delete.
 - Security: strict CSP、scoped capability、credential store、structured redaction、dependency / license / source audit。
 
 ## 8. Counter-review findings
@@ -110,6 +110,10 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 | P0 | Localization structure | navigation等のcatalogはあるがUI文言がTSXへ散在 | FR-SH-009 | production UIで検出した日本語文言と日時localeを型付きja catalogへ移し、英語catalogを同一key集合で追加できるtranslatorとCI source auditを実装。Fixed |
 | P1 | Settings recovery | 各設定を安全な既定値へ戻す導線がない | FR-ST-001 | Rustの正本 `Settings::default` をtyped IPCで取得し、Google接続・予定データを変更せず保存前フォームへ反映する導線を追加。Fixed |
 | P1 | CI runtime | GitHub Actions v4がNode.js 20廃止警告を生成 | latest head CI annotation | 公式current majorのcheckout / setup-node / upload-artifact v7へ更新。Fixed; latest head CIで再検証 |
+| P1 | Undo sync reconciliation | 削除後の未送信 delete が Undo 後も残り、復元した予定を次回同期で削除できた | Codex review thread / DB regression | 古い Outbox を supersede、復元版を version increment、補償 update を同一 transaction でenqueue。Fixed |
+| P1 | Disconnect pending write | Google切断後も未送信 Outbox が残り、再接続先へ送信できた | Codex review thread / sync regression | 切断前に未完了 Outbox を `disconnected`、対象を `local_only` に戻す。Fixed |
+| P1 | Windows restore swap | 既存宛先への `rename` に依存しWindowsで復元切替が失敗し得た | Codex review thread / filesystem regression | 現DBを一時退避して候補をrenameし、失敗・中断時に退避DBを回復。Fixed |
+| P1 | Dependency freshness gate | transitive `modern-tar@0.7.7` が公開24時間未満でinstall policyに拒否された | pnpm supply-chain verification | 親の互換範囲 `^0.7.3` 内で2026-03-18公開の0.7.6へ固定。install scriptはesbuildのみ許可しdriver downloaderは拒否。Fixed |
 
 ## 9. Evidence
 
@@ -123,7 +127,7 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 
 | Check | Result | Evidence |
 |---|---|---|
-| Rust all-feature suite | Pass, 53 tests | domain / DB / sync mock / cancellation / notification / backup / import |
+| Rust all-feature suite | Pass, 57 tests | domain / DB / sync mock / cancellation / notification / backup / import / review regressions |
 | Frontend unit | Pass, 23 tests | UTC / Asia-Tokyo の双方、coverage report 87.35% statements; 500件virtual windowを含む |
 | Accessibility | Pass, 2 tests | axe app shell / empty state |
 | Native E2E macOS | Pass, 7 scenarios | real IPC / SQLite、settings restart、pointer drag、bulk classification、500件budget + screenshots |

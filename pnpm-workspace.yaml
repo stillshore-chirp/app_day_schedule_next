@@ -4,8 +4,14 @@ packages:
 
 overrides:
   "@wdio/native-utils": 2.5.0
+  modern-tar: 0.7.6
   postcss: 8.5.19
   serialize-javascript: 7.0.5
 
 onlyBuiltDependencies:
   - esbuild
+
+allowBuilds:
+  edgedriver: false
+  esbuild: true
+  geckodriver: false

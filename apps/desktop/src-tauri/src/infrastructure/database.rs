@@ -876,6 +876,7 @@ impl Database {
             let entity_id = parse_uuid(row.get::<&str, _>("entity_id"), "undo-entity")?;
             let before_json: Option<String> = row.get("before_json");
             apply_snapshot(&mut transaction, entity_id, before_json.as_deref(), true).await?;
+            reconcile_history_sync(&mut transaction, entity_id, Utc::now()).await?;
             changed_ids.push(entity_id);
         }
         sqlx::query("UPDATE change_history SET undone = 1 WHERE action_id = ?")
@@ -921,6 +922,7 @@ impl Database {
             let entity_id = parse_uuid(row.get::<&str, _>("entity_id"), "redo-entity")?;
             let after_json: String = row.get("after_json");
             apply_snapshot(&mut transaction, entity_id, Some(&after_json), false).await?;
+            reconcile_history_sync(&mut transaction, entity_id, Utc::now()).await?;
             changed_ids.push(entity_id);
         }
         sqlx::query("UPDATE change_history SET undone = 0 WHERE action_id = ?")
@@ -1653,8 +1655,17 @@ async fn apply_snapshot(
     undo_create: bool,
 ) -> AppResult<()> {
     if let Some(snapshot_json) = snapshot_json {
-        let schedule: Schedule = serde_json::from_str(snapshot_json)
+        let mut schedule: Schedule = serde_json::from_str(snapshot_json)
             .map_err(|error| AppError::database("history-decode", error))?;
+        let current_version: i64 =
+            sqlx::query_scalar("SELECT version FROM schedule_items WHERE id = ?")
+                .bind(entity_id.to_string())
+                .fetch_one(&mut **transaction)
+                .await
+                .map_err(|error| AppError::database("history-current-version", error))?;
+        schedule.version = u64::try_from(current_version)
+            .map_err(|error| AppError::database("history-current-version-range", error))?
+            .saturating_add(1);
         update_schedule_row(transaction, &schedule, Utc::now()).await
     } else if undo_create {
         let result = sqlx::query(
@@ -1677,6 +1688,46 @@ async fn apply_snapshot(
             "missing snapshot",
         ))
     }
+}
+
+async fn reconcile_history_sync(
+    transaction: &mut Transaction<'_, Sqlite>,
+    entity_id: Uuid,
+    now: DateTime<Utc>,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE sync_outbox SET completed_at_utc = ?, error_category = 'superseded' WHERE entity_id = ? AND completed_at_utc IS NULL",
+    )
+    .bind(timestamp(now))
+    .bind(entity_id.to_string())
+    .execute(&mut **transaction)
+    .await
+    .map_err(|error| AppError::database("history-outbox-supersede", error))?;
+
+    let mapped: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM sync_mappings WHERE schedule_item_id = ?)")
+            .bind(entity_id.to_string())
+            .fetch_one(&mut **transaction)
+            .await
+            .map_err(|error| AppError::database("history-sync-mapping", error))?;
+    let has_sync_target = mapped || has_default_write_target(transaction).await?;
+    let mut schedule = fetch_schedule(transaction, entity_id).await?;
+    if has_sync_target && !matches!(schedule.sync_status, SyncStatus::ReadOnly) {
+        schedule.sync_status = SyncStatus::Pending;
+        update_schedule_row(transaction, &schedule, now).await?;
+        let operation = if schedule.deleted_at.is_some() {
+            "delete"
+        } else if mapped {
+            "update"
+        } else {
+            "create"
+        };
+        enqueue_outbox(transaction, &schedule, operation, now).await?;
+    } else if !matches!(schedule.sync_status, SyncStatus::ReadOnly) {
+        schedule.sync_status = SyncStatus::LocalOnly;
+        update_schedule_row(transaction, &schedule, now).await?;
+    }
+    Ok(())
 }
 
 pub(super) fn row_to_schedule(row: &SqliteRow) -> AppResult<Schedule> {
@@ -1882,6 +1933,72 @@ mod tests {
             database.schedule(created.id).await.unwrap().draft.title,
             "更新"
         );
+    }
+
+    #[tokio::test]
+    async fn undo_supersedes_stale_delete_outbox_and_enqueues_compensating_update() {
+        let database = Database::open_memory().await.unwrap();
+        connect_default_calendar(&database).await;
+        let created = database
+            .create_schedule(draft("同期済み予定"))
+            .await
+            .unwrap();
+        let calendar_id: String =
+            sqlx::query_scalar("SELECT id FROM google_calendars WHERE default_write_target = 1")
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        sqlx::query("UPDATE sync_outbox SET completed_at_utc = ? WHERE entity_id = ?")
+            .bind(Utc::now().to_rfc3339())
+            .bind(created.id.to_string())
+            .execute(&database.pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO sync_mappings(schedule_item_id, calendar_id, remote_event_id, etag, base_snapshot_json, base_hash) VALUES (?, ?, 'synthetic-event', 'etag-1', '{}', 'synthetic-hash')",
+        )
+        .bind(created.id.to_string())
+        .bind(calendar_id)
+        .execute(&database.pool)
+        .await
+        .unwrap();
+        sqlx::query("UPDATE schedule_items SET sync_status = 'synced' WHERE id = ?")
+            .bind(created.id.to_string())
+            .execute(&database.pool)
+            .await
+            .unwrap();
+
+        database
+            .delete_schedule_scoped(
+                created.id,
+                created.version,
+                RecurrenceEditScope::Series,
+                None,
+            )
+            .await
+            .unwrap();
+        database.undo().await.unwrap();
+
+        let restored = database.schedule(created.id).await.unwrap();
+        assert!(restored.deleted_at.is_none());
+        assert_eq!(restored.version, 2);
+        assert_eq!(restored.sync_status, SyncStatus::Pending);
+        let pending_delete_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sync_outbox WHERE entity_id = ? AND operation = 'delete' AND completed_at_utc IS NULL",
+        )
+        .bind(created.id.to_string())
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert_eq!(pending_delete_count, 0);
+        let pending_update_version: i64 = sqlx::query_scalar(
+            "SELECT entity_version FROM sync_outbox WHERE entity_id = ? AND operation = 'update' AND completed_at_utc IS NULL",
+        )
+        .bind(created.id.to_string())
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert_eq!(pending_update_version, 2);
     }
 
     #[tokio::test]

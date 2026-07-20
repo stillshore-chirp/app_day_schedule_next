@@ -90,6 +90,8 @@ base から local だけ変更、remote だけ変更は自動 merge。両方が�
 - manual retry は duplicate worker を作らない。
 - conflict resolution は local / Google / field-by-field の影響を示す。
 - manual sync は operation ID に紐づく cancel token を持つ。取消要求は page fetch 前後、Outbox item 間、pull transaction commit 前で検査する。remote write 完了後の取消では確定済み結果を保持し、未完了 Outbox を決定的 event ID で再試行する。
+- Undo / Redo は同一 transaction 内で過去版の未完了 Outbox を `superseded` として完了し、復元した entity に単調増加する version を与えて create / update / delete の補償操作を積み直す。
+- Google disconnect は account / mapping の削除前に未完了 Outbox を `disconnected` として完了し、その対象 entity を `local_only` へ戻す。別アカウントや別カレンダーへの再接続で古い操作を暗黙に転送しない。
 
 ## 9. Tests
 
