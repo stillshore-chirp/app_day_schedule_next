@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import ts from "../apps/desktop/node_modules/typescript/lib/typescript.js";
 
 const sourceRoot = path.resolve("apps/desktop/src");
 const catalogPath = path.join(sourceRoot, "shared/i18n/messages.ts");
@@ -17,32 +16,68 @@ function sourceFiles(directory) {
   });
 }
 
+function auditSource(file, sourceText) {
+  let state = "code";
+  let escaped = false;
+  let line = 1;
+  let column = 1;
+  const reportedLines = new Set();
+
+  const report = () => {
+    if (reportedLines.has(line)) return;
+    reportedLines.add(line);
+    violations.push(`${path.relative(process.cwd(), file)}:${line}:${column}`);
+  };
+
+  for (let index = 0; index < sourceText.length; index += 1) {
+    const character = sourceText[index];
+    const next = sourceText[index + 1];
+
+    if (state === "line-comment") {
+      if (character === "\n") state = "code";
+    } else if (state === "block-comment") {
+      if (character === "*" && next === "/") {
+        state = "code";
+        index += 1;
+        column += 1;
+      }
+    } else if (state === "code") {
+      if (character === "/" && next === "/") {
+        state = "line-comment";
+        index += 1;
+        column += 1;
+      } else if (character === "/" && next === "*") {
+        state = "block-comment";
+        index += 1;
+        column += 1;
+      } else if (character === "\"" || character === "'" || character === "`") {
+        state = character;
+        escaped = false;
+      } else if (japanese.test(character)) {
+        report();
+      }
+    } else if (escaped) {
+      escaped = false;
+    } else if (character === "\\") {
+      escaped = true;
+    } else if (character === state) {
+      state = "code";
+    } else if (japanese.test(character) || sourceText.startsWith("ja-JP", index)) {
+      report();
+    }
+
+    if (character === "\n") {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+}
+
 for (const file of sourceFiles(sourceRoot)) {
   const sourceText = fs.readFileSync(file, "utf8");
-  const source = ts.createSourceFile(
-    file,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-
-  function visit(node) {
-    const text =
-      ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isJsxText(node)
-        ? node.text
-        : ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)
-          ? node.text
-          : null;
-    if (text && (japanese.test(text) || text === "ja-JP")) {
-      const location = source.getLineAndCharacterOfPosition(node.getStart(source));
-      violations.push(
-        `${path.relative(process.cwd(), file)}:${location.line + 1}:${location.character + 1}`,
-      );
-    }
-    ts.forEachChild(node, visit);
-  }
-  visit(source);
+  auditSource(file, sourceText);
 }
 
 if (violations.length > 0) {
