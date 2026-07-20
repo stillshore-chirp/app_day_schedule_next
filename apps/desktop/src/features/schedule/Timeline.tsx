@@ -333,6 +333,7 @@ export function Timeline({
             const width = `calc(${100 / item.laneCount}% - 8px)`;
             const left = `calc(${(item.lane * 100) / item.laneCount}% + 4px)`;
             const current = isToday && isCurrent(item.schedule, now);
+            const density = height < (current ? 84 : 56) ? "compact" : "regular";
             const detailsId = `timeline-details-${item.schedule.id}`;
             return (
               <button
@@ -348,6 +349,7 @@ export function Timeline({
                 aria-describedby={detailsId}
                 aria-pressed={selectedId === item.schedule.id}
                 data-current={current || undefined}
+                data-density={density}
                 data-sync={item.schedule.syncStatus}
                 data-priority={item.schedule.priority}
                 style={{ top, height, width, left, backgroundColor: item.schedule.color }}
@@ -363,8 +365,8 @@ export function Timeline({
                   aria-hidden="true"
                   onPointerDown={(event) => beginEventDrag(event, item.schedule, "resize-start")}
                 />
-                <strong>{item.schedule.title}</strong>
-                <span>
+                <strong className="timeline-event-title">{item.schedule.title}</strong>
+                <span className="timeline-event-time">
                   {formatTime(item.schedule.startUtc)}–{formatTime(item.schedule.endUtc)}
                 </span>
                 {current ? (

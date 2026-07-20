@@ -80,6 +80,7 @@ pnpm test:e2e
 - 720 × 720 の最小幅ナビゲーション
 - テンプレート、24時間／詳細編集、Quick Block、自由アラーム、Focus 履歴
 - Today、List、Week、Template、Focus、Compact、Data / Conflict の synthetic native screenshot
+- 30分予定のoverview marker、detail 1行density、完全なaccessible name、title / timeのcard内geometry
 - 専用一時DBへ500予定を実IPCで投入し、仮想化DOM上限とscroll / dragのmain-thread 16.7ms budgetを各30回測定
 
 CI は `macos-15`、`macos-15-intel`、`windows-latest` で同じ suite を実行します。失敗時は screenshot とマスク対象を確認した log を artifact にします。macOS arm64 では続けて `scripts/compare-visual-snapshots.swift` を実行し、Today、Week、Template、Compact、Conflict を channel差32・不一致pixel 4%の許容差で比較します。超過時は赤い差分PNGを artifact に残し、意図した変更だけ baseline 更新としてレビューします。

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Schedule } from "../../shared/contracts";
+import { formatTime } from "../../shared/time";
 import { Timeline } from "./Timeline";
 
 const schedule: Schedule = {
@@ -30,6 +31,35 @@ const schedule: Schedule = {
 };
 
 describe("Timeline interactions", () => {
+  it("uses a single-row layout for a 30-minute schedule without losing its full name", () => {
+    render(
+      <Timeline
+        schedules={[
+          {
+            ...schedule,
+            title: "30分の短時間予定",
+            endUtc: "2026-07-20T00:30:00.000Z",
+          },
+        ]}
+        selectedDate={new Date("2026-07-20T00:00:00.000Z")}
+        selectedId={null}
+        snapMinutes={5}
+        onSelect={vi.fn()}
+        onCreate={vi.fn()}
+        onCreateRange={vi.fn()}
+        onAdjust={vi.fn().mockResolvedValue(undefined)}
+        referenceMinute={0}
+      />,
+    );
+
+    const event = screen.getByRole("button", { name: /30分の短時間予定/ });
+    expect(event).toHaveAttribute("data-density", "compact");
+    expect(event.querySelector(".timeline-event-title")).toHaveTextContent("30分の短時間予定");
+    expect(event.querySelector(".timeline-event-time")).toHaveTextContent(
+      `${formatTime(schedule.startUtc)}–${formatTime("2026-07-20T00:30:00.000Z")}`,
+    );
+  });
+
   it("provides a keyboard equivalent for moving an event", async () => {
     const adjust = vi.fn().mockResolvedValue(undefined);
     render(

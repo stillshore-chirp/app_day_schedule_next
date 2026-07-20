@@ -42,6 +42,7 @@ Precondition: 初回利用、Today、今日の予定なし、Google 未接続、
 |---|---|---|---|---|
 | First use / empty | 今日、空の理由、最初の作成 | 作成／別日／template | heading、status、button | Pass |
 | Normal | strip、timeline、Now、selected inspector | create / edit / duplicate / delete | role / label / visible focus | Pass |
+| Short schedule / long title | 45分以下はstripのmarker、detailの1行title、選択後Inspector | marker / cardを選択、direct edit | 完全なtitle / start / end / syncのaccessible name、native before / after | Pass |
 | Many / overlap | side-by-side lane、100件 page、500件一括変更 | select / filter / page / bulk / Undo | timeline virtualization、DB atomicity、50k DB test、native 30-run budget | Pass; 188 DOM、scroll p95 2ms、drag p95 0ms |
 | Cross-midnight / all-day | day segment、local date range | direct edit | Rust boundary tests | Pass |
 | Loading | 対象を確認中 | wait / retry | `role=status` | Pass |
@@ -64,12 +65,13 @@ Precondition: 初回利用、Today、今日の予定なし、Google 未接続、
 - Drag equivalent: pointer create / move / resize に direct time input と arrow key を提供。`Esc` で取消。native E2E は pointer path から作成・SQLite再検索まで実行。
 - Focus: `:focus-visible` 3px outline、semantic main / aside / nav / section / heading、accessible name。
 - Status: loading、saving、error、empty、sync、permission を text と role で伝える。
+- Short schedule: 30分カードは高さに応じて1行化し、狭いlaneでは時刻だけを省略する。overview markerとdetail cardはいずれもtitle、start / end、syncをaccessible nameに保持し、選択後Inspectorから完全な詳細へ到達できる。
 - Contrast: dark screenshot の heading / Quick Block title の継承色問題を反証レビューで検出し、明示 `inherit` / theme token へ修正。
 - Target:主要 control は最小40px、timeline handle は focus 時にも見える。
 - Automated: axe app shell / empty state 2件、component keyboard tests 2件。
 - Manual pending: 200% text、Windows high DPI、screen reader full critical flow。
 
-Primary action は Today の「＋予定」、date / sync / current-next は固定位置です。詳細説明は primary action を押し下げず、設定・診断・help text へ配置しています。Compact は current / next / Focus に情報を限定します。
+Primary action は Today の「＋予定」、date / sync / current-next は固定位置です。24時間 overview は短い予定を分布markerとして示し、分単位の識別・編集はdetail timelineとInspectorへ委ねるため、狭い幅で先頭1文字だけが残る誤読を避けます。詳細説明は primary action を押し下げず、設定・診断・help text へ配置しています。Compact は current / next / Focus に情報を限定します。
 
 ## 6. Copy / expert efficiency / trust
 
@@ -114,12 +116,15 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 | P1 | Disconnect pending write | Google切断後も未送信 Outbox が残り、再接続先へ送信できた | Codex review thread / sync regression | 切断前に未完了 Outbox を `disconnected`、対象を `local_only` に戻す。Fixed |
 | P1 | Windows restore swap | 既存宛先への `rename` に依存しWindowsで復元切替が失敗し得た | Codex review thread / filesystem regression | 現DBを一時退避して候補をrenameし、失敗・中断時に退避DBを回復。Fixed |
 | P1 | Dependency freshness gate | transitive `modern-tar@0.7.7` が公開24時間未満でinstall policyに拒否された | pnpm supply-chain verification | 親の互換範囲 `^0.7.3` 内で2026-03-18公開の0.7.6へ固定。install scriptはesbuildのみ許可しdriver downloaderは拒否。Fixed |
+| P1 | Short schedule density | 30分予定でdetailのtitle / timeが上下端にclipし、overviewは先頭1文字だけが残った | user screenshot + synthetic native reproduction | detailを高さ依存の1行／複数行へ切替、overviewは45分以下をmarker化。完全なaccessible name / tooltip / Inspectorを保持し、native geometry testとbefore / afterで固定。Fixed |
 
 ## 9. Evidence
 
 - Before: repository に app scaffold がなく、画面差分を取得不能。最初の接続済み empty state は [`native-initial-empty.jpeg`](../../evidence/issue-4/native-initial-empty.jpeg)。
 - After: `docs/evidence/issue-4/` の Today、List、narrow Settings、Template editor / library、Focus、Week、Compact、Data / Conflict screenshots（synthetic dataのみ）。
-- Native test: real Tauri / IPC / SQLite を macOS local で7 scenarios通過。
+- Short schedule before: [`overview`](../../evidence/issue-4/native-short-schedule-overview-before.png) / [`detail`](../../evidence/issue-4/native-short-schedule-detail-before.png)。30分予定の先頭1文字化とtitle / time clipを同じisolated fixtureで再現。
+- Short schedule after: [`overview`](../../evidence/issue-4/native-short-schedule-overview-after.png) / [`detail`](../../evidence/issue-4/native-short-schedule-detail-after.png)。marker化、1行title、選択Inspector、完全なaccessible nameを同じviewport / fixtureで確認。
+- Native test: real Tauri / IPC / SQLite を macOS local で8 scenarios通過。30分予定はoverview marker、detail 1行化、完全なaccessible name、title / timeがカード上下端を越えないgeometryを検証。
 - Performance: [`startup-performance-macos-arm64.json`](../../evidence/issue-4/startup-performance-macos-arm64.json) と [`performance-500-macos-arm64.json`](../../evidence/issue-4/performance-500-macos-arm64.json) に測定定義、閾値、全30 sampleを保存。
 - Test data: `E2E予定-*` 等の synthetic label。account、calendar / event ID、token、local DB path を含まない。
 
@@ -128,9 +133,9 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 | Check | Result | Evidence |
 |---|---|---|
 | Rust all-feature suite | Pass, 57 tests | domain / DB / sync mock / cancellation / notification / backup / import / review regressions |
-| Frontend unit | Pass, 23 tests | UTC / Asia-Tokyo の双方、coverage report 87.35% statements; 500件virtual windowを含む |
+| Frontend unit | Pass, 25 tests | UTC / Asia-Tokyo の双方、coverage report 87.35% statements; 30分予定のdensityと500件virtual windowを含む |
 | Accessibility | Pass, 2 tests | axe app shell / empty state |
-| Native E2E macOS | Pass, 7 scenarios | real IPC / SQLite、settings restart、pointer drag、bulk classification、500件budget + screenshots |
+| Native E2E macOS | Pass, 8 scenarios | real IPC / SQLite、settings restart、pointer drag、bulk classification、30分予定のgeometry、500件budget + screenshots |
 | 50k search | Pass | Rust integration target <150ms |
 | Release startup | Pass | macOS arm64 warm p95 392ms / fresh-profile p95 400ms、各30回 |
 | 500 item main-thread budget | Pass | 188 DOM、scroll p95 2ms / drag p95 0ms、各30回、16.7ms budget |
@@ -156,6 +161,7 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 | clean installer upgrade / uninstall | unsigned CI artifactは生成、clean install未実施 | bundle / data retention差 | CI artifactでmanual smoke |
 | sleep / resume / clock jump actual OS | deterministic testsのみ | lifecycle delivery差 | 10分以内／超の実機sleep test |
 | 200% text / high DPI / multi-monitor | local automated suite対象外 | clipping / window restore | platform visual matrix |
+| macOS arm64 pixel baseline local比較 | 現在のdesktop captureが1440×920、CI baselineが1024×681で寸法不一致 | 通常Today surfaceのpixel差分はlatest CIでのみ判定 | macOS arm64 CIのvisual comparisonを確認 |
 | signed / notarized distribution | personal unsigned v0.1 scope | OS reputation warning | signing Issue before third-party release |
 
 これらは実装を「存在する release candidate」とすることは妨げませんが、すべてが観測されるまで「即出荷可能」「Complete」とは判定しません。

@@ -47,17 +47,22 @@ export function DayOverview({
           </span>
         ))}
         {items.map(({ schedule, startMinute, endMinute, level, levelCount }) => {
+          const durationMinutes = endMinute - startMinute;
+          const density = durationMinutes <= 45 ? "micro" : "regular";
+          const accessibleLabel = translate("features.schedule.DayOverview.005", [
+            schedule.title,
+            formatTime(schedule.startUtc),
+            formatTime(schedule.endUtc),
+          ]);
           return (
             <button
               className="overview-event"
               key={`${schedule.id}-${schedule.startUtc}`}
               type="button"
-              aria-label={translate("features.schedule.DayOverview.005", [
-                schedule.title,
-                formatTime(schedule.startUtc),
-                formatTime(schedule.endUtc),
-              ])}
+              aria-label={accessibleLabel}
               aria-pressed={selectedId === schedule.id}
+              title={accessibleLabel}
+              data-density={density}
               data-sync={schedule.syncStatus}
               style={{
                 left: `${(startMinute / 1440) * 100}%`,
