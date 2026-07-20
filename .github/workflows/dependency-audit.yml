@@ -1,0 +1,53 @@
+name: Dependency audit
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - package.json
+      - apps/desktop/package.json
+      - pnpm-lock.yaml
+      - Cargo.toml
+      - Cargo.lock
+      - apps/desktop/src-tauri/Cargo.toml
+      - deny.toml
+      - .github/workflows/dependency-audit.yml
+  workflow_dispatch:
+  schedule:
+    - cron: "41 17 1 * *"
+
+concurrency:
+  group: dependency-audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    name: Known vulnerabilities, licenses and sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Activate pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.13.1 --activate
+      - name: Audit JavaScript dependencies
+        run: pnpm audit --audit-level moderate
+      - name: Verify Rust advisories, licenses and sources
+        uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        with:
+          rust-version: "1.89.0"
+          command: check advisories licenses sources
+          arguments: --all-features
+          manifest-path: ./Cargo.toml

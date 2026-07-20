@@ -1,65 +1,89 @@
 # Desktop Platform and Release Contract
 
-## 1. Supported platforms
+## 1. 対応プラットフォーム
 
-- macOS: primary development and first completion target。
-- Windows: same feature contract, no second implementation fork。
-- Linux: not a release target unless a separate Issue accepts support burden。
+| Platform | Architecture | CI runner | Bundle |
+|---|---|---|---|
+| macOS 10.15+ | arm64 | `macos-15` | `.app` / `.dmg` |
+| macOS 10.15+ | x86_64 | `macos-15-intel` | `.app` / `.dmg` |
+| Windows 10/11 | x86_64 | `windows-latest` | NSIS current-user installer |
 
-## 2. Tauri security
+Linux は対象外です。macOS / Windows は同じ domain、application、React code を使用し、platform fork を作りません。
 
-- strict production CSP configured in Tauri config。
-- no remote script / CDN。
-- Google HTTP runs in Rust; WebView does not need broad `connect-src`。
-- capabilities are window / command scoped。
-- no general shell / filesystem / SQL / HTTP frontend plugin permission。
-- external browser URLs are allowlisted。
+## 2. build contract
 
-## 3. Windows and macOS differences
+- Node.js 22、pnpm 10.13.1、frozen `pnpm-lock.yaml`
+- Rust 1.89.0、edition 2024、`Cargo.lock`
+- app / bundle version: `0.1.0`
+- stable app identifier: `com.stillshorechirp.dayschedulenext`
+- release artifact は source commit と version を対応付け、git へ commit しない
 
-- WebView: WKWebView vs WebView2。
-- keyring: Keychain vs Credential Manager。
-- notification permission / behavior。
-- shortcut modifier: Command vs Control。
-- menu / tray / close semantics。
-- file path / installer / app data location。
-- multi-monitor scale and window restore。
+```bash
+corepack enable
+pnpm install --frozen-lockfile
+pnpm build
+pnpm tauri:build:debug
+```
 
-Common domain and application behavior must remain platform-independent。
+PR CI は全PRでharness / frontendを実行し、`apps/desktop`、Rust workspace、lockfile等に変更がある場合だけ、個人利用の主対象である`macos-15`でformat、clippy、all-feature test、通常identifierのno-bundle buildを実行します。open PRへのpushと`pull_request`の二重起動、毎回のinstaller artifact生成は行いません。
 
-## 4. Window contract
+macOS x64 / Windows、Native E2E、installer生成は `Native release validation` の手動入力へ移します。通常は`macos-arm64`だけを選択し、release判断時は`platform=all`、`build_installers=true`で3 platformを検証します。Native E2Eは専用identifier `com.stillshorechirp.dayschedulenext.e2e` とfeatureを使い、通常bundleにWebDriver pluginを含めません。失敗診断とinstaller artifactは7日で失効します。
 
-- main window。
-- Compact Window: current / next / remaining / Focus; optional always-on-top。
-- positions stored by logical window label。
-- restore clamps to visible display work area。
-- close / hide / tray / quit behavior explicit and user-configurable when tray is introduced。
-- single-instance prevents duplicate sync / notification workers。
+## 3. Tauri security
 
-## 5. Build
+- production CSP は self / IPC / bundled asset に限定
+- remote script / CDN / iframe / object を禁止
+- Google HTTP、SQLite、keyring、notification adapter は Rust 側
+- frontend plugin permission は main / compact window ごとの最小 capability
+- general shell、general filesystem、raw SQL、arbitrary HTTP permission は不使用
+- external browser は OAuth の検証済み Google authorization URL だけを開く
 
-- Node 22+、pnpm lockfile、Rust stable toolchain / lockfile。
-- macOS and Windows debug build on PR after scaffold。
-- release build uses immutable source commit and version。
-- generated installers / app bundles are artifacts, not git files。
+E2E capability は `cfg(feature = "e2e")` の build だけに存在します。
 
-## 6. Signing / distribution
+## 4. OS 差分
 
-Initial personal use may use unsigned builds with documented OS warnings. When signing is introduced:
+- WebView: WKWebView / WebView2
+- credential store: Keychain / Credential Manager
+- notification permission と delivery behavior
+- Command / Control、tray、close / quit semantics
+- path、installer、scale、multi-monitor work area
 
-- secrets in GitHub encrypted secrets or local secure store。
-- no signing on untrusted PR。
-- macOS Developer ID / notarization and Windows signing are separate gated workflows。
-- checksums and provenance accompany release artifacts。
-- updater is disabled until signature verification and rollback policy are designed。
+window state は logical label で保存し、main / Compact の always-on-top を独立管理します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
 
-## 7. Upgrade / uninstall
+## 5. unsigned 個人配布
 
-- app identifier and data directory are stable。
-- upgrade runs backup + migration before normal startup。
-- uninstall policy must state whether user DB / backups remain。
-- downgrade to older incompatible schema is blocked with recovery instructions。
+初期 build は個人利用向け unsigned artifact です。
 
-## 8. Manual release matrix
+- macOS: Gatekeeper 警告が出る可能性を説明し、出所不明の build を回避
+- Windows: SmartScreen 警告が出る可能性を説明
+- checksum / provenance がない artifact を第三者へ再配布しない
+- updater は署名検証・rollback 設計がないため無効
 
-Use `.agents/skills/desktop-release-review/SKILL.md` and `docs/release-quality-gates.md`。Build success alone is insufficient; install、launch、permission、keyring、notification、OAuth、window、backup must be observed on affected OS。
+個人 build の作成は「第三者向け正式配布」を意味しません。
+
+## 6. signing 導入時
+
+- macOS Developer ID / notarization と Windows code signing は別々の gated workflow
+- signing secret と証明書は GitHub encrypted secret または local secure store
+- untrusted PR で signing しない
+- release artifact に checksum、source SHA、SBOM / license result、provenance を付ける
+- updater は署名検証、段階配布、失敗時 rollback、schema downgrade policy の Issue 後に有効化
+
+## 7. upgrade / uninstall
+
+- upgrade 前に自動 backup を作り、migration failure では旧 DB を切り替えない
+- current schema より古い backup は restore staging 後に migration
+- incompatible newer schema の downgrade は拒否
+- current-user uninstall が DB / backup を保持するかは release note で明示
+- 完全削除はアプリ内の確認文付き削除を先に使い、credential store も削除
+
+## 8. release checklist
+
+1. [`docs/release-quality-gates.md`](../release-quality-gates.md) を埋める。
+2. dependency audit、public text scan、CSP / capability review を通す。
+3. latest commit のPR quality / macOS arm64 native smokeを確認し、`Native release validation`を`platform=all`、`build_installers=true`で実行してmacOS arm64 / x64、Windows x64のnative E2Eとinstallerを確認する。
+4. 対象 OS で clean install、launch、single instance、tray、Compact、notification、credential store、OAuth loopback、backup / restore、upgrade / uninstall を観測する。
+5. 200% text、OS scaling、multi-monitor はリスクに応じて観測し、未実行を明示する。
+6. artifact 名、SHA、version、source commit、観測者、日付を release note に残す。
+
+Build successだけでは release manual check の代替になりません。未実行の OS check が残る場合は release candidate として扱い、「即出荷可能」と表現しません。

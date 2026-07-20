@@ -11,6 +11,8 @@ test-results/
 target/
 **/target/
 *.pdb
+apps/desktop/src-tauri/icons/android/
+apps/desktop/src-tauri/icons/ios/
 
 # Local application data
 *.db

@@ -1,51 +1,74 @@
-name: Native E2E
+name: Native release validation
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 18 * * 1"
+    inputs:
+      platform:
+        description: Platform to validate
+        required: true
+        default: macos-arm64
+        type: choice
+        options:
+          - macos-arm64
+          - macos-x64
+          - windows-x64
+          - all
+      build_installers:
+        description: Build and retain unsigned personal-use installers after E2E
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
-  group: native-e2e-${{ github.ref }}
+  group: native-release-${{ github.ref }}-${{ inputs.platform }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  detect:
+  prepare:
+    name: Select platform matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
-      has_app: ${{ steps.detect.outputs.has_app }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - id: detect
+      - id: matrix
+        name: Build matrix
         shell: bash
         run: |
-          if [[ -f apps/desktop/package.json && -f apps/desktop/src-tauri/Cargo.toml && -f Cargo.toml && -f pnpm-lock.yaml ]]; then
-            echo "has_app=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_app=false" >> "$GITHUB_OUTPUT"
-          fi
+          case "${{ inputs.platform }}" in
+            macos-arm64)
+              matrix='{"include":[{"os":"macos-15","label":"macOS arm64"}]}'
+              ;;
+            macos-x64)
+              matrix='{"include":[{"os":"macos-15-intel","label":"macOS x64"}]}'
+              ;;
+            windows-x64)
+              matrix='{"include":[{"os":"windows-latest","label":"Windows x64"}]}'
+              ;;
+            all)
+              matrix='{"include":[{"os":"macos-15","label":"macOS arm64"},{"os":"macos-15-intel","label":"macOS x64"},{"os":"windows-latest","label":"Windows x64"}]}'
+              ;;
+          esac
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   native-e2e:
-    needs: detect
-    if: needs.detect.outputs.has_app == 'true'
+    name: Native E2E (${{ matrix.label }})
+    needs: prepare
     strategy:
       fail-fast: false
-      matrix:
-        os:
-          - macos-latest
-          - windows-latest
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 75
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
       - name: Activate pnpm
@@ -53,18 +76,45 @@ jobs:
         run: |
           corepack enable
           corepack prepare pnpm@10.13.1 --activate
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.89.0
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build isolated WebdriverIO debug application
+        shell: bash
+        run: VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
       - name: Run native E2E with synthetic fixtures
         run: pnpm test:e2e
-      - name: Upload redacted E2E artifacts
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
+      - name: Compare macOS arm64 visual baselines
+        if: matrix.label == 'macOS arm64'
+        shell: bash
+        run: |
+          swift -module-cache-path "${RUNNER_TEMP}/swift-module-cache" \
+            scripts/compare-visual-snapshots.swift \
+            apps/desktop/tests/visual-baselines/macos-arm64 \
+            apps/desktop/test-results \
+            apps/desktop/test-results/visual-diff
+      - name: Build normal unsigned personal-use installer
+        if: inputs.build_installers && success()
+        run: pnpm tauri:build:debug
+      - name: Upload unsigned personal-use installer
+        if: inputs.build_installers && success()
+        uses: actions/upload-artifact@v7
         with:
-          name: native-e2e-${{ matrix.os }}
+          name: day-schedule-next-debug-${{ matrix.label }}
+          path: target/debug/bundle/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload redacted failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-e2e-failure-${{ matrix.label }}
           path: |
             apps/desktop/test-results/
-            apps/desktop/playwright-report/
+            apps/desktop/logs/
+            apps/desktop/wdio-logs/
           if-no-files-found: ignore
-          retention-days: 30
+          retention-days: 7

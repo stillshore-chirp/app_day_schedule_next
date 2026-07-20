@@ -4,18 +4,17 @@
 
 UI、application workflow、pure domain、external adapter を分離し、時間・同期・データ保護の規則を WebView や API library の都合から独立させます。
 
-## 2. 予定する構造
+## 2. 現行構造
 
 ```text
 apps/desktop/
 ├─ src/
-│  ├─ app/                 # shell, providers, routes/windows
-│  ├─ features/            # schedule, template, focus, alarm, sync, settings
+│  ├─ app/                 # shell, main / Compact windows, native runtimes
+│  ├─ features/            # schedule and user-visible views
 │  ├─ shared/
 │  │  ├─ ui/               # accessible primitives and tokens
-│  │  ├─ ipc/              # typed invoke client only
-│  │  ├─ state/            # short-lived interaction state
-│  │  └─ test/
+│  │  ├─ ipc/              # typed Tauri client and in-memory test client
+│  │  └─ time.ts           # display-only time helpers
 │  └─ main.tsx
 ├─ src-tauri/
 │  ├─ src/
@@ -27,10 +26,8 @@ apps/desktop/
 │  ├─ migrations/
 │  ├─ capabilities/
 │  └─ tauri.conf.json
-└─ tests/e2e/
-packages/
-├─ ui-tokens/
-└─ test-fixtures/
+├─ tests/e2e/              # native WebdriverIO critical flows
+└─ test/                   # unit / a11y setup
 ```
 
 ## 3. 依存方向
@@ -137,4 +134,4 @@ network request を SQLite transaction 中に待たない。
 
 ## 11. Boundary enforcement
 
-`node scripts/check-repository-boundaries.mjs` は最低限の禁止 import / dependency leakage を検査します。実装開始後に architecture test を追加し、例外は allowlist と理由を明示します。
+`node scripts/check-repository-boundaries.mjs` は frontend SQL / keyring / Google HTTP、domain の Tauri / SQLx / reqwest / keyring 依存、禁止 capability を検査します。例外は allowlist と理由を同じ変更に残します。

@@ -1,14 +1,16 @@
 {
   "name": "day-schedule-next",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Local-first minute-precision day scheduling desktop app",
   "scripts": {
     "verify:harness": "node scripts/verify-agent-harness.mjs",
     "verify:docs": "node scripts/verify-doc-links.mjs",
     "verify:security-text": "node scripts/security-scan-text.mjs",
     "verify:boundaries": "node scripts/check-repository-boundaries.mjs",
-    "verify:bootstrap": "npm run verify:harness && npm run verify:docs && npm run verify:security-text && npm run verify:boundaries",
+    "verify:i18n": "node scripts/verify-i18n-keys.mjs",
+    "verify:workflows": "node scripts/verify-workflow-policy.mjs",
+    "verify:bootstrap": "npm run verify:harness && npm run verify:docs && npm run verify:security-text && npm run verify:boundaries && npm run verify:i18n && npm run verify:workflows",
     "format:check": "pnpm --dir apps/desktop format:check",
     "lint": "pnpm --dir apps/desktop lint",
     "typecheck": "pnpm --dir apps/desktop typecheck",

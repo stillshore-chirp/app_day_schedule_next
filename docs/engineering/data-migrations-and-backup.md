@@ -24,6 +24,7 @@
 - metadata: app version、schema、created time、hash、size、verification。
 - default retention is finite and never deletes the only verified backup。
 - backup directory is app data, not repository or source tree。
+- manual backup は operation ID で取り消せる。`VACUUM INTO` 自体の実行中は SQLite を強制中断せず、戻り後に取消を検査して未検証候補を削除し、履歴へ記録しない。
 
 ## 4. Restore
 
@@ -34,9 +35,11 @@
 5. schema compatibility / migration。
 6. smoke query and essential counts。
 7. close active connections。
-8. atomic switch where platform allows。
+8. move the active DB to a same-directory displacement path before renaming the staged candidate into place; do not depend on destination-overwriting rename semantics。
 9. reopen and bootstrap。
-10. failure returns to original DB。
+10. failure returns to original DB。If interruption leaves only the displacement file, the next startup restores it before applying another staged candidate。
+
+候補の migration、integrity check、smoke query は staging path 上で完了させ、active DB の displacement / rename より前に失敗を確定する。候補検証の失敗では active DB を変更しない。
 
 ## 5. Legacy Python app import
 
@@ -62,7 +65,7 @@ Rules:
 
 - before / after or reversible command payload。
 - bulk template apply is one user action with atomic Undo。
-- sync side effect is represented in Outbox after Undo。
+- sync side effect is represented in Outbox after Undo。Incomplete operations for the old version are superseded before the restored version's compensating operation is enqueued。
 - redo chain invalidated after new edit。
 - history retention and personal data impact are documented。
 
@@ -70,3 +73,9 @@ Rules:
 
 - schema version、counts、integrity result、migration list、backup metadata only。
 - event titles、descriptions、token、calendar IDs、absolute user paths are excluded or masked。
+
+## 8. Export cancellation
+
+- JSON export は target と同じ directory の `.part` へ書き、cancel token を collection 間、encode 後、publish 前に検査する。
+- 取消または write / rename failure では `.part` を削除する。
+- target rename 完了後は成功として扱い、完成済み export を暗黙削除しない。
