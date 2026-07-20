@@ -144,6 +144,7 @@
 - conflict は明示解決まで sync complete と表示しない。
 - attendees、conferenceData、reminders、unknown field を意図せず破棄しない。
 - recurrence master / exception / cancellation を round-trip する。
+- 手動取消は operation ID ごとに分離し、pagination / Outbox item / local transaction の安全な境界で停止する。確定済み remote write は戻さず、未完了 Outbox と決定的 remote event ID により再試行を冪等にする。
 
 ## 11. Notification / Focus
 
@@ -165,6 +166,8 @@
 - import source は read-only。
 - preview で counts、mapping、warnings、skips を表示する。
 - import commit は single transaction。source を変更しない。
+- export は一時ファイルへ書いて取消時に削除し、完成ファイルだけを公開する。
+- backup は取消後に未検証ファイルを削除し、検証・履歴記録が完了した世代だけを一覧へ出す。
 
 ## 13. Security / privacy
 
@@ -181,7 +184,7 @@
 - local schedule edit の視覚反映: p95 100ms 以内。
 - 500 予定の Today 表示で主要操作が継続可能。
 - 50,000 schedule item の indexed list / search が実用範囲。
-- sync / backup が UI thread を block しない。
+- sync / backup / export が UI thread を block せず、operation ID で取り消せる。
 - timer / current-line update が過剰な CPU / screen-reader noise を生まない。
 
 ## 15. release blockers

@@ -26,6 +26,11 @@ use crate::{
 
 type CommandResult<T> = Result<T, UserSafeError>;
 
+#[tauri::command]
+pub fn performance_mark_ui_ready(service: State<'_, AppService>) -> u64 {
+    service.mark_ui_ready()
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleQueryDto {
@@ -185,6 +190,19 @@ pub struct NotificationResultRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SyncRetryRequest {
     id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OperationRequest {
+    operation_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataExportRequest {
+    operation_id: Uuid,
+    path: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -357,6 +375,11 @@ pub async fn settings_update(
 }
 
 #[tauri::command]
+pub fn settings_defaults_get(service: State<'_, AppService>) -> Settings {
+    service.default_settings()
+}
+
+#[tauri::command]
 pub async fn focus_command(
     service: State<'_, AppService>,
     request: FocusRequest,
@@ -395,8 +418,22 @@ pub async fn focus_schedule_summary(
 }
 
 #[tauri::command]
-pub async fn sync_run(service: State<'_, AppService>) -> CommandResult<SyncSummary> {
-    service.run_sync().await.map_err(Into::into)
+pub async fn sync_run(
+    service: State<'_, AppService>,
+    request: OperationRequest,
+) -> CommandResult<SyncSummary> {
+    service
+        .run_sync(request.operation_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn operation_cancel(
+    service: State<'_, AppService>,
+    request: OperationRequest,
+) -> CommandResult<bool> {
+    Ok(service.cancel_operation(request.operation_id).await)
 }
 
 #[tauri::command]
@@ -455,10 +492,13 @@ pub async fn diagnostics_export(
 #[tauri::command]
 pub async fn data_export(
     service: State<'_, AppService>,
-    path: String,
+    request: DataExportRequest,
 ) -> CommandResult<ExportResult> {
-    let path = checked_path(path)?;
-    service.export_data(&path).await.map_err(Into::into)
+    let path = checked_path(request.path)?;
+    service
+        .export_data(request.operation_id, &path)
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]
@@ -518,8 +558,14 @@ pub async fn legacy_import_commit(
 }
 
 #[tauri::command]
-pub async fn backup_create(service: State<'_, AppService>) -> CommandResult<BackupRecord> {
-    service.create_backup().await.map_err(Into::into)
+pub async fn backup_create(
+    service: State<'_, AppService>,
+    request: OperationRequest,
+) -> CommandResult<BackupRecord> {
+    service
+        .create_backup(request.operation_id)
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]

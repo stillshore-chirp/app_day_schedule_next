@@ -29,7 +29,7 @@ pnpm tauri:build:debug
 git diff --check
 ```
 
-`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary を検証します。
+`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。
 
 ## 3. Frontend unit / accessibility
 
@@ -59,6 +59,7 @@ cargo test --workspace --all-features
 - JSON import fingerprint、legacy preview / transaction、backup / staged restore
 - Google Desktop OAuth validation、PKCE、initial / incremental / pagination / delete / 410 / 401 / 412 / 429 / 5xx / offline、3-way merge
 - structured diagnostic export の redaction
+- operation ID ごとの cancel isolation、同期 token / local event 保持、export `.part` cleanup、backup file / history 非生成
 
 Google integration test は local TCP mock server を bind します。制限 sandbox で `Operation not permitted` になる場合は、通常の開発環境または CI で同じ command を実行します。実 Google account や録画済み個人 payload は使いません。
 
@@ -79,8 +80,9 @@ pnpm test:e2e
 - 720 × 720 の最小幅ナビゲーション
 - テンプレート、24時間／詳細編集、Quick Block、自由アラーム、Focus 履歴
 - Today、List、Week、Template、Focus、Compact、Data / Conflict の synthetic native screenshot
+- 専用一時DBへ500予定を実IPCで投入し、仮想化DOM上限とscroll / dragのmain-thread 16.7ms budgetを各30回測定
 
-CI は `macos-15`、`macos-15-intel`、`windows-latest` で同じ suite を実行します。失敗時は screenshot とマスク対象を確認した log を artifact にします。
+CI は `macos-15`、`macos-15-intel`、`windows-latest` で同じ suite を実行します。失敗時は screenshot とマスク対象を確認した log を artifact にします。macOS arm64 では続けて `scripts/compare-visual-snapshots.swift` を実行し、Today、Week、Template、Compact、Conflict を channel差32・不一致pixel 4%の許容差で比較します。超過時は赤い差分PNGを artifact に残し、意図した変更だけ baseline 更新としてレビューします。
 
 ## 6. Dependency / source security
 
@@ -108,7 +110,22 @@ Dependency audit workflow は上記に加えて RustSec audit を定期実行し
 
 UI PR は対象状態ごとの変更前／変更後 screenshot を添付します。新規 scaffold では変更前画面が存在しないため、その事実と初回 native screenshot を証跡にします。
 
-## 8. Platform release matrix
+visual baseline は `apps/desktop/tests/visual-baselines/macos-arm64/` に置きます。synthetic fixture だけを使用し、日時・一意suffix等の小さな動的領域は全画面pixel比の許容差へ含めます。寸法変更は許容せず即時失敗します。
+
+## 8. Release performance measurement
+
+macOS arm64 の release 最適化E2E buildで起動性能を測る場合:
+
+```bash
+VITE_WDIO=true pnpm --dir apps/desktop tauri build --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
+node scripts/measure-startup-performance.mjs target/release/day-schedule-next <output-json>
+```
+
+warm profile は未計測の1回で事前起動後に同じsynthetic profileを30回、cold profileは毎回fresh synthetic app-data directoryを使って30回測ります。ready点はprocess entryからbootstrap成功後の画面がrenderされ、最初のReact effectが実行された時点です。E2E featureだけが `DAY_SCHEDULE_TEST_DATA_DIR` を受け付け、通常buildの保存先は変更できません。
+
+`apps/desktop/test-results/native-performance.json` の500件測定は、非前面WebDriverがmacOSでtimer / rAFを1000msへ抑制するため、同期event dispatchと現在layoutのmain-thread budgetを測ります。実compositorのframe interval、high DPI、multi-monitorは前面実機release smokeで別に観測し、補助測定と混同しません。
+
+## 9. Platform release matrix
 
 | Check | macOS arm64 | macOS x64 | Windows x64 |
 |---|---:|---:|---:|
@@ -125,6 +142,6 @@ UI PR は対象状態ごとの変更前／変更後 screenshot を添付しま�
 
 Build successだけでは実機権限と OS lifecycle を検証したことになりません。release 判定では CI URL、artifact、実機観測者、日付を記録します。
 
-## 9. Evidence
+## 10. Evidence
 
 Issue #4 の現行 verification と UI/UX 反証レビューは [`docs/ai-governance/reports/issue-4-completion.md`](../ai-governance/reports/issue-4-completion.md) にまとめます。PR には command、result、artifact、manual step、未実行理由、残リスクを記載します。

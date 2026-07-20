@@ -1,3 +1,4 @@
+import { appLocale, translate } from "../../shared/i18n/messages";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -46,11 +47,11 @@ export function WeekView({ client }: { client: AppClient }) {
   return (
     <main className="secondary-view">
       <ViewTitle
-        eyebrow="一週間を調整"
-        title="週"
-        description="予定の密度と空き時間を日ごとに確認します。"
+        eyebrow={translate("features.views.CalendarViews.001")}
+        title={translate("features.views.CalendarViews.002")}
+        description={translate("features.views.CalendarViews.003")}
       />
-      <div className="week-grid" aria-label="一週間の予定">
+      <div className="week-grid" aria-label={translate("features.views.CalendarViews.004")}>
         {Array.from({ length: 7 }, (_, index) => {
           const date = addDays(start, index);
           const schedules = schedulesForDate(items, date);
@@ -64,9 +65,12 @@ export function WeekView({ client }: { client: AppClient }) {
                   setActiveView("today");
                 }}
               >
-                <span>{new Intl.DateTimeFormat("ja-JP", { weekday: "short" }).format(date)}</span>
+                <span>{new Intl.DateTimeFormat(appLocale, { weekday: "short" }).format(date)}</span>
                 <strong>{date.getDate()}</strong>
-                <small>{schedules.length}件</small>
+                <small>
+                  {schedules.length}
+                  {translate("features.views.CalendarViews.005")}
+                </small>
               </button>
               <ol>
                 {schedules.map((schedule) => (
@@ -98,14 +102,17 @@ export function MonthView({ client }: { client: AppClient }) {
   return (
     <main className="secondary-view">
       <ViewTitle
-        eyebrow="月全体の負荷"
-        title="月"
-        description="予定件数と合計時間を数値で比較できます。"
+        eyebrow={translate("features.views.CalendarViews.006")}
+        title={translate("features.views.CalendarViews.007")}
+        description={translate("features.views.CalendarViews.008")}
       />
       <div
         className="month-grid"
         role="grid"
-        aria-label={`${selectedDate.getFullYear()}年${selectedDate.getMonth() + 1}月`}
+        aria-label={translate("features.views.CalendarViews.009", [
+          selectedDate.getFullYear(),
+          selectedDate.getMonth() + 1,
+        ])}
       >
         {Array.from(
           {
@@ -133,8 +140,14 @@ export function MonthView({ client }: { client: AppClient }) {
                 }}
               >
                 <strong>{date.getDate()}</strong>
-                <span>{schedules.length}件</span>
-                <small>{Math.round((minutes / 60) * 10) / 10}時間</small>
+                <span>
+                  {schedules.length}
+                  {translate("features.views.CalendarViews.010")}
+                </span>
+                <small>
+                  {Math.round((minutes / 60) * 10) / 10}
+                  {translate("features.views.CalendarViews.011")}
+                </small>
               </button>
             );
           },
@@ -216,7 +229,7 @@ export function ListView({ client }: { client: AppClient }) {
     setError(null);
     setMessage(null);
     if (schedule.recurrenceRule) {
-      setError("繰り返し予定は編集画面で「今回のみ／これ以降／すべて」の範囲を選んでください。");
+      setError(translate("features.views.CalendarViews.012"));
       return;
     }
     try {
@@ -226,12 +239,10 @@ export function ListView({ client }: { client: AppClient }) {
         expectedVersion: schedule.version,
         draft: next,
       });
-      setMessage(`「${schedule.title}」を${carryDate}へ繰り越しました。`);
+      setMessage(translate("features.views.CalendarViews.013", [schedule.title, carryDate]));
       await query.refetch();
     } catch {
-      setError(
-        "繰り越し先がDSTで存在しないか曖昧です。編集画面でUTCオフセットを確認してください。",
-      );
+      setError(translate("features.views.CalendarViews.014"));
     }
   };
 
@@ -250,27 +261,27 @@ export function ListView({ client }: { client: AppClient }) {
     if (bulkEnabled.color) patch.color = bulkValues.color;
     if (bulkEnabled.priority) patch.priority = bulkValues.priority;
     if (selectedIds.size === 0 || Object.keys(patch).length === 0) {
-      setError("予定を1件以上選び、変更する分類を1つ以上有効にしてください。");
+      setError(translate("features.views.CalendarViews.015"));
       return;
     }
     try {
       await client.bulkClassifySchedules([...selectedIds], patch);
-      setMessage(`${selectedIds.size}件の分類を一括変更しました。「元に戻す」で一括回復できます。`);
+      setMessage(translate("features.views.CalendarViews.016", [selectedIds.size]));
       setSelectedIds(new Set());
       await query.refetch();
     } catch {
-      setError("一括変更を適用できませんでした。読み取り専用予定と入力値を確認してください。");
+      setError(translate("features.views.CalendarViews.017"));
     }
   };
   return (
     <main className="secondary-view">
       <ViewTitle
-        eyebrow="検索と一括確認"
-        title="予定一覧"
-        description="タイトル、説明、場所、分類、タグを横断して検索します。"
+        eyebrow={translate("features.views.CalendarViews.018")}
+        title={translate("features.views.CalendarViews.019")}
+        description={translate("features.views.CalendarViews.020")}
       />
       <label className="list-search">
-        <span>予定を検索</span>
+        <span>{translate("features.views.CalendarViews.021")}</span>
         <input
           type="search"
           value={search}
@@ -278,19 +289,19 @@ export function ListView({ client }: { client: AppClient }) {
             setSearch(event.target.value);
             setPage(0);
           }}
-          placeholder="タイトル、タグ、プロジェクト…"
+          placeholder={translate("features.views.CalendarViews.022")}
         />
       </label>
       <section className="list-filters" aria-labelledby="list-filter-title">
         <div className="section-heading section-heading--compact">
-          <h2 id="list-filter-title">絞り込みと並べ替え</h2>
+          <h2 id="list-filter-title">{translate("features.views.CalendarViews.023")}</h2>
           <button className="button button--subtle" type="button" onClick={resetFilters}>
-            条件を解除
+            {translate("features.views.CalendarViews.024")}
           </button>
         </div>
         <div className="list-filter-grid">
           <label>
-            開始日
+            {translate("features.views.CalendarViews.025")}
             <input
               type="date"
               value={startDate}
@@ -301,7 +312,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </label>
           <label>
-            終了日
+            {translate("features.views.CalendarViews.026")}
             <input
               type="date"
               value={endDate}
@@ -313,7 +324,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </label>
           <label>
-            状態
+            {translate("features.views.CalendarViews.027")}
             <select
               value={status}
               onChange={(event) => {
@@ -321,16 +332,16 @@ export function ListView({ client }: { client: AppClient }) {
                 setPage(0);
               }}
             >
-              <option value="">すべて</option>
-              <option value="not_started">未着手</option>
-              <option value="scheduled">予定済み</option>
-              <option value="in_progress">進行中</option>
-              <option value="completed">完了</option>
-              <option value="cancelled">取消</option>
+              <option value="">{translate("features.views.CalendarViews.028")}</option>
+              <option value="not_started">{translate("features.views.CalendarViews.029")}</option>
+              <option value="scheduled">{translate("features.views.CalendarViews.030")}</option>
+              <option value="in_progress">{translate("features.views.CalendarViews.031")}</option>
+              <option value="completed">{translate("features.views.CalendarViews.032")}</option>
+              <option value="cancelled">{translate("features.views.CalendarViews.033")}</option>
             </select>
           </label>
           <label>
-            完了条件
+            {translate("features.views.CalendarViews.034")}
             <select
               value={completion}
               onChange={(event) => {
@@ -338,13 +349,13 @@ export function ListView({ client }: { client: AppClient }) {
                 setPage(0);
               }}
             >
-              <option value="all">すべて</option>
-              <option value="open">未完了のみ</option>
-              <option value="completed">完了のみ</option>
+              <option value="all">{translate("features.views.CalendarViews.035")}</option>
+              <option value="open">{translate("features.views.CalendarViews.036")}</option>
+              <option value="completed">{translate("features.views.CalendarViews.037")}</option>
             </select>
           </label>
           <label>
-            プロジェクト
+            {translate("features.views.CalendarViews.038")}
             <input
               value={project}
               onChange={(event) => {
@@ -354,7 +365,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </label>
           <label>
-            カテゴリ
+            {translate("features.views.CalendarViews.039")}
             <input
               value={category}
               onChange={(event) => {
@@ -364,7 +375,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </label>
           <label>
-            タグ（完全一致）
+            {translate("features.views.CalendarViews.040")}
             <input
               value={tag}
               onChange={(event) => {
@@ -374,7 +385,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </label>
           <label>
-            優先度
+            {translate("features.views.CalendarViews.041")}
             <select
               value={priority}
               onChange={(event) => {
@@ -382,15 +393,15 @@ export function ListView({ client }: { client: AppClient }) {
                 setPage(0);
               }}
             >
-              <option value="">すべて</option>
-              <option value="low">低</option>
-              <option value="normal">通常</option>
-              <option value="high">高</option>
-              <option value="urgent">緊急</option>
+              <option value="">{translate("features.views.CalendarViews.042")}</option>
+              <option value="low">{translate("features.views.CalendarViews.043")}</option>
+              <option value="normal">{translate("features.views.CalendarViews.044")}</option>
+              <option value="high">{translate("features.views.CalendarViews.045")}</option>
+              <option value="urgent">{translate("features.views.CalendarViews.046")}</option>
             </select>
           </label>
           <label>
-            同期状態
+            {translate("features.views.CalendarViews.047")}
             <select
               value={syncStatus}
               onChange={(event) => {
@@ -398,18 +409,20 @@ export function ListView({ client }: { client: AppClient }) {
                 setPage(0);
               }}
             >
-              <option value="">すべて</option>
-              <option value="local_only">ローカルのみ</option>
-              <option value="pending">保留</option>
-              <option value="syncing">同期中</option>
-              <option value="synced">同期済み</option>
-              <option value="retry_scheduled">再試行待ち</option>
-              <option value="conflict">競合</option>
-              <option value="read_only">読み取り専用</option>
+              <option value="">{translate("features.views.CalendarViews.048")}</option>
+              <option value="local_only">{translate("features.views.CalendarViews.049")}</option>
+              <option value="pending">{translate("features.views.CalendarViews.050")}</option>
+              <option value="syncing">{translate("features.views.CalendarViews.051")}</option>
+              <option value="synced">{translate("features.views.CalendarViews.052")}</option>
+              <option value="retry_scheduled">
+                {translate("features.views.CalendarViews.053")}
+              </option>
+              <option value="conflict">{translate("features.views.CalendarViews.054")}</option>
+              <option value="read_only">{translate("features.views.CalendarViews.055")}</option>
             </select>
           </label>
           <label>
-            同期先カレンダー名
+            {translate("features.views.CalendarViews.056")}
             <input
               value={syncTarget}
               onChange={(event) => {
@@ -419,7 +432,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </label>
           <label>
-            並べ替え
+            {translate("features.views.CalendarViews.057")}
             <select
               value={sortBy}
               onChange={(event) => {
@@ -427,11 +440,11 @@ export function ListView({ client }: { client: AppClient }) {
                 setPage(0);
               }}
             >
-              <option value="start">開始時刻</option>
-              <option value="end">終了時刻</option>
-              <option value="updated">更新時刻</option>
-              <option value="priority">優先度</option>
-              <option value="title">タイトル</option>
+              <option value="start">{translate("features.views.CalendarViews.058")}</option>
+              <option value="end">{translate("features.views.CalendarViews.059")}</option>
+              <option value="updated">{translate("features.views.CalendarViews.060")}</option>
+              <option value="priority">{translate("features.views.CalendarViews.061")}</option>
+              <option value="title">{translate("features.views.CalendarViews.062")}</option>
             </select>
           </label>
           <label className="checkbox-label">
@@ -443,18 +456,20 @@ export function ListView({ client }: { client: AppClient }) {
                 setPage(0);
               }}
             />
-            降順
+            {translate("features.views.CalendarViews.063")}
           </label>
         </div>
       </section>
       <fieldset className="bulk-classification">
-        <legend>選択した予定の分類を一括変更</legend>
+        <legend>{translate("features.views.CalendarViews.064")}</legend>
         <p>
-          現在 {selectedIds.size}件を選択中です。有効にした項目だけを変更し、ほかの値は保持します。
+          {translate("features.views.CalendarViews.065")}
+          {selectedIds.size}
+          {translate("features.views.CalendarViews.066")}
         </p>
         <div className="bulk-classification__grid">
           <BulkField
-            label="プロジェクト"
+            label={translate("features.views.CalendarViews.067")}
             enabled={bulkEnabled.project}
             onEnabled={(enabled) => setBulkEnabled({ ...bulkEnabled, project: enabled })}
           >
@@ -465,7 +480,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </BulkField>
           <BulkField
-            label="カテゴリ"
+            label={translate("features.views.CalendarViews.068")}
             enabled={bulkEnabled.category}
             onEnabled={(enabled) => setBulkEnabled({ ...bulkEnabled, category: enabled })}
           >
@@ -476,7 +491,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </BulkField>
           <BulkField
-            label="タグ（カンマ区切り）"
+            label={translate("features.views.CalendarViews.069")}
             enabled={bulkEnabled.tags}
             onEnabled={(enabled) => setBulkEnabled({ ...bulkEnabled, tags: enabled })}
           >
@@ -487,7 +502,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </BulkField>
           <BulkField
-            label="色"
+            label={translate("features.views.CalendarViews.070")}
             enabled={bulkEnabled.color}
             onEnabled={(enabled) => setBulkEnabled({ ...bulkEnabled, color: enabled })}
           >
@@ -499,7 +514,7 @@ export function ListView({ client }: { client: AppClient }) {
             />
           </BulkField>
           <BulkField
-            label="優先度"
+            label={translate("features.views.CalendarViews.071")}
             enabled={bulkEnabled.priority}
             onEnabled={(enabled) => setBulkEnabled({ ...bulkEnabled, priority: enabled })}
           >
@@ -513,10 +528,10 @@ export function ListView({ client }: { client: AppClient }) {
                 })
               }
             >
-              <option value="low">低</option>
-              <option value="normal">通常</option>
-              <option value="high">高</option>
-              <option value="urgent">緊急</option>
+              <option value="low">{translate("features.views.CalendarViews.072")}</option>
+              <option value="normal">{translate("features.views.CalendarViews.073")}</option>
+              <option value="high">{translate("features.views.CalendarViews.074")}</option>
+              <option value="urgent">{translate("features.views.CalendarViews.075")}</option>
             </select>
           </BulkField>
         </div>
@@ -526,53 +541,57 @@ export function ListView({ client }: { client: AppClient }) {
             type="button"
             onClick={() => void applyBulkClassification()}
           >
-            {selectedIds.size}件へ一括適用
+            {selectedIds.size}
+            {translate("features.views.CalendarViews.076")}
           </button>
           <button
             className="button button--subtle"
             type="button"
             onClick={() => setSelectedIds(new Set())}
           >
-            選択を解除
+            {translate("features.views.CalendarViews.077")}
           </button>
         </div>
       </fieldset>
       <section className="carry-control" aria-labelledby="carry-title">
-        <h2 id="carry-title">未完了予定を繰り越す</h2>
+        <h2 id="carry-title">{translate("features.views.CalendarViews.078")}</h2>
         <label>
-          繰り越し先
+          {translate("features.views.CalendarViews.079")}
           <input
             type="date"
             value={carryDate}
             onChange={(event) => setCarryDate(event.target.value)}
           />
         </label>
-        <p>各行の「繰り越す」で、ローカル時刻と所要時間を保ったまま移動します。</p>
+        <p>{translate("features.views.CalendarViews.080")}</p>
       </section>
       {message ? <StatusMessage tone="success" title={message} /> : null}
       {error ? <StatusMessage tone="warning" title={error} /> : null}
       {items.length === 0 ? (
         <StatusMessage
-          title="条件に一致する予定はありません"
+          title={translate("features.views.CalendarViews.081")}
           action={
             <button className="button" onClick={() => setSearch("")}>
-              検索を解除
+              {translate("features.views.CalendarViews.082")}
             </button>
           }
         >
-          予定自体は削除されていません。検索語を変えるか、条件を解除してください。
+          {translate("features.views.CalendarViews.083")}
         </StatusMessage>
       ) : (
         <div className="table-scroll">
           <table>
             <caption>
-              {total}件中 {page * pageSize + 1}〜{Math.min(total, (page + 1) * pageSize)}件
+              {total}
+              {translate("features.views.CalendarViews.084")}
+              {page * pageSize + 1}〜{Math.min(total, (page + 1) * pageSize)}
+              {translate("features.views.CalendarViews.085")}
             </caption>
             <thead>
               <tr>
                 <th scope="col">
                   <label className="table-selection">
-                    <span className="sr-only">現在のページをすべて選択</span>
+                    <span className="sr-only">{translate("features.views.CalendarViews.086")}</span>
                     <input
                       type="checkbox"
                       checked={items.length > 0 && items.every((item) => selectedIds.has(item.id))}
@@ -587,12 +606,12 @@ export function ListView({ client }: { client: AppClient }) {
                     />
                   </label>
                 </th>
-                <th>開始</th>
-                <th>タイトル</th>
-                <th>分類</th>
-                <th>状態</th>
-                <th>同期</th>
-                <th>操作</th>
+                <th>{translate("features.views.CalendarViews.087")}</th>
+                <th>{translate("features.views.CalendarViews.088")}</th>
+                <th>{translate("features.views.CalendarViews.089")}</th>
+                <th>{translate("features.views.CalendarViews.090")}</th>
+                <th>{translate("features.views.CalendarViews.091")}</th>
+                <th>{translate("features.views.CalendarViews.092")}</th>
               </tr>
             </thead>
             <tbody>
@@ -612,7 +631,7 @@ export function ListView({ client }: { client: AppClient }) {
                     <input
                       type="checkbox"
                       checked={selectedIds.has(schedule.id)}
-                      aria-label={`${schedule.title}を一括変更の対象にする`}
+                      aria-label={translate("features.views.CalendarViews.093", [schedule.title])}
                       onClick={(event) => event.stopPropagation()}
                       onChange={(event) => {
                         const next = new Set(selectedIds);
@@ -632,7 +651,8 @@ export function ListView({ client }: { client: AppClient }) {
                     <strong>{schedule.title}</strong>
                   </td>
                   <td>
-                    {schedule.project || "未分類"} / {schedule.category || "未分類"}
+                    {schedule.project || translate("features.views.CalendarViews.094")} /{" "}
+                    {schedule.category || translate("features.views.CalendarViews.095")}
                   </td>
                   <td>{schedule.status}</td>
                   <td>{schedule.syncStatus}</td>
@@ -646,7 +666,7 @@ export function ListView({ client }: { client: AppClient }) {
                         void carryOver(schedule);
                       }}
                     >
-                      繰り越す
+                      {translate("features.views.CalendarViews.096")}
                     </button>
                   </td>
                 </tr>
@@ -656,14 +676,14 @@ export function ListView({ client }: { client: AppClient }) {
         </div>
       )}
       {total > pageSize ? (
-        <nav className="pagination" aria-label="予定一覧のページ">
+        <nav className="pagination" aria-label={translate("features.views.CalendarViews.097")}>
           <button
             className="button"
             type="button"
             disabled={page === 0}
             onClick={() => setPage((current) => Math.max(0, current - 1))}
           >
-            前へ
+            {translate("features.views.CalendarViews.098")}
           </button>
           <span>
             {page + 1} / {Math.ceil(total / pageSize)}
@@ -674,7 +694,7 @@ export function ListView({ client }: { client: AppClient }) {
             disabled={(page + 1) * pageSize >= total}
             onClick={() => setPage((current) => current + 1)}
           >
-            次へ
+            {translate("features.views.CalendarViews.099")}
           </button>
         </nav>
       ) : null}
@@ -701,7 +721,8 @@ function BulkField({
           checked={enabled}
           onChange={(event) => onEnabled(event.target.checked)}
         />
-        {label}を変更
+        {label}
+        {translate("features.views.CalendarViews.100")}
       </label>
       {children}
     </div>
@@ -802,14 +823,14 @@ function ViewError({ onRetry }: { onRetry: () => void }) {
     <main className="secondary-view">
       <StatusMessage
         tone="danger"
-        title="予定を読み込めませんでした"
+        title={translate("features.views.CalendarViews.101")}
         action={
           <button className="button" onClick={onRetry}>
-            再読み込み
+            {translate("features.views.CalendarViews.102")}
           </button>
         }
       >
-        この端末のデータは変更されていません。
+        {translate("features.views.CalendarViews.103")}
       </StatusMessage>
     </main>
   );

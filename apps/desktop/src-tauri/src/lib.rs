@@ -3,6 +3,8 @@ mod commands;
 mod domain;
 mod infrastructure;
 
+use std::time::Instant;
+
 use application::AppService;
 use domain::{CloseBehavior, FocusCommand, FocusPhase};
 use infrastructure::Database;
@@ -11,9 +13,11 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
+use uuid::Uuid;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let process_started_at = Instant::now();
     let _ = tracing_subscriber::fmt()
         .with_env_filter("day_schedule_next=info")
         .without_time()
@@ -36,11 +40,18 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
-            let data_directory = app
+        .setup(move |app| {
+            let default_data_directory = app
                 .path()
                 .app_data_dir()
                 .map_err(|error| format!("app data directory unavailable: {error}"))?;
+            #[cfg(feature = "e2e")]
+            let data_directory = std::env::var_os("DAY_SCHEDULE_TEST_DATA_DIR")
+                .map(std::path::PathBuf::from)
+                .filter(|path| path.is_absolute() && path.components().count() >= 3)
+                .unwrap_or(default_data_directory);
+            #[cfg(not(feature = "e2e"))]
+            let data_directory = default_data_directory;
             std::fs::create_dir_all(&data_directory)
                 .map_err(|error| format!("app data directory could not be prepared: {error}"))?;
             let database_path = data_directory.join("day-schedule-next.sqlite3");
@@ -63,7 +74,7 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 window.set_always_on_top(main_always_on_top)?;
             }
-            app.manage(AppService::new(database));
+            app.manage(AppService::new_started_at(database, process_started_at));
             configure_tray(app)?;
             Ok(())
         })
@@ -83,6 +94,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            commands::performance_mark_ui_ready,
             commands::bootstrap_get,
             commands::time_local_resolve,
             commands::recurrence_preview_get,
@@ -94,11 +106,13 @@ pub fn run() {
             commands::history_undo,
             commands::history_redo,
             commands::settings_update,
+            commands::settings_defaults_get,
             commands::focus_command,
             commands::focus_state_get,
             commands::focus_history_today,
             commands::focus_schedule_summary,
             commands::sync_run,
+            commands::operation_cancel,
             commands::sync_queue_list,
             commands::sync_queue_retry,
             commands::sync_conflict_list,
@@ -199,7 +213,7 @@ fn configure_tray(app: &mut tauri::App) -> tauri::Result<()> {
                 let service = app.state::<AppService>().inner().clone();
                 let app_handle = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    if service.run_sync().await.is_ok() {
+                    if service.run_sync(Uuid::new_v4()).await.is_ok() {
                         let _ = app_handle.emit("tray-action", "sync");
                     }
                 });

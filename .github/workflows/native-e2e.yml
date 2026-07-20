@@ -68,6 +68,15 @@ jobs:
         run: VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
       - name: Run native E2E with synthetic fixtures
         run: pnpm test:e2e
+      - name: Compare macOS arm64 visual baselines
+        if: ${{ matrix.label == 'macOS arm64' }}
+        shell: bash
+        run: |
+          swift -module-cache-path "${RUNNER_TEMP}/swift-module-cache" \
+            scripts/compare-visual-snapshots.swift \
+            apps/desktop/tests/visual-baselines/macos-arm64 \
+            apps/desktop/test-results \
+            apps/desktop/test-results/visual-diff
       - name: Upload redacted E2E artifacts
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

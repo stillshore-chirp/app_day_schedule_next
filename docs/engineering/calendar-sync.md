@@ -89,6 +89,7 @@ base から local だけ変更、remote だけ変更は自動 merge。両方が�
 - status は item と account / calendar summary の両方で scope を示す。
 - manual retry は duplicate worker を作らない。
 - conflict resolution は local / Google / field-by-field の影響を示す。
+- manual sync は operation ID に紐づく cancel token を持つ。取消要求は page fetch 前後、Outbox item 間、pull transaction commit 前で検査する。remote write 完了後の取消では確定済み結果を保持し、未完了 Outbox を決定的 event ID で再試行する。
 
 ## 9. Tests
 

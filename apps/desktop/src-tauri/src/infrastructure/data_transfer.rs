@@ -7,9 +7,12 @@ use sha2::{Digest, Sha256};
 use sqlx::{Sqlite, Transaction};
 use uuid::Uuid;
 
-use crate::domain::{
-    AppError, AppResult, DayTemplateDraft, FreeAlarmDraft, QuickBlockDraft, Schedule, Settings,
-    SyncStatus, TemplateBlockDraft,
+use crate::{
+    application::OperationCancellation,
+    domain::{
+        AppError, AppResult, DayTemplateDraft, FreeAlarmDraft, QuickBlockDraft, Schedule, Settings,
+        SyncStatus, TemplateBlockDraft,
+    },
 };
 
 use super::Database;
@@ -99,14 +102,27 @@ pub struct ImportResult {
 }
 
 impl Database {
+    #[cfg(test)]
     pub async fn export_json(&self, target: &Path, timezone_id: &str) -> AppResult<ExportResult> {
+        self.export_json_cancelable(target, timezone_id, &OperationCancellation::default())
+            .await
+    }
+
+    pub async fn export_json_cancelable(
+        &self,
+        target: &Path,
+        timezone_id: &str,
+        cancellation: &OperationCancellation,
+    ) -> AppResult<ExportResult> {
         validate_json_path(target, true)?;
+        cancellation.check()?;
         let schedule_rows = sqlx::query(
             "SELECT * FROM schedule_items WHERE deleted_at_utc IS NULL ORDER BY start_at_utc, id",
         )
         .fetch_all(&self.pool)
         .await
         .map_err(|error| AppError::database("export-schedules", error))?;
+        cancellation.check()?;
         let schedules = schedule_rows
             .iter()
             .map(row_to_schedule)
@@ -134,18 +150,21 @@ impl Database {
                     .collect(),
             })
             .collect::<Vec<_>>();
+        cancellation.check()?;
         let quick_blocks = self
             .list_quick_blocks()
             .await?
             .into_iter()
             .map(|item| ExportQuickBlock { draft: item.draft })
             .collect::<Vec<_>>();
+        cancellation.check()?;
         let free_alarms = self
             .list_free_alarms()
             .await?
             .into_iter()
             .map(|item| ExportAlarm { draft: item.draft })
             .collect::<Vec<_>>();
+        cancellation.check()?;
         let envelope = ExportEnvelope {
             format_version: EXPORT_FORMAT_VERSION,
             created_at: Utc::now(),
@@ -158,6 +177,7 @@ impl Database {
         };
         let bytes = serde_json::to_vec_pretty(&envelope)
             .map_err(|error| AppError::database("export-encode", error))?;
+        cancellation.check()?;
         if bytes.len() as u64 > MAX_IMPORT_BYTES {
             return Err(AppError::Unavailable {
                 message: "エクスポートデータが安全な上限を超えました。".into(),
@@ -166,9 +186,18 @@ impl Database {
             });
         }
         let temporary = target.with_extension("json.part");
-        fs::write(&temporary, &bytes)
-            .and_then(|()| fs::rename(&temporary, target))
-            .map_err(|error| AppError::database("export-write", error))?;
+        if let Err(error) = fs::write(&temporary, &bytes) {
+            let _ = fs::remove_file(&temporary);
+            return Err(AppError::database("export-write", error));
+        }
+        if let Err(error) = cancellation.check() {
+            let _ = fs::remove_file(&temporary);
+            return Err(error);
+        }
+        if let Err(error) = fs::rename(&temporary, target) {
+            let _ = fs::remove_file(&temporary);
+            return Err(AppError::database("export-rename", error));
+        }
         Ok(ExportResult {
             file_name: safe_file_name(target),
             bytes_written: bytes.len() as u64,
@@ -608,6 +637,24 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[tokio::test]
+    async fn cancelled_export_does_not_publish_a_target_or_partial_file() {
+        let source = Database::open_memory().await.unwrap();
+        source.create_schedule(draft()).await.unwrap();
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("cancelled.json");
+        let cancellation = OperationCancellation::default();
+        cancellation.cancel();
+
+        let result = source
+            .export_json_cancelable(&path, "Asia/Tokyo", &cancellation)
+            .await;
+
+        assert!(matches!(result, Err(AppError::Cancelled { .. })));
+        assert!(!path.exists());
+        assert!(!path.with_extension("json.part").exists());
     }
 
     #[tokio::test]

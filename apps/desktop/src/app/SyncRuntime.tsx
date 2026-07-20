@@ -7,15 +7,18 @@ export function SyncRuntime({ client, onSettled }: { client: AppClient; onSettle
   useEffect(() => {
     let active = true;
     let running = false;
+    let operationId: string | null = null;
 
     const synchronize = async () => {
       if (!active || running) return;
       running = true;
+      operationId = crypto.randomUUID();
       try {
-        await client.runSync();
+        await client.runSync(operationId);
       } catch {
         // The backend persists a user-safe sync state. Refreshing bootstrap exposes it.
       } finally {
+        operationId = null;
         running = false;
         if (active) onSettled();
       }
@@ -32,6 +35,7 @@ export function SyncRuntime({ client, onSettled }: { client: AppClient; onSettle
     window.addEventListener("day-schedule-local-change", onLocalChange);
     return () => {
       active = false;
+      if (operationId) void client.cancelOperation(operationId);
       window.clearTimeout(startup);
       window.clearInterval(interval);
       window.removeEventListener("focus", onResume);

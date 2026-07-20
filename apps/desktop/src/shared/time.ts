@@ -1,3 +1,4 @@
+import { appLocale, translate } from "./i18n/messages";
 import { addDays, endOfDay, format, startOfDay } from "date-fns";
 
 export function dayRange(date: Date): { startUtc: string; endUtc: string } {
@@ -8,7 +9,7 @@ export function dayRange(date: Date): { startUtc: string; endUtc: string } {
 }
 
 export function formatDateHeading(date: Date): string {
-  return new Intl.DateTimeFormat("ja-JP", {
+  return new Intl.DateTimeFormat(appLocale, {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -17,7 +18,7 @@ export function formatDateHeading(date: Date): string {
 }
 
 export function formatTime(iso: string): string {
-  return new Intl.DateTimeFormat("ja-JP", {
+  return new Intl.DateTimeFormat(appLocale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -25,10 +26,12 @@ export function formatTime(iso: string): string {
 }
 
 export function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes}分`;
+  if (minutes < 60) return translate("shared.time.001", [minutes]);
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  return rest === 0 ? `${hours}時間` : `${hours}時間${rest}分`;
+  return rest === 0
+    ? translate("shared.time.002", [hours])
+    : translate("shared.time.003", [hours, rest]);
 }
 
 export function minutesSinceDayStart(iso: string, selectedDate: Date): number {

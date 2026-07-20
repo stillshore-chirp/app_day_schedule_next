@@ -1,3 +1,4 @@
+import { translate } from "../i18n/messages";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import {
@@ -90,6 +91,7 @@ export interface DiagnosticsSnapshot {
 }
 
 export interface AppClient {
+  markUiReady(): Promise<number>;
   bootstrap(): Promise<Bootstrap>;
   resolveLocalTime(local: string, timezoneId: string): Promise<LocalTimeResolution>;
   previewRecurrence(request: {
@@ -106,6 +108,7 @@ export interface AppClient {
   undo(): Promise<ChangeResult>;
   redo(): Promise<ChangeResult>;
   updateSettings(settings: Settings): Promise<Settings>;
+  defaultSettings(): Promise<Settings>;
   focusCommand(
     command: "start" | "pause" | "resume" | "stop" | "skip",
     linkedScheduleId?: string,
@@ -113,7 +116,8 @@ export interface AppClient {
   currentFocus(): Promise<FocusState>;
   focusHistoryToday(): Promise<FocusHistoryReport>;
   focusScheduleSummary(scheduleItemId: string): Promise<FocusScheduleSummary>;
-  runSync(): Promise<SyncSummary>;
+  runSync(operationId: string): Promise<SyncSummary>;
+  cancelOperation(operationId: string): Promise<boolean>;
   listSyncQueue(): Promise<SyncQueueItem[]>;
   retrySyncQueue(id?: string): Promise<number>;
   listSyncConflicts(): Promise<SyncConflictItem[]>;
@@ -137,13 +141,13 @@ export interface AppClient {
   previewTemplate(request: TemplateTarget): Promise<TemplatePreview>;
   applyTemplate(request: TemplateTarget): Promise<ChangeResult>;
   setWindowAlwaysOnTop(label: "main" | "compact", alwaysOnTop: boolean): Promise<void>;
-  exportData(path: string): Promise<ExportResult>;
+  exportData(path: string, operationId: string): Promise<ExportResult>;
   deleteAllUserData(confirmation: string): Promise<number>;
   previewImport(path: string): Promise<ImportPreview>;
   importData(path: string, fingerprint: string, mode: "add" | "replace"): Promise<ImportResult>;
   previewLegacyImport(path: string): Promise<LegacyImportPreview>;
   importLegacy(path: string, fingerprint: string): Promise<LegacyImportResult>;
-  createBackup(): Promise<BackupRecord>;
+  createBackup(operationId: string): Promise<BackupRecord>;
   listBackups(): Promise<BackupRecord[]>;
   stageRestore(backupId: string): Promise<RestoreStageResult>;
   pollNotifications(): Promise<NotificationDelivery[]>;
@@ -182,8 +186,8 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
     if (parsed.success) throw new AppClientError(parsed.data);
     throw new AppClientError({
       code: "unexpected",
-      message: "操作を完了できませんでした。",
-      recovery: "入力は保持されています。もう一度試し、続く場合はデータと診断を確認してください。",
+      message: translate("shared.ipc.client.001"),
+      recovery: translate("shared.ipc.client.002"),
       retryable: true,
       diagnosticId: null,
     });
@@ -201,6 +205,10 @@ export class AppClientError extends Error {
 }
 
 export class TauriAppClient implements AppClient {
+  async markUiReady(): Promise<number> {
+    return call("performance_mark_ui_ready");
+  }
+
   async bootstrap(): Promise<Bootstrap> {
     return bootstrapSchema.parse(await call("bootstrap_get"));
   }
@@ -265,6 +273,10 @@ export class TauriAppClient implements AppClient {
     return settingsSchema.parse(await call("settings_update", { settings }));
   }
 
+  async defaultSettings(): Promise<Settings> {
+    return settingsSchema.parse(await call("settings_defaults_get"));
+  }
+
   async focusCommand(
     command: "start" | "pause" | "resume" | "stop" | "skip",
     linkedScheduleId?: string,
@@ -290,8 +302,12 @@ export class TauriAppClient implements AppClient {
     );
   }
 
-  async runSync(): Promise<SyncSummary> {
-    return syncSummarySchema.parse(await call("sync_run"));
+  async runSync(operationId: string): Promise<SyncSummary> {
+    return syncSummarySchema.parse(await call("sync_run", { request: { operationId } }));
+  }
+
+  async cancelOperation(operationId: string): Promise<boolean> {
+    return call("operation_cancel", { request: { operationId } });
   }
 
   async listSyncQueue(): Promise<SyncQueueItem[]> {
@@ -395,8 +411,8 @@ export class TauriAppClient implements AppClient {
     await call("window_always_on_top_set", { request: { label, alwaysOnTop } });
   }
 
-  async exportData(path: string): Promise<ExportResult> {
-    return exportResultSchema.parse(await call("data_export", { path }));
+  async exportData(path: string, operationId: string): Promise<ExportResult> {
+    return exportResultSchema.parse(await call("data_export", { request: { path, operationId } }));
   }
 
   async deleteAllUserData(confirmation: string): Promise<number> {
@@ -429,8 +445,8 @@ export class TauriAppClient implements AppClient {
     );
   }
 
-  async createBackup(): Promise<BackupRecord> {
-    return backupRecordSchema.parse(await call("backup_create"));
+  async createBackup(operationId: string): Promise<BackupRecord> {
+    return backupRecordSchema.parse(await call("backup_create", { request: { operationId } }));
   }
 
   async listBackups(): Promise<BackupRecord[]> {
@@ -490,12 +506,14 @@ class NativeRuntimeRequiredClient implements AppClient {
   private unavailable(): AppClientError {
     return new AppClientError({
       code: "native_runtime_required",
-      message: "デスクトップ機能を開始できませんでした。",
-      recovery:
-        "Tauri デスクトップアプリとして起動してください。ローカルデータは変更されていません。",
+      message: translate("shared.ipc.client.003"),
+      recovery: translate("shared.ipc.client.004"),
       retryable: false,
       diagnosticId: null,
     });
+  }
+  markUiReady(): Promise<number> {
+    return Promise.reject(this.unavailable());
   }
 
   bootstrap(): Promise<Bootstrap> {
@@ -531,6 +549,9 @@ class NativeRuntimeRequiredClient implements AppClient {
   updateSettings(): Promise<Settings> {
     return Promise.reject(this.unavailable());
   }
+  defaultSettings(): Promise<Settings> {
+    return Promise.reject(this.unavailable());
+  }
   focusCommand(): Promise<FocusState> {
     return Promise.reject(this.unavailable());
   }
@@ -544,6 +565,9 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   runSync(): Promise<SyncSummary> {
+    return Promise.reject(this.unavailable());
+  }
+  cancelOperation(): Promise<boolean> {
     return Promise.reject(this.unavailable());
   }
   listSyncQueue(): Promise<SyncQueueItem[]> {

@@ -1,3 +1,4 @@
+import { appLocale, translate } from "../../shared/i18n/messages";
 import { useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import {
@@ -22,9 +23,13 @@ import type {
   SyncQueueItem,
   ConflictChoice,
 } from "../../shared/contracts";
-import type { AppClient, DiagnosticsSnapshot } from "../../shared/ipc/client";
+import { AppClientError, type AppClient, type DiagnosticsSnapshot } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 import { ViewTitle } from "./CalendarViews";
+
+function isCancelled(error: unknown): boolean {
+  return error instanceof AppClientError && error.detail.code === "cancelled";
+}
 
 export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap: Bootstrap }) {
   const [focus, setFocus] = useState<FocusState>(bootstrap.focus);
@@ -85,35 +90,43 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
   return (
     <main className="secondary-view focus-view">
       <ViewTitle
-        eyebrow="予定と同じ文脈で集中"
-        title="フォーカス"
-        description="作業・一時停止・休憩の状態を保存し、再起動後も回復します。"
+        eyebrow={translate("features.views.OperationalViews.001")}
+        title={translate("features.views.OperationalViews.002")}
+        description={translate("features.views.OperationalViews.003")}
       />
       {loadError ? (
-        <StatusMessage tone="warning" title="予定または今日のFocus履歴を読み込めませんでした">
-          Focusタイマーは利用できます。履歴を再表示するには、この画面を開き直してください。
+        <StatusMessage tone="warning" title={translate("features.views.OperationalViews.004")}>
+          {translate("features.views.OperationalViews.005")}
         </StatusMessage>
       ) : null}
       <section className="focus-card" aria-labelledby="focus-phase">
-        <span className="eyebrow">現在のフェーズ</span>
+        <span className="eyebrow">{translate("features.views.OperationalViews.006")}</span>
         <h2 id="focus-phase">{focusLabel(focus.phase)}</h2>
-        <output className="focus-time" aria-label={`残り${minutes}分${seconds}秒`}>
+        <output
+          className="focus-time"
+          aria-label={translate("features.views.OperationalViews.007", [minutes, seconds])}
+        >
           {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
         </output>
         <p>
-          サイクル {focus.cycle + 1} ／ 作業 {bootstrap.settings.focusWorkMinutes}分・休憩{" "}
-          {bootstrap.settings.focusBreakMinutes}分・長休憩
-          {bootstrap.settings.focusLongBreakMinutes}分（{bootstrap.settings.focusLongBreakEvery}
-          サイクルごと）
+          {translate("features.views.OperationalViews.008")}
+          {focus.cycle + 1} {translate("features.views.OperationalViews.009")}
+          {bootstrap.settings.focusWorkMinutes}
+          {translate("features.views.OperationalViews.010")} {bootstrap.settings.focusBreakMinutes}
+          {translate("features.views.OperationalViews.011")}
+          {bootstrap.settings.focusLongBreakMinutes}
+          {translate("features.views.OperationalViews.012")}
+          {bootstrap.settings.focusLongBreakEvery}
+          {translate("features.views.OperationalViews.013")}
         </p>
         {focus.phase === "idle" || focus.phase === "waiting_next" ? (
           <label className="focus-link">
-            紐付ける予定（任意）
+            {translate("features.views.OperationalViews.014")}
             <select
               value={linkedScheduleId}
               onChange={(event) => setLinkedScheduleId(event.target.value)}
             >
-              <option value="">予定に紐付けない</option>
+              <option value="">{translate("features.views.OperationalViews.015")}</option>
               {schedules.map((schedule) => (
                 <option key={`${schedule.id}-${schedule.startUtc}`} value={schedule.id}>
                   {`${formatFocusTime(schedule.startUtc)} ${schedule.title}`}
@@ -123,10 +136,10 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
           </label>
         ) : focus.linkedScheduleId ? (
           <p>
-            対象予定:{" "}
+            {translate("features.views.OperationalViews.016")}{" "}
             <strong>
               {schedules.find((schedule) => schedule.id === focus.linkedScheduleId)?.title ??
-                "紐付けた予定"}
+                translate("features.views.OperationalViews.017")}
             </strong>
           </p>
         ) : null}
@@ -137,12 +150,12 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
               disabled={busy}
               onClick={() => void command("start")}
             >
-              作業を開始
+              {translate("features.views.OperationalViews.018")}
             </button>
           ) : null}
           {focus.phase === "working" || focus.phase === "break" ? (
             <button className="button" disabled={busy} onClick={() => void command("pause")}>
-              一時停止
+              {translate("features.views.OperationalViews.019")}
             </button>
           ) : null}
           {focus.phase === "paused" ? (
@@ -151,12 +164,12 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
               disabled={busy}
               onClick={() => void command("resume")}
             >
-              再開
+              {translate("features.views.OperationalViews.020")}
             </button>
           ) : null}
           {focus.phase === "working" ? (
             <button className="button" disabled={busy} onClick={() => void command("skip")}>
-              休憩へ進む
+              {translate("features.views.OperationalViews.021")}
             </button>
           ) : null}
           {focus.phase !== "idle" ? (
@@ -165,17 +178,20 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
               disabled={busy}
               onClick={() => void command("stop")}
             >
-              Focusを終了
+              {translate("features.views.OperationalViews.022")}
             </button>
           ) : null}
         </div>
       </section>
       <section className="focus-history" aria-labelledby="focus-history-title">
         <div className="section-heading section-heading--compact">
-          <h2 id="focus-history-title">今日のFocus履歴</h2>
+          <h2 id="focus-history-title">{translate("features.views.OperationalViews.023")}</h2>
           <strong>
-            作業 {Math.floor((history?.workSeconds ?? 0) / 60)}分
-            {String((history?.workSeconds ?? 0) % 60).padStart(2, "0")}秒
+            {translate("features.views.OperationalViews.024")}
+            {Math.floor((history?.workSeconds ?? 0) / 60)}
+            {translate("features.views.OperationalViews.025")}
+            {String((history?.workSeconds ?? 0) % 60).padStart(2, "0")}
+            {translate("features.views.OperationalViews.026")}
           </strong>
         </div>
         {history?.entries.length ? (
@@ -185,25 +201,27 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
                 <time>{formatFocusTime(entry.occurredAt)}</time>
                 <span>{focusEventLabel(entry.event)}</span>
                 {entry.elapsedSeconds > 0 ? (
-                  <small>{Math.round(entry.elapsedSeconds / 60)}分</small>
+                  <small>
+                    {Math.round(entry.elapsedSeconds / 60)}
+                    {translate("features.views.OperationalViews.027")}
+                  </small>
                 ) : null}
               </li>
             ))}
           </ol>
         ) : (
-          <p>今日の履歴はまだありません。作業を開始するとここへ記録します。</p>
+          <p>{translate("features.views.OperationalViews.028")}</p>
         )}
       </section>
-      <StatusMessage title="通知と終了中の動作">
-        アプリが完全終了している間は Focus
-        の通知を配信できません。ウィンドウを閉じても続ける場合は、設定で「トレイへ格納」を選びます。
+      <StatusMessage title={translate("features.views.OperationalViews.029")}>
+        {translate("features.views.OperationalViews.030")}
       </StatusMessage>
     </main>
   );
 }
 
 function formatFocusTime(value: string): string {
-  return new Intl.DateTimeFormat("ja-JP", {
+  return new Intl.DateTimeFormat(appLocale, {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
@@ -211,19 +229,20 @@ function formatFocusTime(value: string): string {
 
 function focusEventLabel(event: FocusHistoryReport["entries"][number]["event"]): string {
   return {
-    start: "作業開始",
-    pause: "一時停止",
-    resume: "再開",
-    work_end: "作業終了",
-    break_end: "休憩終了",
-    stop: "Focus終了",
-    skip: "フェーズをスキップ",
+    start: translate("features.views.OperationalViews.031"),
+    pause: translate("features.views.OperationalViews.032"),
+    resume: translate("features.views.OperationalViews.033"),
+    work_end: translate("features.views.OperationalViews.034"),
+    break_end: translate("features.views.OperationalViews.035"),
+    stop: translate("features.views.OperationalViews.036"),
+    skip: translate("features.views.OperationalViews.037"),
   }[event];
 }
 
 export function SettingsView({ client, bootstrap }: { client: AppClient; bootstrap: Bootstrap }) {
   const [settings, setSettings] = useState<Settings>(bootstrap.settings);
   const [saved, setSaved] = useState(false);
+  const [resetState, setResetState] = useState<"loaded" | "failed" | null>(null);
   const [busy, setBusy] = useState(false);
   const [windowPreferences, setWindowPreferences] = useState(bootstrap.windowPreferences);
   const [notificationPermission, setNotificationPermission] = useState<
@@ -251,7 +270,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
   const testNotification = () => {
     sendNotification({
       title: "Day Schedule Next",
-      body: "OS標準通知を確認できました。",
+      body: translate("features.views.OperationalViews.038"),
     });
   };
   const save = async () => {
@@ -259,6 +278,21 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
     try {
       setSettings(await client.updateSettings(settings));
       setSaved(true);
+      setResetState(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resetDefaults = async () => {
+    setBusy(true);
+    setSaved(false);
+    setResetState(null);
+    try {
+      const defaults = await client.defaultSettings();
+      setSettings(defaults);
+      setResetState("loaded");
+    } catch {
+      setResetState("failed");
     } finally {
       setBusy(false);
     }
@@ -266,29 +300,37 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
   return (
     <main className="secondary-view settings-view">
       <ViewTitle
-        eyebrow="動作と表示を調整"
-        title="設定"
-        description="一般、表示、通知、Focus、Google、データの既定動作を確認します。"
+        eyebrow={translate("features.views.OperationalViews.039")}
+        title={translate("features.views.OperationalViews.040")}
+        description={translate("features.views.OperationalViews.041")}
       />
-      {saved ? <StatusMessage tone="success" title="設定をこの端末に保存しました" /> : null}
+      {saved ? (
+        <StatusMessage tone="success" title={translate("features.views.OperationalViews.042")} />
+      ) : null}
+      {resetState === "loaded" ? (
+        <StatusMessage tone="success" title={translate("settings.states.defaultsLoaded")} />
+      ) : null}
+      {resetState === "failed" ? (
+        <StatusMessage tone="warning" title={translate("settings.states.defaultsFailed")} />
+      ) : null}
       <div className="settings-grid">
         <section>
-          <h2>表示と操作</h2>
+          <h2>{translate("features.views.OperationalViews.043")}</h2>
           <label>
-            テーマ
+            {translate("features.views.OperationalViews.044")}
             <select
               value={settings.theme}
               onChange={(event) =>
                 setSettings({ ...settings, theme: event.target.value as Settings["theme"] })
               }
             >
-              <option value="system">システム設定に合わせる</option>
-              <option value="light">ライト</option>
-              <option value="dark">ダーク</option>
+              <option value="system">{translate("features.views.OperationalViews.045")}</option>
+              <option value="light">{translate("features.views.OperationalViews.046")}</option>
+              <option value="dark">{translate("features.views.OperationalViews.047")}</option>
             </select>
           </label>
           <label>
-            タイムラインのスナップ幅
+            {translate("features.views.OperationalViews.048")}
             <select
               value={settings.snapMinutes}
               onChange={(event) =>
@@ -300,17 +342,16 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
             >
               {[1, 5, 10, 15, 30].map((value) => (
                 <option key={value} value={value}>
-                  {value}分
+                  {value}
+                  {translate("features.views.OperationalViews.049")}
                 </option>
               ))}
             </select>
           </label>
-          <p className="field-help">
-            直接入力した時刻は1分単位で保存され、スナップ幅には丸められません。
-          </p>
+          <p className="field-help">{translate("features.views.OperationalViews.050")}</p>
         </section>
         <section>
-          <h2>アプリを閉じる動作</h2>
+          <h2>{translate("features.views.OperationalViews.051")}</h2>
           <label>
             <input
               type="radio"
@@ -318,7 +359,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
               checked={settings.closeBehavior === "tray"}
               onChange={() => setSettings({ ...settings, closeBehavior: "tray" })}
             />{" "}
-            トレイへ格納して通知・同期を続ける
+            {translate("features.views.OperationalViews.052")}
           </label>
           <label>
             <input
@@ -327,11 +368,11 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
               checked={settings.closeBehavior === "quit"}
               onChange={() => setSettings({ ...settings, closeBehavior: "quit" })}
             />{" "}
-            完全終了する
+            {translate("features.views.OperationalViews.053")}
           </label>
-          <p className="field-help">完全終了中は通知、同期、Focusタイマーを実行できません。</p>
+          <p className="field-help">{translate("features.views.OperationalViews.054")}</p>
           <fieldset className="window-preferences">
-            <legend>常に手前へ表示</legend>
+            <legend>{translate("features.views.OperationalViews.055")}</legend>
             <label>
               <input
                 type="checkbox"
@@ -342,7 +383,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
                   void client.setWindowAlwaysOnTop("main", value);
                 }}
               />
-              メインウィンドウ
+              {translate("features.views.OperationalViews.056")}
             </label>
             <label>
               <input
@@ -354,14 +395,15 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
                   void client.setWindowAlwaysOnTop("compact", value);
                 }}
               />
-              コンパクトウィンドウ
+              {translate("features.views.OperationalViews.057")}
             </label>
           </fieldset>
         </section>
         <section>
-          <h2>通知の復帰</h2>
+          <h2>{translate("features.views.OperationalViews.058")}</h2>
           <p className="permission-state" data-state={notificationPermission}>
-            OS通知権限: {permissionLabel(notificationPermission)}
+            {translate("features.views.OperationalViews.059")}
+            {permissionLabel(notificationPermission)}
           </p>
           <div className="button-row">
             {notificationPermission !== "granted" ? (
@@ -370,18 +412,17 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
                 type="button"
                 onClick={() => void askNotificationPermission()}
               >
-                OS通知を許可する
+                {translate("features.views.OperationalViews.060")}
               </button>
             ) : (
               <button className="button" type="button" onClick={testNotification}>
-                テスト通知
+                {translate("features.views.OperationalViews.061")}
               </button>
             )}
           </div>
           {notificationPermission === "denied" ? (
-            <StatusMessage tone="warning" title="OS通知は拒否されています">
-              OSのアプリ通知設定で Day Schedule Next
-              を許可してください。通知音だけを有効にした場合は、アプリ起動中に音のみ動作します。
+            <StatusMessage tone="warning" title={translate("features.views.OperationalViews.062")}>
+              {translate("features.views.OperationalViews.063")}
             </StatusMessage>
           ) : null}
           <label>
@@ -392,7 +433,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
                 setSettings({ ...settings, scheduleNotificationsEnabled: event.target.checked })
               }
             />{" "}
-            予定の通知を有効にする
+            {translate("features.views.OperationalViews.064")}
           </label>
           <label>
             <input
@@ -402,7 +443,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
                 setSettings({ ...settings, osNotificationsEnabled: event.target.checked })
               }
             />{" "}
-            OS標準通知を使う
+            {translate("features.views.OperationalViews.065")}
           </label>
           <label>
             <input
@@ -412,10 +453,10 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
                 setSettings({ ...settings, soundNotificationsEnabled: event.target.checked })
               }
             />{" "}
-            アプリ内の通知音を使う
+            {translate("features.views.OperationalViews.066")}
           </label>
           <label>
-            スリープ後に補う範囲（分）
+            {translate("features.views.OperationalViews.067")}
             <input
               type="number"
               min={0}
@@ -427,7 +468,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
             />
           </label>
           <label>
-            一度に補う最大件数
+            {translate("features.views.OperationalViews.068")}
             <input
               type="number"
               min={0}
@@ -442,7 +483,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
         <section>
           <h2>Focus</h2>
           <label>
-            作業時間（分）
+            {translate("features.views.OperationalViews.069")}
             <input
               type="number"
               min={1}
@@ -454,7 +495,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
             />
           </label>
           <label>
-            休憩時間（分）
+            {translate("features.views.OperationalViews.070")}
             <input
               type="number"
               min={1}
@@ -466,7 +507,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
             />
           </label>
           <label>
-            長休憩（分）
+            {translate("features.views.OperationalViews.071")}
             <input
               type="number"
               min={1}
@@ -478,7 +519,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
             />
           </label>
           <label>
-            長休憩までのサイクル数
+            {translate("features.views.OperationalViews.072")}
             <input
               type="number"
               min={1}
@@ -497,7 +538,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
                 setSettings({ ...settings, focusAutoStart: event.target.checked })
               }
             />{" "}
-            休憩後に次の作業を自動開始
+            {translate("features.views.OperationalViews.073")}
           </label>
           <label>
             <input
@@ -507,18 +548,31 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
                 setSettings({ ...settings, focusNotificationsEnabled: event.target.checked })
               }
             />{" "}
-            Focus通知を有効にする
+            {translate("features.views.OperationalViews.074")}
           </label>
         </section>
       </div>
-      <button
-        className="button button--primary"
-        type="button"
-        disabled={busy}
-        onClick={() => void save()}
-      >
-        {busy ? "保存中…" : "設定を保存"}
-      </button>
+      <div className="button-row">
+        <button
+          className="button button--primary"
+          type="button"
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          {busy
+            ? translate("features.views.OperationalViews.075")
+            : translate("features.views.OperationalViews.076")}
+        </button>
+        <button
+          className="button"
+          type="button"
+          disabled={busy}
+          onClick={() => void resetDefaults()}
+        >
+          {translate("settings.actions.resetDefaults")}
+        </button>
+      </div>
+      <p className="field-help">{translate("settings.help.resetDefaults")}</p>
       <GooglePanel client={client} />
       <DataTransferPanel client={client} />
     </main>
@@ -542,7 +596,7 @@ function GooglePanel({ client }: { client: AppClient }) {
       client
         .googleConnection()
         .then((value) => active && setConnection(value))
-        .catch(() => active && setError("Google接続状態を取得できませんでした。"));
+        .catch(() => active && setError(translate("features.views.OperationalViews.077")));
     void read();
     const timer = window.setInterval(() => {
       if (connection?.state === "connecting") void read();
@@ -558,7 +612,7 @@ function GooglePanel({ client }: { client: AppClient }) {
     setError(null);
     try {
       const path = await open({
-        title: "Google OAuth Desktop app JSONを選択",
+        title: translate("features.views.OperationalViews.078"),
         multiple: false,
         directory: false,
         filters: [{ name: "Google OAuth JSON", extensions: ["json"] }],
@@ -566,13 +620,9 @@ function GooglePanel({ client }: { client: AppClient }) {
       if (typeof path !== "string") return;
       const configured = await client.importGoogleOAuthConfig(path);
       await refresh();
-      setMessage(
-        `OAuth設定 ${configured.clientIdHint} を読み込みました。client secretはOS秘密ストアへ保存しました。`,
-      );
+      setMessage(translate("features.views.OperationalViews.079", [configured.clientIdHint]));
     } catch {
-      setError(
-        "OAuth JSONを読み込めませんでした。Google CloudでDesktop appとして作成したJSONを確認してください。",
-      );
+      setError(translate("features.views.OperationalViews.080"));
     } finally {
       setBusy(false);
     }
@@ -585,12 +635,12 @@ function GooglePanel({ client }: { client: AppClient }) {
       const result = await client.beginGoogleOAuth();
       setMessage(
         result.openedInSystemBrowser
-          ? "システムブラウザを開きました。3分以内にGoogleの同意を完了してください。"
-          : "ブラウザでGoogleの同意を完了してください。",
+          ? translate("features.views.OperationalViews.081")
+          : translate("features.views.OperationalViews.082"),
       );
       await refresh();
     } catch {
-      setError("Google接続を開始できませんでした。OAuth設定と既定ブラウザを確認してください。");
+      setError(translate("features.views.OperationalViews.083"));
     } finally {
       setBusy(false);
     }
@@ -602,7 +652,7 @@ function GooglePanel({ client }: { client: AppClient }) {
       await client.updateGoogleCalendar(id, selected, defaultWriteTarget);
       await refresh();
     } catch {
-      setError("カレンダー設定を保存できませんでした。権限と接続状態を確認してください。");
+      setError(translate("features.views.OperationalViews.084"));
     } finally {
       setBusy(false);
     }
@@ -615,12 +665,12 @@ function GooglePanel({ client }: { client: AppClient }) {
       await refresh();
       setMessage(
         mode === "keep_local"
-          ? `Google接続を解除し、対応するローカル予定${affected}件を保持しました。`
-          : `Google接続を解除し、対応するローカル予定${affected}件を削除待ちにしました。`,
+          ? translate("features.views.OperationalViews.085", [affected])
+          : translate("features.views.OperationalViews.086", [affected]),
       );
       setDisconnectMode(null);
     } catch {
-      setError("Google接続を解除できませんでした。認証情報とローカル予定は保持されています。");
+      setError(translate("features.views.OperationalViews.087"));
     } finally {
       setBusy(false);
     }
@@ -631,10 +681,7 @@ function GooglePanel({ client }: { client: AppClient }) {
       <div className="section-heading-row">
         <div>
           <h2 id="google-panel-title">Google Calendar</h2>
-          <p>
-            Desktop OAuth、PKCE
-            S256、127.0.0.1の一時ポートを使い、予定編集とカレンダー一覧だけを許可します。
-          </p>
+          <p>{translate("features.views.OperationalViews.088")}</p>
         </div>
         <span className="state-chip" data-state={connection?.state ?? "loading"}>
           {googleStateLabel(connection?.state)}
@@ -643,46 +690,53 @@ function GooglePanel({ client }: { client: AppClient }) {
       {message ? <StatusMessage tone="success" title={message} /> : null}
       {error ? <StatusMessage tone="danger" title={error} /> : null}
       {connection?.state === "feature_disabled" ? (
-        <StatusMessage title="このビルドはローカル専用です">
-          Google同期を含まない機能フラグでビルドされています。ローカル予定、通知、Focusは利用できます。
+        <StatusMessage title={translate("features.views.OperationalViews.089")}>
+          {translate("features.views.OperationalViews.090")}
         </StatusMessage>
       ) : null}
       {!connection?.configured && connection?.state !== "feature_disabled" ? (
         <div className="button-row">
           <button className="button" disabled={busy} onClick={() => void importConfig()}>
-            Desktop OAuth JSONを読み込む
+            {translate("features.views.OperationalViews.091")}
           </button>
         </div>
       ) : null}
       {connection?.configured && !connection.accountId ? (
         <div className="button-row">
           <button className="button button--primary" disabled={busy} onClick={() => void connect()}>
-            システムブラウザでGoogleへ接続
+            {translate("features.views.OperationalViews.092")}
           </button>
           <button className="button" disabled={busy} onClick={() => void importConfig()}>
-            OAuth JSONを変更
+            {translate("features.views.OperationalViews.093")}
           </button>
         </div>
       ) : null}
       {connection?.state === "connecting" ? (
-        <StatusMessage title="ブラウザでGoogle接続を待っています">
-          このアプリが認可コード、state、PKCE
-          verifierを検証します。ブラウザに表示されたコードを貼り付ける必要はありません。
+        <StatusMessage title={translate("features.views.OperationalViews.094")}>
+          {translate("features.views.OperationalViews.095")}
         </StatusMessage>
       ) : null}
       {connection?.accountId ? (
         <>
           <p>
-            接続: <strong>{connection.displayLabel ?? "Google Calendar"}</strong>
+            {translate("features.views.OperationalViews.096")}
+            <strong>{connection.displayLabel ?? "Google Calendar"}</strong>
           </p>
-          <div className="google-calendar-list" role="group" aria-label="同期するカレンダー">
+          <div
+            className="google-calendar-list"
+            role="group"
+            aria-label={translate("features.views.OperationalViews.097")}
+          >
             {connection.calendars.map((calendar) => (
               <article key={calendar.id}>
                 <i style={{ backgroundColor: calendar.color }} aria-hidden="true" />
                 <span>
                   <strong>{calendar.displayName}</strong>
                   <small>
-                    {calendar.timezoneId}・{calendar.writable ? "書き込み可能" : "読み取り専用"}
+                    {calendar.timezoneId}・
+                    {calendar.writable
+                      ? translate("features.views.OperationalViews.098")
+                      : translate("features.views.OperationalViews.099")}
                   </small>
                 </span>
                 <label>
@@ -698,7 +752,7 @@ function GooglePanel({ client }: { client: AppClient }) {
                       )
                     }
                   />
-                  同期
+                  {translate("features.views.OperationalViews.100")}
                 </label>
                 <label>
                   <input
@@ -708,18 +762,23 @@ function GooglePanel({ client }: { client: AppClient }) {
                     disabled={busy || !calendar.writable}
                     onChange={() => void updateCalendar(calendar.id, true, true)}
                   />
-                  新規予定の同期先
+                  {translate("features.views.OperationalViews.101")}
                 </label>
               </article>
             ))}
           </div>
           {disconnectMode ? (
             <div className="disconnect-confirm">
-              <StatusMessage tone="warning" title="Google接続を解除します">
-                対応するローカル予定は{connection.mappedScheduleCount}件です。
+              <StatusMessage
+                tone="warning"
+                title={translate("features.views.OperationalViews.102")}
+              >
+                {translate("features.views.OperationalViews.103")}
+                {connection.mappedScheduleCount}
+                {translate("features.views.OperationalViews.104")}
                 {disconnectMode === "keep_local"
-                  ? " 予定を端末に残し、以後はローカル予定として扱います。"
-                  : " 対応するローカル予定を削除待ちにします。Google上のイベントは削除しません。"}
+                  ? translate("features.views.OperationalViews.105")
+                  : translate("features.views.OperationalViews.106")}
               </StatusMessage>
               <div className="button-row">
                 <button
@@ -727,39 +786,36 @@ function GooglePanel({ client }: { client: AppClient }) {
                   disabled={busy}
                   onClick={() => void disconnect(disconnectMode)}
                 >
-                  影響を確認して解除
+                  {translate("features.views.OperationalViews.107")}
                 </button>
                 <button className="button" onClick={() => setDisconnectMode(null)}>
-                  やめる
+                  {translate("features.views.OperationalViews.108")}
                 </button>
               </div>
             </div>
           ) : (
             <div className="button-row">
               <button className="button" onClick={() => setDisconnectMode("keep_local")}>
-                ローカル予定を残して解除…
+                {translate("features.views.OperationalViews.109")}
               </button>
               <button
                 className="button button--danger-outline"
                 onClick={() => setDisconnectMode("delete_mapped_local")}
               >
-                対応ローカル予定も削除して解除…
+                {translate("features.views.OperationalViews.110")}
               </button>
             </div>
           )}
         </>
       ) : null}
       <details>
-        <summary>Google Cloud設定の注意</summary>
+        <summary>{translate("features.views.OperationalViews.111")}</summary>
+        <p>{translate("features.views.OperationalViews.112")}</p>
         <p>
-          OAuth同意画面が「Testing」の場合、refresh
-          tokenが短期間で失効することがあります。継続利用する場合はGoogle
-          Cloudの公開状態とテストユーザー設定を確認してください。未確認アプリの警告が表示される場合があります。
-        </p>
-        <p>
-          要求スコープ: <code>calendar.events</code> と <code>calendar.calendarlist.readonly</code>
-          のみ。client secret、access token、refresh
-          tokenはOS秘密ストアへ保存し、SQLiteと画面には返しません。
+          {translate("features.views.OperationalViews.113")}
+          <code>calendar.events</code> {translate("features.views.OperationalViews.114")}
+          <code>calendar.calendarlist.readonly</code>
+          {translate("features.views.OperationalViews.115")}
         </p>
       </details>
     </section>
@@ -774,6 +830,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activeExportId, setActiveExportId] = useState<string | null>(null);
   const [legacyPath, setLegacyPath] = useState<string | null>(null);
   const [legacyPreview, setLegacyPreview] = useState<LegacyImportPreview | null>(null);
   const [legacyResult, setLegacyResult] = useState<LegacyImportResult | null>(null);
@@ -785,20 +842,41 @@ function DataTransferPanel({ client }: { client: AppClient }) {
     setError(null);
     try {
       const path = await save({
-        title: "予定データをJSONへエクスポート",
+        title: translate("features.views.OperationalViews.116"),
         defaultPath: `day-schedule-next-${new Date().toISOString().slice(0, 10)}.json`,
         filters: [{ name: "Day Schedule Next JSON", extensions: ["json"] }],
       });
       if (!path) return;
-      const exported = await client.exportData(path);
+      const operationId = crypto.randomUUID();
+      setActiveExportId(operationId);
+      const exported = await client.exportData(path, operationId);
       setMessage(
-        `${exported.fileName}へ予定${exported.scheduleCount}件、テンプレート${exported.templateCount}件を保存しました。`,
+        translate("features.views.OperationalViews.117", [
+          exported.fileName,
+          exported.scheduleCount,
+          exported.templateCount,
+        ]),
       );
-    } catch {
-      setError("エクスポートできませんでした。保存先を選び直して再試行してください。");
+    } catch (caught) {
+      if (isCancelled(caught)) {
+        setMessage(translate("features.views.OperationalViews.118"));
+      } else {
+        setError(translate("features.views.OperationalViews.119"));
+      }
     } finally {
+      setActiveExportId(null);
       setBusy(false);
     }
+  };
+
+  const cancelExport = async () => {
+    if (!activeExportId) return;
+    const accepted = await client.cancelOperation(activeExportId);
+    setMessage(
+      accepted
+        ? translate("features.views.OperationalViews.120")
+        : translate("features.views.OperationalViews.121"),
+    );
   };
 
   const selectImport = async () => {
@@ -807,7 +885,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
     setResult(null);
     try {
       const path = await open({
-        title: "取り込むDay Schedule Next JSONを選択",
+        title: translate("features.views.OperationalViews.122"),
         multiple: false,
         directory: false,
         filters: [{ name: "Day Schedule Next JSON", extensions: ["json"] }],
@@ -818,7 +896,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
     } catch {
       setPreview(null);
       setImportPath(null);
-      setError("ファイルをプレビューできませんでした。元データは変更されていません。");
+      setError(translate("features.views.OperationalViews.123"));
     } finally {
       setBusy(false);
     }
@@ -833,11 +911,9 @@ function DataTransferPanel({ client }: { client: AppClient }) {
       setResult(imported);
       setPreview(null);
       setImportPath(null);
-      setMessage("インポートを1つのトランザクションで確定しました。画面を再読込してください。");
+      setMessage(translate("features.views.OperationalViews.124"));
     } catch {
-      setError(
-        "インポートを確定できませんでした。データは部分適用されていません。再プレビューしてください。",
-      );
+      setError(translate("features.views.OperationalViews.125"));
     } finally {
       setBusy(false);
     }
@@ -849,7 +925,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
     setLegacyResult(null);
     try {
       const path = await open({
-        title: "旧Day Scheduleのschedule.dbを選択",
+        title: translate("features.views.OperationalViews.126"),
         multiple: false,
         directory: false,
         filters: [{ name: "SQLite database", extensions: ["db", "sqlite", "sqlite3"] }],
@@ -860,9 +936,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
     } catch {
       setLegacyPath(null);
       setLegacyPreview(null);
-      setError(
-        "旧DBを読み取り専用でプレビューできませんでした。元アプリを閉じ、DBのコピーを選んでください。",
-      );
+      setError(translate("features.views.OperationalViews.127"));
     } finally {
       setBusy(false);
     }
@@ -876,18 +950,16 @@ function DataTransferPanel({ client }: { client: AppClient }) {
       setLegacyResult(await client.importLegacy(legacyPath, legacyPreview.fingerprint));
       setLegacyPath(null);
       setLegacyPreview(null);
-      setMessage("旧DBの有効な項目を1つのトランザクションで取り込みました。");
+      setMessage(translate("features.views.OperationalViews.128"));
     } catch {
-      setError(
-        "旧DBを取り込めませんでした。新しいデータは部分適用されていません。もう一度プレビューしてください。",
-      );
+      setError(translate("features.views.OperationalViews.129"));
     } finally {
       setBusy(false);
     }
   };
 
   const deleteAllData = async () => {
-    if (deleteConfirmation !== "すべてのローカルデータを削除") return;
+    if (deleteConfirmation !== translate("features.views.OperationalViews.130")) return;
     setBusy(true);
     setError(null);
     setMessage(null);
@@ -895,9 +967,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
       setDeletedScheduleCount(await client.deleteAllUserData(deleteConfirmation));
       setDeleteConfirmation("");
     } catch {
-      setError(
-        "全データ削除を確定できませんでした。表示された回復手順に従い、OSの資格情報ストアと保存領域を確認してください。",
-      );
+      setError(translate("features.views.OperationalViews.131"));
     } finally {
       setBusy(false);
     }
@@ -905,69 +975,90 @@ function DataTransferPanel({ client }: { client: AppClient }) {
 
   return (
     <section className="data-transfer" aria-labelledby="data-transfer-title">
-      <h2 id="data-transfer-title">データ</h2>
-      <p>
-        予定、テンプレート、Quick
-        Block、アラーム、設定をJSONへ保存します。Google認証情報と同期識別子は含めません。
-      </p>
+      <h2 id="data-transfer-title">{translate("features.views.OperationalViews.132")}</h2>
+      <p>{translate("features.views.OperationalViews.133")}</p>
       {message ? <StatusMessage tone="success" title={message} /> : null}
       {error ? <StatusMessage tone="danger" title={error} /> : null}
       {deletedScheduleCount !== null ? (
         <StatusMessage
           tone="success"
-          title={`この端末の予定${deletedScheduleCount}件と関連データを削除しました`}
+          title={translate("features.views.OperationalViews.134", [deletedScheduleCount])}
           action={
             <button className="button" type="button" onClick={() => window.location.reload()}>
-              初期状態を再読み込み
+              {translate("features.views.OperationalViews.135")}
             </button>
           }
         >
-          追加テンプレート、Quick Block、アラーム、Focus履歴、同期情報、Google認証情報、
-          診断履歴、バックアップ、設定を消去しました。Google Calendar上の予定は削除していません。
+          {translate("features.views.OperationalViews.136")}
         </StatusMessage>
       ) : null}
       {result ? (
-        <StatusMessage tone="success" title="取り込み結果">
-          予定{result.importedScheduleCount}件、テンプレート{result.importedTemplateCount}件、Quick
-          Block{result.importedQuickBlockCount}件、アラーム{result.importedAlarmCount}
-          件を追加しました。
+        <StatusMessage tone="success" title={translate("features.views.OperationalViews.137")}>
+          {translate("features.views.OperationalViews.138")}
+          {result.importedScheduleCount}
+          {translate("features.views.OperationalViews.139")}
+          {result.importedTemplateCount}
+          {translate("features.views.OperationalViews.140")}
+          {result.importedQuickBlockCount}
+          {translate("features.views.OperationalViews.141")}
+          {result.importedAlarmCount}
+          {translate("features.views.OperationalViews.142")}
           {result.preservedExternalScheduleCount > 0
-            ? ` Google由来の予定${result.preservedExternalScheduleCount}件は保護しました。`
+            ? translate("features.views.OperationalViews.143", [
+                result.preservedExternalScheduleCount,
+              ])
             : ""}
         </StatusMessage>
       ) : null}
       <div className="button-row">
         <button className="button" type="button" disabled={busy} onClick={() => void exportData()}>
-          JSONへエクスポート
+          {translate("features.views.OperationalViews.144")}
         </button>
+        {activeExportId ? (
+          <button className="button" type="button" onClick={() => void cancelExport()}>
+            {translate("features.views.OperationalViews.145")}
+          </button>
+        ) : null}
         <button
           className="button"
           type="button"
           disabled={busy}
           onClick={() => void selectImport()}
         >
-          JSONを選んでプレビュー
+          {translate("features.views.OperationalViews.146")}
         </button>
       </div>
       {preview ? (
         <div className="import-preview">
-          <h3>適用前の確認</h3>
+          <h3>{translate("features.views.OperationalViews.147")}</h3>
           <dl>
             <div>
-              <dt>予定</dt>
-              <dd>{preview.scheduleCount}件</dd>
+              <dt>{translate("features.views.OperationalViews.148")}</dt>
+              <dd>
+                {preview.scheduleCount}
+                {translate("features.views.OperationalViews.149")}
+              </dd>
             </div>
             <div>
-              <dt>テンプレート</dt>
-              <dd>{preview.templateCount}件</dd>
+              <dt>{translate("features.views.OperationalViews.150")}</dt>
+              <dd>
+                {preview.templateCount}
+                {translate("features.views.OperationalViews.151")}
+              </dd>
             </div>
             <div>
               <dt>Quick Block</dt>
-              <dd>{preview.quickBlockCount}件</dd>
+              <dd>
+                {preview.quickBlockCount}
+                {translate("features.views.OperationalViews.152")}
+              </dd>
             </div>
             <div>
-              <dt>アラーム</dt>
-              <dd>{preview.alarmCount}件</dd>
+              <dt>{translate("features.views.OperationalViews.153")}</dt>
+              <dd>
+                {preview.alarmCount}
+                {translate("features.views.OperationalViews.154")}
+              </dd>
             </div>
           </dl>
           <ul>
@@ -976,7 +1067,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
             ))}
           </ul>
           <fieldset>
-            <legend>適用方法</legend>
+            <legend>{translate("features.views.OperationalViews.155")}</legend>
             <label>
               <input
                 type="radio"
@@ -984,7 +1075,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
                 checked={mode === "add"}
                 onChange={() => setMode("add")}
               />{" "}
-              新しい項目として追加（推奨）
+              {translate("features.views.OperationalViews.156")}
             </label>
             <label>
               <input
@@ -993,13 +1084,12 @@ function DataTransferPanel({ client }: { client: AppClient }) {
                 checked={mode === "replace"}
                 onChange={() => setMode("replace")}
               />{" "}
-              ローカル項目を置換（Google由来の予定は保持）
+              {translate("features.views.OperationalViews.157")}
             </label>
           </fieldset>
           {mode === "replace" ? (
-            <StatusMessage tone="warning" title="ローカル項目を置き換えます">
-              現在のローカル予定、追加テンプレート、Quick
-              Block、アラームを削除してから取り込みます。Google由来の予定と既定テンプレートは保持します。
+            <StatusMessage tone="warning" title={translate("features.views.OperationalViews.158")}>
+              {translate("features.views.OperationalViews.159")}
             </StatusMessage>
           ) : null}
           <div className="button-row">
@@ -1009,7 +1099,9 @@ function DataTransferPanel({ client }: { client: AppClient }) {
               disabled={busy}
               onClick={() => void commitImport()}
             >
-              {mode === "replace" ? "確認した内容で置換" : "確認した内容を追加"}
+              {mode === "replace"
+                ? translate("features.views.OperationalViews.160")
+                : translate("features.views.OperationalViews.161")}
             </button>
             <button
               className="button"
@@ -1019,54 +1111,73 @@ function DataTransferPanel({ client }: { client: AppClient }) {
                 setImportPath(null);
               }}
             >
-              取り消す
+              {translate("features.views.OperationalViews.162")}
             </button>
           </div>
         </div>
       ) : null}
       <hr />
-      <h3>旧Day Scheduleから移行</h3>
+      <h3>{translate("features.views.OperationalViews.163")}</h3>
       <p>
-        旧 <code>schedule.db</code> を読み取り専用で解析し、件数と変換警告を確認してから追加します。
-        元DBは変更しません。
+        {translate("features.views.OperationalViews.164")}
+        <code>schedule.db</code> {translate("features.views.OperationalViews.165")}
       </p>
       {legacyResult ? (
-        <StatusMessage tone="success" title="旧DBの取り込み結果">
-          テンプレート{legacyResult.importedTemplateCount}件、ブロック
-          {legacyResult.importedTemplateBlockCount}件、Quick Block
-          {legacyResult.importedQuickBlockCount}件、アラーム{legacyResult.importedAlarmCount}
-          件を追加しました。
+        <StatusMessage tone="success" title={translate("features.views.OperationalViews.166")}>
+          {translate("features.views.OperationalViews.167")}
+          {legacyResult.importedTemplateCount}
+          {translate("features.views.OperationalViews.168")}
+          {legacyResult.importedTemplateBlockCount}
+          {translate("features.views.OperationalViews.169")}
+          {legacyResult.importedQuickBlockCount}
+          {translate("features.views.OperationalViews.170")}
+          {legacyResult.importedAlarmCount}
+          {translate("features.views.OperationalViews.171")}
         </StatusMessage>
       ) : null}
       <button className="button" type="button" disabled={busy} onClick={() => void selectLegacy()}>
-        schedule.dbを選んでプレビュー
+        {translate("features.views.OperationalViews.172")}
       </button>
       {legacyPreview ? (
         <div className="import-preview">
-          <h3>旧DBの適用前確認</h3>
+          <h3>{translate("features.views.OperationalViews.173")}</h3>
           <dl>
             <div>
-              <dt>テンプレート／ブロック</dt>
+              <dt>{translate("features.views.OperationalViews.174")}</dt>
               <dd>
-                {legacyPreview.templateCount}件／{legacyPreview.templateBlockCount}件
+                {legacyPreview.templateCount}
+                {translate("features.views.OperationalViews.175")}
+                {legacyPreview.templateBlockCount}
+                {translate("features.views.OperationalViews.176")}
               </dd>
             </div>
             <div>
-              <dt>Quick Block／アラーム</dt>
+              <dt>{translate("features.views.OperationalViews.177")}</dt>
               <dd>
-                {legacyPreview.quickBlockCount}件／{legacyPreview.alarmCount}件
+                {legacyPreview.quickBlockCount}
+                {translate("features.views.OperationalViews.178")}
+                {legacyPreview.alarmCount}
+                {translate("features.views.OperationalViews.179")}
               </dd>
             </div>
             <div>
-              <dt>孤児／無効時刻／重複名</dt>
+              <dt>{translate("features.views.OperationalViews.180")}</dt>
               <dd>
-                {legacyPreview.orphanCount}件／{legacyPreview.invalidTimeCount}件／
-                {legacyPreview.duplicateNameCount}件
+                {legacyPreview.orphanCount}
+                {translate("features.views.OperationalViews.181")}
+                {legacyPreview.invalidTimeCount}
+                {translate("features.views.OperationalViews.182")}
+                {legacyPreview.duplicateNameCount}
+                {translate("features.views.OperationalViews.183")}
               </dd>
             </div>
             <div>
-              <dt>最後のテンプレート</dt>
-              <dd>{legacyPreview.lastProfileFound ? "移行します" : "既定へフォールバック"}</dd>
+              <dt>{translate("features.views.OperationalViews.184")}</dt>
+              <dd>
+                {legacyPreview.lastProfileFound
+                  ? translate("features.views.OperationalViews.185")
+                  : translate("features.views.OperationalViews.186")}
+              </dd>
             </div>
           </dl>
           {legacyPreview.warnings.length > 0 ? (
@@ -1076,10 +1187,11 @@ function DataTransferPanel({ client }: { client: AppClient }) {
               ))}
             </ul>
           ) : (
-            <p>変換警告はありません。</p>
+            <p>{translate("features.views.OperationalViews.187")}</p>
           )}
           <p>
-            移行しない項目: <strong>{legacyPreview.excluded.join("、")}</strong>
+            {translate("features.views.OperationalViews.188")}
+            <strong>{legacyPreview.excluded.join("、")}</strong>
           </p>
           <div className="button-row">
             <button
@@ -1088,7 +1200,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
               disabled={busy}
               onClick={() => void commitLegacy()}
             >
-              確認した有効項目を追加
+              {translate("features.views.OperationalViews.189")}
             </button>
             <button
               className="button"
@@ -1098,21 +1210,19 @@ function DataTransferPanel({ client }: { client: AppClient }) {
                 setLegacyPreview(null);
               }}
             >
-              取り消す
+              {translate("features.views.OperationalViews.190")}
             </button>
           </div>
         </div>
       ) : null}
       <hr />
       <details className="data-delete-zone">
-        <summary>この端末のすべてのデータを削除</summary>
-        <StatusMessage tone="danger" title="元に戻せない操作です">
-          対象は、この端末の予定（Googleから取得したローカルコピーを含む）、追加テンプレート、Quick
-          Block、アラーム、Focus履歴、同期情報、Google認証情報、診断履歴、バックアップ、設定です。
-          Google Calendar上の予定は削除しません。必要なら先にJSONへエクスポートしてください。
+        <summary>{translate("features.views.OperationalViews.191")}</summary>
+        <StatusMessage tone="danger" title={translate("features.views.OperationalViews.192")}>
+          {translate("features.views.OperationalViews.193")}
         </StatusMessage>
         <label>
-          続けるには「すべてのローカルデータを削除」と入力
+          {translate("features.views.OperationalViews.194")}
           <input
             value={deleteConfirmation}
             autoComplete="off"
@@ -1124,10 +1234,12 @@ function DataTransferPanel({ client }: { client: AppClient }) {
           <button
             className="button button--danger"
             type="button"
-            disabled={busy || deleteConfirmation !== "すべてのローカルデータを削除"}
+            disabled={
+              busy || deleteConfirmation !== translate("features.views.OperationalViews.195")
+            }
             onClick={() => void deleteAllData()}
           >
-            理解して全データを削除
+            {translate("features.views.OperationalViews.196")}
           </button>
           <button
             className="button"
@@ -1135,7 +1247,7 @@ function DataTransferPanel({ client }: { client: AppClient }) {
             disabled={busy || deleteConfirmation.length === 0}
             onClick={() => setDeleteConfirmation("")}
           >
-            入力を取り消す
+            {translate("features.views.OperationalViews.197")}
           </button>
         </div>
       </details>
@@ -1188,74 +1300,92 @@ export function DiagnosticsView({ client }: { client: AppClient }) {
     ].join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      setMessage("予定本文や識別子を含まないバージョン情報をコピーしました。");
+      setMessage(translate("features.views.OperationalViews.198"));
     } catch {
-      setMessage("クリップボードへコピーできませんでした。診断JSONを保存してください。");
+      setMessage(translate("features.views.OperationalViews.199"));
     }
   };
 
   const exportDiagnostics = async () => {
     try {
       const path = await save({
-        title: "マスク済み診断JSONを保存",
+        title: translate("features.views.OperationalViews.200"),
         defaultPath: `day-schedule-next-diagnostics-${new Date().toISOString().slice(0, 10)}.json`,
         filters: [{ name: "Redacted diagnostics JSON", extensions: ["json"] }],
       });
       if (!path) return;
       const result = await client.exportDiagnostics(path, navigator.userAgent);
       setMessage(
-        `${result.fileName}へ構造化イベント${result.eventCount}件をマスク済みで保存しました。`,
+        translate("features.views.OperationalViews.201", [result.fileName, result.eventCount]),
       );
     } catch {
-      setMessage("診断JSONを保存できませんでした。保存先を選び直してください。");
+      setMessage(translate("features.views.OperationalViews.202"));
     }
   };
   return (
     <main className="secondary-view diagnostics-view">
       <ViewTitle
-        eyebrow="安全な復旧と確認"
-        title="データと診断"
-        description="予定本文やアカウント情報を表示せず、保存状態と回復手段を確認します。"
+        eyebrow={translate("features.views.OperationalViews.203")}
+        title={translate("features.views.OperationalViews.204")}
+        description={translate("features.views.OperationalViews.205")}
       />
       {error ? (
-        <StatusMessage tone="danger" title="診断情報を取得できませんでした">
-          予定データは変更されていません。アプリを再起動してもう一度確認してください。
+        <StatusMessage tone="danger" title={translate("features.views.OperationalViews.206")}>
+          {translate("features.views.OperationalViews.207")}
         </StatusMessage>
       ) : null}
-      {!snapshot && !error ? <StatusMessage title="診断情報を確認しています" /> : null}
+      {!snapshot && !error ? (
+        <StatusMessage title={translate("features.views.OperationalViews.208")} />
+      ) : null}
       {snapshot ? (
         <dl className="diagnostics-grid">
           <div>
-            <dt>アプリバージョン</dt>
+            <dt>{translate("features.views.OperationalViews.209")}</dt>
             <dd>{snapshot.appVersion}</dd>
           </div>
           <div>
-            <dt>データ形式</dt>
+            <dt>{translate("features.views.OperationalViews.210")}</dt>
             <dd>Version {snapshot.schemaVersion}</dd>
           </div>
           <div>
-            <dt>予定</dt>
-            <dd>{snapshot.scheduleCount}件</dd>
+            <dt>{translate("features.views.OperationalViews.211")}</dt>
+            <dd>
+              {snapshot.scheduleCount}
+              {translate("features.views.OperationalViews.212")}
+            </dd>
           </div>
           <div>
-            <dt>削除待ち</dt>
-            <dd>{snapshot.deletedCount}件</dd>
+            <dt>{translate("features.views.OperationalViews.213")}</dt>
+            <dd>
+              {snapshot.deletedCount}
+              {translate("features.views.OperationalViews.214")}
+            </dd>
           </div>
           <div>
-            <dt>Google反映待ち</dt>
-            <dd>{snapshot.outboxCount}件</dd>
+            <dt>{translate("features.views.OperationalViews.215")}</dt>
+            <dd>
+              {snapshot.outboxCount}
+              {translate("features.views.OperationalViews.216")}
+            </dd>
           </div>
           <div>
-            <dt>未解決の競合</dt>
-            <dd>{snapshot.conflictCount}件</dd>
+            <dt>{translate("features.views.OperationalViews.217")}</dt>
+            <dd>
+              {snapshot.conflictCount}
+              {translate("features.views.OperationalViews.218")}
+            </dd>
           </div>
           <div>
-            <dt>データ整合性</dt>
-            <dd>{snapshot.integrity === "ok" ? "正常" : "確認が必要"}</dd>
+            <dt>{translate("features.views.OperationalViews.219")}</dt>
+            <dd>
+              {snapshot.integrity === "ok"
+                ? translate("features.views.OperationalViews.220")
+                : translate("features.views.OperationalViews.221")}
+            </dd>
           </div>
           <div>
-            <dt>最終バックアップ</dt>
-            <dd>{snapshot.lastBackupAt ?? "まだありません"}</dd>
+            <dt>{translate("features.views.OperationalViews.222")}</dt>
+            <dd>{snapshot.lastBackupAt ?? translate("features.views.OperationalViews.223")}</dd>
           </div>
         </dl>
       ) : null}
@@ -1267,7 +1397,7 @@ export function DiagnosticsView({ client }: { client: AppClient }) {
           disabled={!snapshot}
           onClick={() => void copyVersions()}
         >
-          バージョン情報をコピー
+          {translate("features.views.OperationalViews.224")}
         </button>
         <button
           className="button"
@@ -1275,46 +1405,50 @@ export function DiagnosticsView({ client }: { client: AppClient }) {
           disabled={!snapshot}
           onClick={() => void exportDiagnostics()}
         >
-          マスク済み診断JSONを保存
+          {translate("features.views.OperationalViews.225")}
         </button>
       </div>
-      <StatusMessage title="公開用の診断情報について">
-        コピー・エクスポートには予定名、説明、場所、メールアドレス、カレンダーID、認証情報、端末上の絶対パスを含めません。
+      <StatusMessage title={translate("features.views.OperationalViews.226")}>
+        {translate("features.views.OperationalViews.227")}
       </StatusMessage>
       <section className="notification-history" aria-labelledby="notification-history-title">
         <div className="section-heading-row">
           <div>
-            <h2 id="notification-history-title">通知配信履歴</h2>
-            <p>直近100件の結果だけを表示します。予定名や通知本文は保存・表示しません。</p>
+            <h2 id="notification-history-title">
+              {translate("features.views.OperationalViews.228")}
+            </h2>
+            <p>{translate("features.views.OperationalViews.229")}</p>
           </div>
         </div>
         {notificationHistoryError ? (
-          <StatusMessage tone="warning" title="通知履歴を読み込めませんでした" />
+          <StatusMessage tone="warning" title={translate("features.views.OperationalViews.230")} />
         ) : notificationHistory.length ? (
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>対象時刻</th>
-                  <th>試行時刻</th>
-                  <th>結果</th>
-                  <th>分類</th>
+                  <th>{translate("features.views.OperationalViews.231")}</th>
+                  <th>{translate("features.views.OperationalViews.232")}</th>
+                  <th>{translate("features.views.OperationalViews.233")}</th>
+                  <th>{translate("features.views.OperationalViews.234")}</th>
                 </tr>
               </thead>
               <tbody>
                 {notificationHistory.map((item, index) => (
                   <tr key={`${item.attemptedAt}-${index}`}>
-                    <td>{new Date(item.occurrenceAt).toLocaleString("ja-JP")}</td>
-                    <td>{new Date(item.attemptedAt).toLocaleString("ja-JP")}</td>
+                    <td>{new Date(item.occurrenceAt).toLocaleString(appLocale)}</td>
+                    <td>{new Date(item.attemptedAt).toLocaleString(appLocale)}</td>
                     <td>{notificationResultLabel(item.result)}</td>
-                    <td>{item.errorCategory ?? "なし"}</td>
+                    <td>
+                      {item.errorCategory ?? translate("features.views.OperationalViews.235")}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : (
-          <p>通知配信履歴はまだありません。</p>
+          <p>{translate("features.views.OperationalViews.236")}</p>
         )}
       </section>
       <SyncOperationsPanel client={client} />
@@ -1325,10 +1459,10 @@ export function DiagnosticsView({ client }: { client: AppClient }) {
 
 function notificationResultLabel(result: NotificationLedgerItem["result"]): string {
   return {
-    delivered: "配信済み",
-    skipped: "スキップ",
-    failed: "失敗",
-    expired: "期限切れ",
+    delivered: translate("features.views.OperationalViews.237"),
+    skipped: translate("features.views.OperationalViews.238"),
+    failed: translate("features.views.OperationalViews.239"),
+    expired: translate("features.views.OperationalViews.240"),
   }[result];
 }
 
@@ -1338,6 +1472,7 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
 
   const refresh = async () => {
     const [nextQueue, nextConflicts] = await Promise.all([
@@ -1357,23 +1492,47 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
         setConflicts(nextConflicts);
       })
       .catch(() => {
-        if (active) setError("同期キューと競合を読み込めませんでした。");
+        if (active) setError(translate("features.views.OperationalViews.241"));
       });
     return () => {
       active = false;
     };
   }, [client]);
 
+  const runTrackedSync = async () => {
+    const operationId = crypto.randomUUID();
+    setActiveOperationId(operationId);
+    try {
+      return await client.runSync(operationId);
+    } finally {
+      setActiveOperationId(null);
+    }
+  };
+
+  const cancelSync = async () => {
+    if (!activeOperationId) return;
+    const accepted = await client.cancelOperation(activeOperationId);
+    setMessage(
+      accepted
+        ? translate("features.views.OperationalViews.242")
+        : translate("features.views.OperationalViews.243"),
+    );
+  };
+
   const synchronize = async () => {
     setBusy(true);
     setError(null);
     try {
-      await client.runSync();
+      await runTrackedSync();
       await refresh();
-      setMessage("同期を実行しました。保留中の項目は次回時刻に再試行します。");
-    } catch {
+      setMessage(translate("features.views.OperationalViews.244"));
+    } catch (caught) {
       await refresh().catch(() => undefined);
-      setError("同期を完了できませんでした。ローカル変更は保持されています。");
+      if (isCancelled(caught)) {
+        setMessage(translate("features.views.OperationalViews.245"));
+      } else {
+        setError(translate("features.views.OperationalViews.246"));
+      }
     } finally {
       setBusy(false);
     }
@@ -1384,12 +1543,20 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
     setError(null);
     try {
       await client.retrySyncQueue(id);
-      await client.runSync();
+      await runTrackedSync();
       await refresh();
-      setMessage(id ? "選択した項目を再試行しました。" : "同期キュー全体を再試行しました。");
-    } catch {
+      setMessage(
+        id
+          ? translate("features.views.OperationalViews.247")
+          : translate("features.views.OperationalViews.248"),
+      );
+    } catch (caught) {
       await refresh().catch(() => undefined);
-      setError("再試行を完了できませんでした。予定とキューは保持されています。");
+      if (isCancelled(caught)) {
+        setMessage(translate("features.views.OperationalViews.249"));
+      } else {
+        setError(translate("features.views.OperationalViews.250"));
+      }
     } finally {
       setBusy(false);
     }
@@ -1399,34 +1566,45 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
     <section className="sync-operations" aria-labelledby="sync-operations-title">
       <div className="section-heading-row">
         <div>
-          <h2 id="sync-operations-title">同期キューと競合</h2>
-          <p>ローカル変更の反映状況を確認し、失敗項目と同時変更を回復します。</p>
+          <h2 id="sync-operations-title">{translate("features.views.OperationalViews.251")}</h2>
+          <p>{translate("features.views.OperationalViews.252")}</p>
         </div>
         <div className="button-row">
           <button className="button" disabled={busy} onClick={() => void synchronize()}>
-            今すぐ同期
+            {translate("features.views.OperationalViews.253")}
           </button>
+          {activeOperationId ? (
+            <button className="button" onClick={() => void cancelSync()}>
+              {translate("features.views.OperationalViews.254")}
+            </button>
+          ) : null}
           {queue.some((item) => item.errorCategory) ? (
             <button className="button" disabled={busy} onClick={() => void retry()}>
-              失敗をすべて再試行
+              {translate("features.views.OperationalViews.255")}
             </button>
           ) : null}
         </div>
       </div>
       {message ? <StatusMessage tone="success" title={message} /> : null}
       {error ? <StatusMessage tone="danger" title={error} /> : null}
-      {queue.length === 0 ? <StatusMessage title="Google反映待ちはありません" /> : null}
+      {queue.length === 0 ? (
+        <StatusMessage title={translate("features.views.OperationalViews.256")} />
+      ) : null}
       {queue.length > 0 ? (
-        <div className="table-scroll" tabIndex={0} aria-label="同期キュー一覧">
+        <div
+          className="table-scroll"
+          tabIndex={0}
+          aria-label={translate("features.views.OperationalViews.257")}
+        >
           <table className="sync-queue-table">
             <thead>
               <tr>
-                <th>予定</th>
-                <th>操作</th>
-                <th>状態</th>
-                <th>試行</th>
-                <th>次回</th>
-                <th>操作</th>
+                <th>{translate("features.views.OperationalViews.258")}</th>
+                <th>{translate("features.views.OperationalViews.259")}</th>
+                <th>{translate("features.views.OperationalViews.260")}</th>
+                <th>{translate("features.views.OperationalViews.261")}</th>
+                <th>{translate("features.views.OperationalViews.262")}</th>
+                <th>{translate("features.views.OperationalViews.263")}</th>
               </tr>
             </thead>
             <tbody>
@@ -1435,9 +1613,12 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
                   <td>{item.title}</td>
                   <td>{syncOperationLabel(item.operation)}</td>
                   <td>{syncErrorLabel(item.errorCategory)}</td>
-                  <td>{item.attemptCount}回</td>
                   <td>
-                    {new Intl.DateTimeFormat("ja-JP", {
+                    {item.attemptCount}
+                    {translate("features.views.OperationalViews.264")}
+                  </td>
+                  <td>
+                    {new Intl.DateTimeFormat(appLocale, {
                       dateStyle: "short",
                       timeStyle: "short",
                     }).format(new Date(item.nextAttemptAt))}
@@ -1448,7 +1629,7 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
                       disabled={busy}
                       onClick={() => void retry(item.id)}
                     >
-                      再試行
+                      {translate("features.views.OperationalViews.265")}
                     </button>
                   </td>
                 </tr>
@@ -1457,7 +1638,9 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
           </table>
         </div>
       ) : null}
-      {conflicts.length === 0 ? <StatusMessage title="未解決の競合はありません" /> : null}
+      {conflicts.length === 0 ? (
+        <StatusMessage title={translate("features.views.OperationalViews.266")} />
+      ) : null}
       <div className="conflict-list">
         {conflicts.map((conflict) => (
           <ConflictResolver
@@ -1469,11 +1652,15 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
               setError(null);
               try {
                 await client.resolveSyncConflict(conflict.id, choices);
-                await client.runSync();
+                await runTrackedSync();
                 await refresh();
-                setMessage(`「${conflict.title}」の競合を解決しました。`);
-              } catch {
-                setError("競合を解決できませんでした。選択内容と最新状態を確認してください。");
+                setMessage(translate("features.views.OperationalViews.267", [conflict.title]));
+              } catch (caught) {
+                if (isCancelled(caught)) {
+                  setMessage(translate("features.views.OperationalViews.268"));
+                } else {
+                  setError(translate("features.views.OperationalViews.269"));
+                }
               } finally {
                 setBusy(false);
               }
@@ -1504,20 +1691,20 @@ function ConflictResolver({
           <h3>{conflict.title}</h3>
           <p>
             {conflict.calendarName}・
-            {new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" }).format(
+            {new Intl.DateTimeFormat(appLocale, { dateStyle: "medium", timeStyle: "short" }).format(
               new Date(conflict.createdAt),
             )}
           </p>
         </div>
         <span className="state-chip" data-state="conflict">
-          競合
+          {translate("features.views.OperationalViews.270")}
         </span>
       </header>
       <fieldset>
         <legend>
           {conflict.deletionConflict
-            ? "削除と変更のどちらを採用するか選択"
-            : "項目ごとに採用する値を選択"}
+            ? translate("features.views.OperationalViews.271")
+            : translate("features.views.OperationalViews.272")}
         </legend>
         {conflict.fields.map((field) => (
           <div className="conflict-field" key={field.field}>
@@ -1529,7 +1716,7 @@ function ConflictResolver({
                 checked={choices[field.field] === "local"}
                 onChange={() => setChoices({ ...choices, [field.field]: "local" })}
               />
-              <span>この端末</span>
+              <span>{translate("features.views.OperationalViews.273")}</span>
               <code>{formatConflictValue(field.localValue)}</code>
             </label>
             <label>
@@ -1557,57 +1744,63 @@ function ConflictResolver({
           )
         }
       >
-        選択内容で解決
+        {translate("features.views.OperationalViews.274")}
       </button>
     </article>
   );
 }
 
 function formatConflictValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "（空）";
-  if (Array.isArray(value)) return value.join(", ") || "（なし）";
+  if (value === null || value === undefined || value === "")
+    return translate("features.views.OperationalViews.275");
+  if (Array.isArray(value))
+    return value.join(", ") || translate("features.views.OperationalViews.276");
   if (typeof value === "object") return JSON.stringify(value);
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return `${value}`;
   }
-  return "（表示できない値）";
+  return translate("features.views.OperationalViews.277");
 }
 
 function conflictFieldLabel(field: string): string {
   return (
     {
-      title: "タイトル",
-      description: "説明",
-      location: "場所",
-      startUtc: "開始",
-      endUtc: "終了",
-      timezoneId: "タイムゾーン",
-      allDay: "終日",
-      status: "状態",
-      project: "プロジェクト",
-      category: "カテゴリ",
-      tags: "タグ",
-      color: "色",
-      priority: "優先度",
-      recurrenceRule: "繰り返し",
-      delete: "保持または削除",
+      title: translate("features.views.OperationalViews.278"),
+      description: translate("features.views.OperationalViews.279"),
+      location: translate("features.views.OperationalViews.280"),
+      startUtc: translate("features.views.OperationalViews.281"),
+      endUtc: translate("features.views.OperationalViews.282"),
+      timezoneId: translate("features.views.OperationalViews.283"),
+      allDay: translate("features.views.OperationalViews.284"),
+      status: translate("features.views.OperationalViews.285"),
+      project: translate("features.views.OperationalViews.286"),
+      category: translate("features.views.OperationalViews.287"),
+      tags: translate("features.views.OperationalViews.288"),
+      color: translate("features.views.OperationalViews.289"),
+      priority: translate("features.views.OperationalViews.290"),
+      recurrenceRule: translate("features.views.OperationalViews.291"),
+      delete: translate("features.views.OperationalViews.292"),
     }[field] ?? field
   );
 }
 
 function syncOperationLabel(operation: SyncQueueItem["operation"]): string {
-  return { create: "作成", update: "更新", delete: "削除" }[operation];
+  return {
+    create: translate("features.views.OperationalViews.293"),
+    update: translate("features.views.OperationalViews.294"),
+    delete: translate("features.views.OperationalViews.295"),
+  }[operation];
 }
 
 function syncErrorLabel(category: string | null): string {
-  if (!category) return "待機中";
+  if (!category) return translate("features.views.OperationalViews.296");
   return (
     {
-      auth_required: "再認証が必要",
-      conflict: "競合の解決待ち",
-      retryable: "一時失敗",
-      permanent: "手動確認が必要",
-      merged: "自動統合後の再試行",
+      auth_required: translate("features.views.OperationalViews.297"),
+      conflict: translate("features.views.OperationalViews.298"),
+      retryable: translate("features.views.OperationalViews.299"),
+      permanent: translate("features.views.OperationalViews.300"),
+      merged: translate("features.views.OperationalViews.301"),
     }[category] ?? category
   );
 }
@@ -1618,6 +1811,7 @@ function BackupPanel({ client }: { client: AppClient }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
   const refresh = async () => setBackups(await client.listBackups());
 
   useEffect(() => {
@@ -1625,7 +1819,7 @@ function BackupPanel({ client }: { client: AppClient }) {
     void client
       .listBackups()
       .then((items) => active && setBackups(items))
-      .catch(() => active && setError("バックアップ一覧を取得できませんでした。"));
+      .catch(() => active && setError(translate("features.views.OperationalViews.302")));
     return () => {
       active = false;
     };
@@ -1635,14 +1829,31 @@ function BackupPanel({ client }: { client: AppClient }) {
     setBusy(true);
     setError(null);
     try {
-      await client.createBackup();
+      const operationId = crypto.randomUUID();
+      setActiveOperationId(operationId);
+      await client.createBackup(operationId);
       await refresh();
-      setMessage("整合性を確認したバックアップを作成しました。");
-    } catch {
-      setError("バックアップを作成できませんでした。現在のデータは変更されていません。");
+      setMessage(translate("features.views.OperationalViews.303"));
+    } catch (caught) {
+      if (isCancelled(caught)) {
+        setMessage(translate("features.views.OperationalViews.304"));
+      } else {
+        setError(translate("features.views.OperationalViews.305"));
+      }
     } finally {
+      setActiveOperationId(null);
       setBusy(false);
     }
+  };
+
+  const cancelBackup = async () => {
+    if (!activeOperationId) return;
+    const accepted = await client.cancelOperation(activeOperationId);
+    setMessage(
+      accepted
+        ? translate("features.views.OperationalViews.306")
+        : translate("features.views.OperationalViews.307"),
+    );
   };
 
   const stageRestore = async (backup: BackupRecord) => {
@@ -1650,12 +1861,10 @@ function BackupPanel({ client }: { client: AppClient }) {
     setError(null);
     try {
       await client.stageRestore(backup.id);
-      setMessage(
-        "復元を準備しました。アプリを完全終了して再起動すると、現在のDBを退避してから切り替えます。",
-      );
+      setMessage(translate("features.views.OperationalViews.308"));
       setConfirmId(null);
     } catch {
-      setError("復元を準備できませんでした。現在のデータは切り替えていません。");
+      setError(translate("features.views.OperationalViews.309"));
     } finally {
       setBusy(false);
     }
@@ -1665,29 +1874,40 @@ function BackupPanel({ client }: { client: AppClient }) {
     <section className="backup-panel" aria-labelledby="backup-title">
       <div className="section-heading-row">
         <div>
-          <h2 id="backup-title">バックアップと復元</h2>
-          <p>日次で最大10世代を保持します。復元は再起動時に整合性確認後だけ切り替えます。</p>
+          <h2 id="backup-title">{translate("features.views.OperationalViews.310")}</h2>
+          <p>{translate("features.views.OperationalViews.311")}</p>
         </div>
-        <button className="button" disabled={busy} onClick={() => void createBackup()}>
-          今すぐバックアップ
-        </button>
+        <div className="button-row">
+          <button className="button" disabled={busy} onClick={() => void createBackup()}>
+            {translate("features.views.OperationalViews.312")}
+          </button>
+          {activeOperationId ? (
+            <button className="button" onClick={() => void cancelBackup()}>
+              {translate("features.views.OperationalViews.313")}
+            </button>
+          ) : null}
+        </div>
       </div>
       {message ? <StatusMessage tone="success" title={message} /> : null}
       {error ? <StatusMessage tone="danger" title={error} /> : null}
-      {backups.length === 0 ? <StatusMessage title="検証済みバックアップはまだありません" /> : null}
+      {backups.length === 0 ? (
+        <StatusMessage title={translate("features.views.OperationalViews.314")} />
+      ) : null}
       <ol className="backup-list">
         {backups.map((backup) => (
           <li key={backup.id}>
             <span>
               <strong>
-                {new Intl.DateTimeFormat("ja-JP", {
+                {new Intl.DateTimeFormat(appLocale, {
                   dateStyle: "medium",
                   timeStyle: "short",
                 }).format(new Date(backup.createdAt))}
               </strong>
               <small>
                 DB v{backup.schemaVersion}・{formatBytes(backup.sizeBytes)}・
-                {backup.verified ? "整合性確認済み" : "未検証"}
+                {backup.verified
+                  ? translate("features.views.OperationalViews.315")
+                  : translate("features.views.OperationalViews.316")}
               </small>
             </span>
             {confirmId === backup.id ? (
@@ -1697,23 +1917,23 @@ function BackupPanel({ client }: { client: AppClient }) {
                   disabled={busy}
                   onClick={() => void stageRestore(backup)}
                 >
-                  この世代で復元準備
+                  {translate("features.views.OperationalViews.317")}
                 </button>
                 <button className="button" onClick={() => setConfirmId(null)}>
-                  やめる
+                  {translate("features.views.OperationalViews.318")}
                 </button>
               </span>
             ) : (
               <button className="button" disabled={busy} onClick={() => setConfirmId(backup.id)}>
-                復元…
+                {translate("features.views.OperationalViews.319")}
               </button>
             )}
           </li>
         ))}
       </ol>
       {confirmId ? (
-        <StatusMessage tone="warning" title="復元の影響">
-          次回起動時、現在のDBを別世代として退避し、選択したバックアップを検証してから切り替えます。現在のDBを削除せず、復元失敗時は切り替えません。
+        <StatusMessage tone="warning" title={translate("features.views.OperationalViews.320")}>
+          {translate("features.views.OperationalViews.321")}
         </StatusMessage>
       ) : null}
     </section>
@@ -1728,31 +1948,31 @@ function formatBytes(value: number): string {
 
 function focusLabel(phase: FocusState["phase"]): string {
   return {
-    idle: "待機中",
-    working: "作業中",
-    paused: "一時停止",
-    break: "休憩中",
-    waiting_next: "次の作業待ち",
+    idle: translate("features.views.OperationalViews.322"),
+    working: translate("features.views.OperationalViews.323"),
+    paused: translate("features.views.OperationalViews.324"),
+    break: translate("features.views.OperationalViews.325"),
+    waiting_next: translate("features.views.OperationalViews.326"),
   }[phase];
 }
 
 function permissionLabel(value: "unknown" | "granted" | "denied" | "unavailable"): string {
   return {
-    unknown: "未確認",
-    granted: "許可済み",
-    denied: "拒否",
-    unavailable: "この実行環境では利用不可",
+    unknown: translate("features.views.OperationalViews.327"),
+    granted: translate("features.views.OperationalViews.328"),
+    denied: translate("features.views.OperationalViews.329"),
+    unavailable: translate("features.views.OperationalViews.330"),
   }[value];
 }
 
 function googleStateLabel(state?: GoogleConnection["state"]): string {
-  if (!state) return "確認中";
+  if (!state) return translate("features.views.OperationalViews.331");
   return {
-    not_configured: "未設定",
-    configured: "接続前",
-    connecting: "接続中",
-    connected: "接続済み",
-    auth_required: "再接続が必要",
-    feature_disabled: "ローカル専用",
+    not_configured: translate("features.views.OperationalViews.332"),
+    configured: translate("features.views.OperationalViews.333"),
+    connecting: translate("features.views.OperationalViews.334"),
+    connected: translate("features.views.OperationalViews.335"),
+    auth_required: translate("features.views.OperationalViews.336"),
+    feature_disabled: translate("features.views.OperationalViews.337"),
   }[state];
 }

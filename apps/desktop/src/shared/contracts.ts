@@ -1,3 +1,4 @@
+import { translate } from "./i18n/messages";
 import { z } from "zod";
 
 export const scheduleStatusSchema = z.enum([
@@ -61,7 +62,7 @@ function refineScheduleInterval(
     context.addIssue({
       code: "custom",
       path: ["endUtc"],
-      message: "終了時刻は開始時刻より後にしてください。",
+      message: translate("shared.contracts.001"),
     });
   }
   if (
@@ -73,7 +74,7 @@ function refineScheduleInterval(
     context.addIssue({
       code: "custom",
       path: ["allDayEndDateExclusive"],
-      message: "終日予定の終了日は開始日より後にしてください。",
+      message: translate("shared.contracts.002"),
     });
   }
 }

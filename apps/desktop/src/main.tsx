@@ -1,3 +1,4 @@
+import { translate } from "./shared/i18n/messages";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -34,8 +35,7 @@ async function startApp() {
       </StrictMode>,
     );
   } else {
-    document.body.textContent =
-      "Day Schedule Next の画面を開始できませんでした。再起動してください。";
+    document.body.textContent = translate("main.001");
   }
 }
 

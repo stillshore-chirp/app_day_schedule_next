@@ -1,3 +1,4 @@
+import { appLocale, translate } from "../../shared/i18n/messages";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { addMinutes } from "date-fns";
@@ -163,7 +164,7 @@ export function ScheduleEditor({
     const minutes = Math.round((Date.parse(state.end) - Date.parse(state.start)) / 60_000);
     return Number.isFinite(minutes) && minutes > 0
       ? formatDuration(minutes)
-      : "時刻を確認してください";
+      : translate("features.schedule.ScheduleEditor.001");
   }, [state.end, state.start]);
 
   const update = <Key extends keyof FormState>(key: Key, value: FormState[Key]) => {
@@ -212,7 +213,7 @@ export function ScheduleEditor({
         client.resolveLocalTime(state.end, state.timezoneId),
       ]);
       if (start.kind === "gap" || end.kind === "gap") {
-        setErrors({ form: "DSTで存在しない時刻があるため、繰り返しをプレビューできません。" });
+        setErrors({ form: translate("features.schedule.ScheduleEditor.002") });
         return;
       }
       if (
@@ -223,7 +224,7 @@ export function ScheduleEditor({
           start: start.kind === "ambiguous" ? start.candidates : undefined,
           end: end.kind === "ambiguous" ? end.candidates : undefined,
         });
-        setErrors({ form: "先にDSTのUTCオフセットを選んでください。" });
+        setErrors({ form: translate("features.schedule.ScheduleEditor.003") });
         return;
       }
       setRecurrencePreview(
@@ -237,7 +238,7 @@ export function ScheduleEditor({
       setErrors({});
     } catch {
       setRecurrencePreview(null);
-      setErrors({ form: "RRULE、日時、タイムゾーンを確認してください。" });
+      setErrors({ form: translate("features.schedule.ScheduleEditor.004") });
     }
   };
 
@@ -252,10 +253,10 @@ export function ScheduleEditor({
       ]);
       const nextErrors: Record<string, string> = {};
       if (startResolution.kind === "gap") {
-        nextErrors.startUtc = "この開始時刻はDST移行で存在しません。別の時刻を選んでください。";
+        nextErrors.startUtc = translate("features.schedule.ScheduleEditor.005");
       }
       if (endResolution.kind === "gap") {
-        nextErrors.endUtc = "この終了時刻はDST移行で存在しません。別の時刻を選んでください。";
+        nextErrors.endUtc = translate("features.schedule.ScheduleEditor.006");
       }
       if (Object.keys(nextErrors).length > 0) {
         setErrors(nextErrors);
@@ -270,14 +271,14 @@ export function ScheduleEditor({
         (nextAmbiguity.start && foldChoice.start === undefined) ||
         (nextAmbiguity.end && foldChoice.end === undefined)
       ) {
-        setErrors({ form: "DSTで同じ時刻が2回あります。UTCオフセットを選んでください。" });
+        setErrors({ form: translate("features.schedule.ScheduleEditor.007") });
         return;
       }
       startUtc = startResolution.candidates[foldChoice.start ?? 0] ?? "";
       endUtc = endResolution.candidates[foldChoice.end ?? 0] ?? "";
     } catch {
       setErrors({
-        startUtc: "開始・終了とIANAタイムゾーンを確認してください。入力は保持されています。",
+        startUtc: translate("features.schedule.ScheduleEditor.008"),
       });
       return;
     }
@@ -328,22 +329,35 @@ export function ScheduleEditor({
     <aside className="inspector" aria-labelledby="inspector-title">
       <div className="inspector__header">
         <div>
-          <span className="eyebrow">{mode === "create" ? "新しい予定" : "選択中の予定"}</span>
-          <h2 id="inspector-title">{mode === "create" ? "予定を作成" : "予定を編集"}</h2>
+          <span className="eyebrow">
+            {mode === "create"
+              ? translate("features.schedule.ScheduleEditor.009")
+              : translate("features.schedule.ScheduleEditor.010")}
+          </span>
+          <h2 id="inspector-title">
+            {mode === "create"
+              ? translate("features.schedule.ScheduleEditor.011")
+              : translate("features.schedule.ScheduleEditor.012")}
+          </h2>
         </div>
-        <button className="icon-button" type="button" aria-label="編集を閉じる" onClick={onClose}>
+        <button
+          className="icon-button"
+          type="button"
+          aria-label={translate("features.schedule.ScheduleEditor.013")}
+          onClick={onClose}
+        >
           ×
         </button>
       </div>
 
       <form className="inspector__form" onSubmit={(event) => void submit(event)} noValidate>
         {readOnly ? (
-          <StatusMessage tone="warning" title="Google側で編集できない予定です">
-            特殊イベントまたは読み取り専用カレンダーのため、この予定は変更・削除できません。複製すると通常のローカル予定として編集できます。
+          <StatusMessage tone="warning" title={translate("features.schedule.ScheduleEditor.014")}>
+            {translate("features.schedule.ScheduleEditor.015")}
           </StatusMessage>
         ) : null}
         <label>
-          タイトル
+          {translate("features.schedule.ScheduleEditor.016")}
           <input
             autoFocus
             value={state.title}
@@ -360,7 +374,7 @@ export function ScheduleEditor({
 
         <div className="field-pair">
           <label>
-            開始
+            {translate("features.schedule.ScheduleEditor.017")}
             <input
               type="datetime-local"
               value={state.start}
@@ -369,7 +383,7 @@ export function ScheduleEditor({
             />
           </label>
           <label>
-            終了
+            {translate("features.schedule.ScheduleEditor.018")}
             <input
               type="datetime-local"
               value={state.end}
@@ -378,21 +392,21 @@ export function ScheduleEditor({
             />
           </label>
           <label>
-            優先度
+            {translate("features.schedule.ScheduleEditor.019")}
             <select
               value={state.priority}
               onChange={(event) => update("priority", event.target.value as FormState["priority"])}
             >
-              <option value="low">低</option>
-              <option value="normal">通常</option>
-              <option value="high">高</option>
-              <option value="urgent">最優先</option>
+              <option value="low">{translate("features.schedule.ScheduleEditor.020")}</option>
+              <option value="normal">{translate("features.schedule.ScheduleEditor.021")}</option>
+              <option value="high">{translate("features.schedule.ScheduleEditor.022")}</option>
+              <option value="urgent">{translate("features.schedule.ScheduleEditor.023")}</option>
             </select>
           </label>
         </div>
         <div className="field-pair">
           <label>
-            繰り返し
+            {translate("features.schedule.ScheduleEditor.024")}
             <select
               value={presetRecurrence(state.recurrenceRule)}
               onChange={(event) => {
@@ -400,13 +414,23 @@ export function ScheduleEditor({
                 setRecurrencePreview(null);
               }}
             >
-              <option value="">繰り返さない</option>
-              <option value="FREQ=DAILY">毎日</option>
-              <option value="FREQ=WEEKLY">毎週</option>
-              <option value="FREQ=MONTHLY">毎月</option>
-              <option value="FREQ=YEARLY">毎年</option>
-              <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR">平日</option>
-              <option value="custom">カスタム RRULE</option>
+              <option value="">{translate("features.schedule.ScheduleEditor.025")}</option>
+              <option value="FREQ=DAILY">
+                {translate("features.schedule.ScheduleEditor.026")}
+              </option>
+              <option value="FREQ=WEEKLY">
+                {translate("features.schedule.ScheduleEditor.027")}
+              </option>
+              <option value="FREQ=MONTHLY">
+                {translate("features.schedule.ScheduleEditor.028")}
+              </option>
+              <option value="FREQ=YEARLY">
+                {translate("features.schedule.ScheduleEditor.029")}
+              </option>
+              <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR">
+                {translate("features.schedule.ScheduleEditor.030")}
+              </option>
+              <option value="custom">{translate("features.schedule.ScheduleEditor.031")}</option>
             </select>
           </label>
           <label className="checkbox-label">
@@ -415,12 +439,12 @@ export function ScheduleEditor({
               checked={state.allDay}
               onChange={(event) => setAllDay(event.target.checked)}
             />
-            終日予定
+            {translate("features.schedule.ScheduleEditor.032")}
           </label>
         </div>
         {presetRecurrence(state.recurrenceRule) === "custom" ? (
           <label>
-            カスタム RRULE
+            {translate("features.schedule.ScheduleEditor.033")}
             <input
               value={state.recurrenceRule}
               onChange={(event) => {
@@ -434,18 +458,21 @@ export function ScheduleEditor({
         {state.recurrenceRule ? (
           <div className="recurrence-preview">
             <button className="button" type="button" onClick={() => void showRecurrencePreview()}>
-              次の10件をプレビュー
+              {translate("features.schedule.ScheduleEditor.034")}
             </button>
             {recurrencePreview ? (
               <div role="status">
                 <p>
-                  {recurrencePreview.items.length}件
-                  {recurrencePreview.infinite ? "・終了なし" : "・終了条件あり"}
+                  {recurrencePreview.items.length}
+                  {translate("features.schedule.ScheduleEditor.035")}
+                  {recurrencePreview.infinite
+                    ? translate("features.schedule.ScheduleEditor.036")
+                    : translate("features.schedule.ScheduleEditor.037")}
                 </p>
                 <ol>
                   {recurrencePreview.items.map((item) => (
                     <li key={item.startUtc}>
-                      {new Intl.DateTimeFormat("ja-JP", {
+                      {new Intl.DateTimeFormat(appLocale, {
                         dateStyle: "medium",
                         timeStyle: "short",
                         timeZone: state.timezoneId,
@@ -464,7 +491,7 @@ export function ScheduleEditor({
         ) : null}
         {mode === "edit" && schedule?.recurrenceRule ? (
           <fieldset className="recurrence-scope">
-            <legend>変更する範囲</legend>
+            <legend>{translate("features.schedule.ScheduleEditor.038")}</legend>
             <label>
               <input
                 type="radio"
@@ -472,7 +499,7 @@ export function ScheduleEditor({
                 checked={recurrenceScope === "this"}
                 onChange={() => setRecurrenceScope("this")}
               />
-              この予定だけ
+              {translate("features.schedule.ScheduleEditor.039")}
             </label>
             <label>
               <input
@@ -481,7 +508,7 @@ export function ScheduleEditor({
                 checked={recurrenceScope === "following"}
                 onChange={() => setRecurrenceScope("following")}
               />
-              これ以降
+              {translate("features.schedule.ScheduleEditor.040")}
             </label>
             <label>
               <input
@@ -490,15 +517,13 @@ export function ScheduleEditor({
                 checked={recurrenceScope === "series"}
                 onChange={() => setRecurrenceScope("series")}
               />
-              すべて
+              {translate("features.schedule.ScheduleEditor.041")}
             </label>
-            <p className="field-help">
-              「この予定だけ」は系列へ例外を作成し、「これ以降」は系列を分割します。
-            </p>
+            <p className="field-help">{translate("features.schedule.ScheduleEditor.042")}</p>
           </fieldset>
         ) : null}
         <label>
-          タイムゾーン（IANA）
+          {translate("features.schedule.ScheduleEditor.043")}
           <input
             list="schedule-timezones"
             value={state.timezoneId}
@@ -542,48 +567,51 @@ export function ScheduleEditor({
         ) : null}
         {errors.form ? <p className="field-error">{errors.form}</p> : null}
         <p className="field-help">
-          所要時間: {duration} ／ タイムゾーン: {state.timezoneId}
+          {translate("features.schedule.ScheduleEditor.044")}
+          {duration} {translate("features.schedule.ScheduleEditor.045")}
+          {state.timezoneId}
         </p>
         {mode === "edit" ? (
           <p className="field-help">
-            この予定に紐付いたFocus実績: {formatElapsedSeconds(focusSummary.data?.workSeconds ?? 0)}
+            {translate("features.schedule.ScheduleEditor.046")}
+            {formatElapsedSeconds(focusSummary.data?.workSeconds ?? 0)}
           </p>
         ) : null}
 
         <fieldset>
-          <legend>予定の通知</legend>
+          <legend>{translate("features.schedule.ScheduleEditor.047")}</legend>
           <div className="field-pair">
             <NotificationSelect
-              label="開始の通知"
+              label={translate("features.schedule.ScheduleEditor.048")}
               value={state.startNotificationMinutes}
               onChange={(value) => update("startNotificationMinutes", value)}
             />
             <NotificationSelect
-              label="終了の通知"
+              label={translate("features.schedule.ScheduleEditor.049")}
               value={state.endNotificationMinutes}
               onChange={(value) => update("endNotificationMinutes", value)}
             />
           </div>
-          <p className="field-help">
-            OS通知は設定と権限が有効な場合だけ配信されます。完全終了中は配信できません。
-          </p>
+          <p className="field-help">{translate("features.schedule.ScheduleEditor.050")}</p>
         </fieldset>
 
         {mode === "edit" ? (
           <fieldset className="time-adjuster">
-            <legend>キーボード・クリックで時刻を調整</legend>
+            <legend>{translate("features.schedule.ScheduleEditor.051")}</legend>
             <div className="button-row button-row--wrap">
               <button type="button" onClick={() => shift(-snapMinutes)}>
-                −{snapMinutes}分 移動
+                −{snapMinutes}
+                {translate("features.schedule.ScheduleEditor.052")}
               </button>
               <button type="button" onClick={() => shift(snapMinutes)}>
-                ＋{snapMinutes}分 移動
+                ＋{snapMinutes}
+                {translate("features.schedule.ScheduleEditor.053")}
               </button>
               <button type="button" onClick={() => resize("start", -snapMinutes)}>
-                開始を早める
+                {translate("features.schedule.ScheduleEditor.054")}
               </button>
               <button type="button" onClick={() => resize("end", snapMinutes)}>
-                終了を延ばす
+                {translate("features.schedule.ScheduleEditor.055")}
               </button>
             </div>
           </fieldset>
@@ -591,14 +619,14 @@ export function ScheduleEditor({
 
         <div className="field-pair">
           <label>
-            プロジェクト
+            {translate("features.schedule.ScheduleEditor.056")}
             <input
               value={state.project}
               onChange={(event) => update("project", event.target.value)}
             />
           </label>
           <label>
-            カテゴリ
+            {translate("features.schedule.ScheduleEditor.057")}
             <input
               value={state.category}
               onChange={(event) => update("category", event.target.value)}
@@ -606,25 +634,29 @@ export function ScheduleEditor({
           </label>
         </div>
         <label>
-          タグ（カンマ区切り）
+          {translate("features.schedule.ScheduleEditor.058")}
           <input value={state.tags} onChange={(event) => update("tags", event.target.value)} />
         </label>
         <div className="field-pair">
           <label>
-            状態
+            {translate("features.schedule.ScheduleEditor.059")}
             <select
               value={state.status}
               onChange={(event) => update("status", event.target.value as FormState["status"])}
             >
-              <option value="not_started">未着手</option>
-              <option value="scheduled">予定済み</option>
-              <option value="in_progress">進行中</option>
-              <option value="completed">完了</option>
-              <option value="cancelled">取消</option>
+              <option value="not_started">
+                {translate("features.schedule.ScheduleEditor.060")}
+              </option>
+              <option value="scheduled">{translate("features.schedule.ScheduleEditor.061")}</option>
+              <option value="in_progress">
+                {translate("features.schedule.ScheduleEditor.062")}
+              </option>
+              <option value="completed">{translate("features.schedule.ScheduleEditor.063")}</option>
+              <option value="cancelled">{translate("features.schedule.ScheduleEditor.064")}</option>
             </select>
           </label>
           <label>
-            色
+            {translate("features.schedule.ScheduleEditor.065")}
             <input
               type="color"
               value={state.color}
@@ -633,14 +665,14 @@ export function ScheduleEditor({
           </label>
         </div>
         <label>
-          場所
+          {translate("features.schedule.ScheduleEditor.066")}
           <input
             value={state.location}
             onChange={(event) => update("location", event.target.value)}
           />
         </label>
         <label>
-          説明
+          {translate("features.schedule.ScheduleEditor.067")}
           <textarea
             rows={3}
             value={state.description}
@@ -650,10 +682,14 @@ export function ScheduleEditor({
 
         <div className="inspector__actions">
           <button className="button button--primary" type="submit" disabled={busy || readOnly}>
-            {busy ? "この端末に保存中…" : mode === "create" ? "予定を作成" : "変更を保存"}
+            {busy
+              ? translate("features.schedule.ScheduleEditor.068")
+              : mode === "create"
+                ? translate("features.schedule.ScheduleEditor.069")
+                : translate("features.schedule.ScheduleEditor.070")}
           </button>
           <button className="button" type="button" onClick={onClose}>
-            キャンセル
+            {translate("features.schedule.ScheduleEditor.071")}
           </button>
           {mode === "edit" && onDuplicate ? (
             <button
@@ -662,7 +698,7 @@ export function ScheduleEditor({
               disabled={busy}
               onClick={() => void onDuplicate()}
             >
-              複製して編集
+              {translate("features.schedule.ScheduleEditor.072")}
             </button>
           ) : null}
         </div>
@@ -675,20 +711,20 @@ export function ScheduleEditor({
                 type="button"
                 onClick={() => setDeletePending(true)}
               >
-                予定を削除…
+                {translate("features.schedule.ScheduleEditor.073")}
               </button>
             ) : (
               <div role="alert">
-                <strong>この予定をこの端末から削除しますか？</strong>
+                <strong>{translate("features.schedule.ScheduleEditor.074")}</strong>
                 <p>
                   {schedule?.recurrenceRule
                     ? recurrenceScope === "this"
-                      ? "この発生だけを系列の例外として削除します。"
+                      ? translate("features.schedule.ScheduleEditor.075")
                       : recurrenceScope === "following"
-                        ? "この発生以降を系列から削除します。"
-                        : "繰り返し系列全体を削除します。"
-                    : "この予定を削除します。"}
-                  削除後も「元に戻す」で回復できます。
+                        ? translate("features.schedule.ScheduleEditor.076")
+                        : translate("features.schedule.ScheduleEditor.077")
+                    : translate("features.schedule.ScheduleEditor.078")}
+                  {translate("features.schedule.ScheduleEditor.079")}
                 </p>
                 <div className="button-row">
                   <button
@@ -703,10 +739,10 @@ export function ScheduleEditor({
                       )
                     }
                   >
-                    この端末から削除
+                    {translate("features.schedule.ScheduleEditor.080")}
                   </button>
                   <button className="button" type="button" onClick={() => setDeletePending(false)}>
-                    削除しない
+                    {translate("features.schedule.ScheduleEditor.081")}
                   </button>
                 </div>
               </div>
@@ -741,7 +777,9 @@ function formatElapsedSeconds(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return hours > 0 ? `${hours}時間${minutes}分${seconds}秒` : `${minutes}分${seconds}秒`;
+  return hours > 0
+    ? translate("features.schedule.ScheduleEditor.082", [hours, minutes, seconds])
+    : translate("features.schedule.ScheduleEditor.083", [minutes, seconds]);
 }
 
 function AmbiguousTimeChoice({
@@ -759,8 +797,13 @@ function AmbiguousTimeChoice({
 }) {
   return (
     <fieldset className="dst-choice">
-      <legend>{edge === "start" ? "開始" : "終了"}はDSTで2回現れる時刻です</legend>
-      <p className="field-help">保存するUTCオフセットを選んでください。黙って補正しません。</p>
+      <legend>
+        {edge === "start"
+          ? translate("features.schedule.ScheduleEditor.084")
+          : translate("features.schedule.ScheduleEditor.085")}
+        {translate("features.schedule.ScheduleEditor.086")}
+      </legend>
+      <p className="field-help">{translate("features.schedule.ScheduleEditor.087")}</p>
       {candidates.map((candidate, index) => (
         <label key={candidate}>
           <input
@@ -769,7 +812,7 @@ function AmbiguousTimeChoice({
             checked={selected === index}
             onChange={() => onChange(index)}
           />
-          {new Intl.DateTimeFormat("ja-JP", {
+          {new Intl.DateTimeFormat(appLocale, {
             dateStyle: "medium",
             timeStyle: "long",
             timeZone: timezoneId,
@@ -794,13 +837,13 @@ function NotificationSelect({
     <label>
       {label}
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">なし</option>
-        <option value="0">時刻ちょうど</option>
-        <option value="5">5分前</option>
-        <option value="10">10分前</option>
-        <option value="15">15分前</option>
-        <option value="30">30分前</option>
-        <option value="60">1時間前</option>
+        <option value="">{translate("features.schedule.ScheduleEditor.088")}</option>
+        <option value="0">{translate("features.schedule.ScheduleEditor.089")}</option>
+        <option value="5">{translate("features.schedule.ScheduleEditor.090")}</option>
+        <option value="10">{translate("features.schedule.ScheduleEditor.091")}</option>
+        <option value="15">{translate("features.schedule.ScheduleEditor.092")}</option>
+        <option value="30">{translate("features.schedule.ScheduleEditor.093")}</option>
+        <option value="60">{translate("features.schedule.ScheduleEditor.094")}</option>
       </select>
     </label>
   );

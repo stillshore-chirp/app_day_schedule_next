@@ -4,7 +4,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::{AppError, AppResult, SyncSummary};
+use crate::{
+    application::OperationCancellation,
+    domain::{AppError, AppResult, SyncSummary},
+};
 
 use super::Database;
 
@@ -93,7 +96,11 @@ impl Database {
         Err(disabled())
     }
 
-    pub async fn run_google_sync(&self) -> AppResult<SyncSummary> {
+    pub async fn run_google_sync(
+        &self,
+        cancellation: &OperationCancellation,
+    ) -> AppResult<SyncSummary> {
+        cancellation.check()?;
         self.sync_summary().await
     }
 }

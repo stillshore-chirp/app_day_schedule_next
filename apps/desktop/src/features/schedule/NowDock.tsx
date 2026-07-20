@@ -1,3 +1,4 @@
+import { translate } from "../../shared/i18n/messages";
 import { useEffect, useMemo, useState } from "react";
 import { fromZonedTime } from "date-fns-tz";
 import type { FocusState, FreeAlarm, Schedule } from "../../shared/contracts";
@@ -50,30 +51,35 @@ export function NowDock({ schedules, focus, alarms }: NowDockProps) {
     : 0;
 
   return (
-    <footer className="now-dock" aria-label="現在と次の予定">
+    <footer className="now-dock" aria-label={translate("features.schedule.NowDock.001")}>
       <div className="now-dock__current">
         <span className="eyebrow eyebrow--inverse">NOW</span>
-        <strong>{primary?.title ?? "進行中の予定はありません"}</strong>
+        <strong>{primary?.title ?? translate("features.schedule.NowDock.002")}</strong>
         {primary ? (
           <span>
-            経過{" "}
+            {translate("features.schedule.NowDock.003")}{" "}
             {durationLabel(
               Math.max(0, Math.floor((now.getTime() - Date.parse(primary.startUtc)) / 1000)),
             )}
-            ・残り {remainingLabel(primary.endUtc, now)}・{formatTime(primary.endUtc)}終了
+            {translate("features.schedule.NowDock.004")}
+            {remainingLabel(primary.endUtc, now)}・{formatTime(primary.endUtc)}
+            {translate("features.schedule.NowDock.005")}
           </span>
         ) : null}
         {current.length > 1 ? (
           <details className="now-dock__concurrent">
             <summary className="state-chip state-chip--inverse">
-              進行中をすべて表示（{current.length}件）
+              {translate("features.schedule.NowDock.006")}
+              {current.length}
+              {translate("features.schedule.NowDock.007")}
             </summary>
             <ul>
               {current.map((item) => (
                 <li key={item.id}>
                   <strong>{item.title}</strong>
                   <span>
-                    {formatTime(item.startUtc)}–{formatTime(item.endUtc)}・残り
+                    {formatTime(item.startUtc)}–{formatTime(item.endUtc)}
+                    {translate("features.schedule.NowDock.008")}
                     {remainingLabel(item.endUtc, now)}
                   </span>
                 </li>
@@ -88,18 +94,26 @@ export function NowDock({ schedules, focus, alarms }: NowDockProps) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(progress)}
-        aria-label={primary ? `進捗 ${Math.round(progress)}%` : "進行中の予定なし"}
+        aria-label={
+          primary
+            ? translate("features.schedule.NowDock.009", [Math.round(progress)])
+            : translate("features.schedule.NowDock.010")
+        }
       >
         <i style={{ width: `${progress}%` }} />
       </div>
       <div className="now-dock__next">
-        <span>次の予定</span>
+        <span>{translate("features.schedule.NowDock.011")}</span>
         <strong>
-          {next ? `${next.title} ${formatTime(next.startUtc)}` : "24時間以内に予定はありません"}
+          {next
+            ? `${next.title} ${formatTime(next.startUtc)}`
+            : translate("features.schedule.NowDock.012")}
         </strong>
         <small>
-          次のアラーム:{" "}
-          {nextAlarm ? `${nextAlarm.label}・${remainingLabel(nextAlarm.at, now)}` : "なし"}
+          {translate("features.schedule.NowDock.013")}{" "}
+          {nextAlarm
+            ? `${nextAlarm.label}・${remainingLabel(nextAlarm.at, now)}`
+            : translate("features.schedule.NowDock.014")}
         </small>
       </div>
       <div className="now-dock__focus">
@@ -112,11 +126,11 @@ export function NowDock({ schedules, focus, alarms }: NowDockProps) {
 
 function focusPhaseLabel(phase: FocusState["phase"]): string {
   return {
-    idle: "待機中",
-    working: "作業中",
-    paused: "一時停止",
-    break: "休憩中",
-    waiting_next: "次の作業待ち",
+    idle: translate("features.schedule.NowDock.015"),
+    working: translate("features.schedule.NowDock.016"),
+    paused: translate("features.schedule.NowDock.017"),
+    break: translate("features.schedule.NowDock.018"),
+    waiting_next: translate("features.schedule.NowDock.019"),
   }[phase];
 }
 

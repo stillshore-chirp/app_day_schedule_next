@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { addDays } from "date-fns";
 import type { AppClient } from "../shared/ipc/client";
-import { messages } from "../shared/i18n/messages";
+import { translate, messages } from "../shared/i18n/messages";
 import { formatDateHeading } from "../shared/time";
 import { StatusMessage } from "../shared/ui/StatusMessage";
 import { TodayView } from "../features/schedule/TodayView";
@@ -28,6 +28,7 @@ const navItems: Array<{ view: AppView; label: string; symbol: string }> = [
 
 export function App({ client }: { client: AppClient }) {
   const bootstrapQuery = useQuery({ queryKey: ["bootstrap"], queryFn: () => client.bootstrap() });
+  const readyReported = useRef(false);
   const refreshBootstrap = useCallback(() => {
     void bootstrapQuery.refetch();
   }, [bootstrapQuery.refetch]);
@@ -40,6 +41,12 @@ export function App({ client }: { client: AppClient }) {
     setSearch,
     openCreate,
   } = useUiStore();
+
+  useEffect(() => {
+    if (!bootstrapQuery.data || readyReported.current) return;
+    readyReported.current = true;
+    void client.markUiReady().catch(() => undefined);
+  }, [bootstrapQuery.data, client]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -97,12 +104,12 @@ export function App({ client }: { client: AppClient }) {
 
   const syncLabel = useMemo(() => {
     const state = bootstrapQuery.data?.sync.state;
-    if (!state) return "状態を確認中";
+    if (!state) return translate("app.App.001");
     switch (state) {
       case "disconnected":
         return messages.states.disconnected;
       case "connecting":
-        return "Google に接続中";
+        return translate("app.App.002");
       case "synced":
         return messages.states.synced;
       case "pending":
@@ -112,7 +119,7 @@ export function App({ client }: { client: AppClient }) {
       case "offline":
         return messages.states.offline;
       case "retry_scheduled":
-        return "同期を再試行します";
+        return translate("app.App.003");
       case "conflict":
         return messages.states.conflict;
       case "auth_required":
@@ -127,7 +134,7 @@ export function App({ client }: { client: AppClient }) {
           24
         </div>
         <h1>Day Schedule Next</h1>
-        <p role="status">この端末の予定を安全に開いています…</p>
+        <p role="status">{translate("app.App.004")}</p>
       </main>
     );
   }
@@ -140,14 +147,14 @@ export function App({ client }: { client: AppClient }) {
         </div>
         <StatusMessage
           tone="danger"
-          title="アプリを開始できませんでした"
+          title={translate("app.App.005")}
           action={
             <button className="button" onClick={() => void bootstrapQuery.refetch()}>
-              もう一度開始
+              {translate("app.App.006")}
             </button>
           }
         >
-          この端末の予定は変更されていません。デスクトップアプリとして起動し、続く場合はバックアップからの復旧を確認してください。
+          {translate("app.App.007")}
         </StatusMessage>
       </main>
     );
@@ -165,10 +172,10 @@ export function App({ client }: { client: AppClient }) {
           </div>
           <strong>{messages.appName}</strong>
         </div>
-        <div className="date-navigation" aria-label="表示日の移動">
+        <div className="date-navigation" aria-label={translate("app.App.008")}>
           <button
             className="icon-button"
-            aria-label="前の日"
+            aria-label={translate("app.App.009")}
             onClick={() => setSelectedDate(addDays(selectedDate, -1))}
           >
             ‹
@@ -178,22 +185,22 @@ export function App({ client }: { client: AppClient }) {
           </button>
           <button
             className="icon-button"
-            aria-label="次の日"
+            aria-label={translate("app.App.010")}
             onClick={() => setSelectedDate(addDays(selectedDate, 1))}
           >
             ›
           </button>
           <button className="button button--subtle" onClick={() => setSelectedDate(new Date())}>
-            今日
+            {translate("app.App.011")}
           </button>
         </div>
         <div className="topbar__actions">
           <label className="global-search">
-            <span className="sr-only">予定を検索</span>
+            <span className="sr-only">{translate("app.App.012")}</span>
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="予定を検索"
+              placeholder={translate("app.App.013")}
               type="search"
             />
           </label>
@@ -204,7 +211,7 @@ export function App({ client }: { client: AppClient }) {
               openCreate();
             }}
           >
-            ＋ 予定
+            {translate("app.App.014")}
           </button>
           <button
             className="sync-indicator"
@@ -215,7 +222,7 @@ export function App({ client }: { client: AppClient }) {
           </button>
         </div>
       </header>
-      <aside className="sidebar" aria-label="主要画面">
+      <aside className="sidebar" aria-label={translate("app.App.015")}>
         <nav>
           {navItems.map((item) => (
             <button
@@ -237,7 +244,7 @@ export function App({ client }: { client: AppClient }) {
           type="button"
           onClick={() => void client.openCompactWindow()}
         >
-          ▱ コンパクト表示
+          {translate("app.App.016")}
         </button>
       </aside>
       <div className="app-content">

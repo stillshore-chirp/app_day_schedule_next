@@ -1,3 +1,4 @@
+import { translate } from "../../shared/i18n/messages";
 import type { Schedule } from "../../shared/contracts";
 import { formatTime } from "../../shared/time";
 import { layoutOverview } from "./overview-layout";
@@ -28,16 +29,16 @@ export function DayOverview({
     <section className="overview" aria-labelledby="overview-title">
       <div className="section-heading section-heading--compact">
         <div>
-          <span className="eyebrow">一日の分布</span>
-          <h2 id="overview-title">24時間ストリップ</h2>
+          <span className="eyebrow">{translate("features.schedule.DayOverview.001")}</span>
+          <h2 id="overview-title">{translate("features.schedule.DayOverview.002")}</h2>
         </div>
         <span className="legend">
-          <i className="legend__pending" /> 同期待ちを点線で表示
+          <i className="legend__pending" /> {translate("features.schedule.DayOverview.003")}
         </span>
       </div>
       <div
         className="overview-track"
-        aria-label="0時から24時の予定概要"
+        aria-label={translate("features.schedule.DayOverview.004")}
         style={{ minHeight: 62 + Math.min(maxLevels, 8) * 7 }}
       >
         {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((hour) => (
@@ -51,7 +52,11 @@ export function DayOverview({
               className="overview-event"
               key={`${schedule.id}-${schedule.startUtc}`}
               type="button"
-              aria-label={`${schedule.title} ${formatTime(schedule.startUtc)}から${formatTime(schedule.endUtc)}`}
+              aria-label={translate("features.schedule.DayOverview.005", [
+                schedule.title,
+                formatTime(schedule.startUtc),
+                formatTime(schedule.endUtc),
+              ])}
               aria-pressed={selectedId === schedule.id}
               data-sync={schedule.syncStatus}
               style={{
@@ -72,7 +77,7 @@ export function DayOverview({
         ) : null}
       </div>
       <label className="reference-time-control">
-        <span>詳細表示の基準時刻</span>
+        <span>{translate("features.schedule.DayOverview.006")}</span>
         <input
           type="range"
           min={0}

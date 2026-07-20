@@ -1,3 +1,4 @@
+import { translate } from "../../shared/i18n/messages";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fromZonedTime } from "date-fns-tz";
@@ -111,10 +112,10 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             }
           : {}),
       });
-      setStatus("この端末に変更を保存しました。Google 接続時は同期待ちになります。");
+      setStatus(translate("features.schedule.TodayView.001"));
     } else {
       await actions.create.mutateAsync(draft);
-      setStatus("この端末に予定を保存しました。");
+      setStatus(translate("features.schedule.TodayView.002"));
     }
     closeEditor();
   };
@@ -134,7 +135,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
           }
         : {}),
     });
-    setStatus("この端末から予定を削除しました。「元に戻す」で回復できます。");
+    setStatus(translate("features.schedule.TodayView.003"));
     closeEditor();
     selectSchedule(null);
   };
@@ -142,7 +143,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
   const duplicate = async () => {
     if (!selected) return;
     await actions.create.mutateAsync({
-      title: `${selected.title}（コピー）`,
+      title: translate("features.schedule.TodayView.004", [selected.title]),
       description: selected.description,
       location: selected.location,
       startUtc: selected.startUtc,
@@ -162,14 +163,14 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       startNotificationMinutes: selected.startNotificationMinutes,
       endNotificationMinutes: selected.endNotificationMinutes,
     });
-    setStatus("予定を新しいローカル予定として複製しました。");
+    setStatus(translate("features.schedule.TodayView.005"));
     closeEditor();
     selectSchedule(null);
   };
 
   const adjustSchedule = async (schedule: Schedule, startUtc: string, endUtc: string) => {
     if (quickBlockIds.has(schedule.id)) {
-      setStatus("Quick Blockの時刻はテンプレート画面で編集してください。");
+      setStatus(translate("features.schedule.TodayView.006"));
       setActiveView("templates");
       return;
     }
@@ -178,7 +179,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       expectedVersion: schedule.version,
       draft: { ...schedule, startUtc, endUtc },
     });
-    setStatus("タイムライン上の変更をこの端末に保存しました。");
+    setStatus(translate("features.schedule.TodayView.007"));
   };
 
   if (schedulesQuery.isError) {
@@ -186,14 +187,14 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       <main className="workspace-main">
         <StatusMessage
           tone="danger"
-          title="予定を読み込めませんでした"
+          title={translate("features.schedule.TodayView.008")}
           action={
             <button className="button" onClick={() => void schedulesQuery.refetch()}>
-              もう一度読み込む
+              {translate("features.schedule.TodayView.009")}
             </button>
           }
         >
-          入力済みのデータは変更されていません。続く場合は「データと診断」を確認してください。
+          {translate("features.schedule.TodayView.010")}
         </StatusMessage>
       </main>
     );
@@ -206,10 +207,10 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       >
         <header className="today-heading">
           <div>
-            <span className="eyebrow">現在・次・残り・空きを確認</span>
-            <h1>今日の予定</h1>
+            <span className="eyebrow">{translate("features.schedule.TodayView.011")}</span>
+            <h1>{translate("features.schedule.TodayView.012")}</h1>
           </div>
-          <p>予定を選ぶと詳細を編集できます。空き時間から作成することもできます。</p>
+          <p>{translate("features.schedule.TodayView.013")}</p>
         </header>
         {status ? (
           <StatusMessage
@@ -217,14 +218,14 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             title={status}
             action={
               <button className="link-button" onClick={() => setStatus(null)}>
-                閉じる
+                {translate("features.schedule.TodayView.014")}
               </button>
             }
           />
         ) : null}
         {schedulesQuery.isLoading ? (
-          <StatusMessage title="この日の予定を読み込んでいます">
-            保存済みの画面状態は保持されます。
+          <StatusMessage title={translate("features.schedule.TodayView.015")}>
+            {translate("features.schedule.TodayView.016")}
           </StatusMessage>
         ) : null}
         {!schedulesQuery.isLoading && schedules.length === 0 ? (
@@ -232,10 +233,10 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             <span className="empty-state__icon" aria-hidden="true">
               ＋
             </span>
-            <h2>この日にはまだ予定がありません</h2>
-            <p>最初の予定を作成するか、一日のテンプレートを適用できます。</p>
+            <h2>{translate("features.schedule.TodayView.017")}</h2>
+            <p>{translate("features.schedule.TodayView.018")}</p>
             <button className="button button--primary" type="button" onClick={() => openCreate()}>
-              予定を作成
+              {translate("features.schedule.TodayView.019")}
             </button>
           </section>
         ) : (
@@ -278,14 +279,14 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
           initialRange={createRange}
         />
       ) : null}
-      <div className="history-actions" aria-label="変更履歴">
+      <div className="history-actions" aria-label={translate("features.schedule.TodayView.020")}>
         <button
           className="button button--subtle"
           type="button"
           disabled={actions.undo.isPending}
           onClick={() => void actions.undo.mutateAsync()}
         >
-          ↶ 元に戻す
+          {translate("features.schedule.TodayView.021")}
         </button>
         <button
           className="button button--subtle"
@@ -293,7 +294,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
           disabled={actions.redo.isPending}
           onClick={() => void actions.redo.mutateAsync()}
         >
-          ↷ やり直す
+          {translate("features.schedule.TodayView.022")}
         </button>
       </div>
       <NowDock schedules={schedules} focus={bootstrap.focus} alarms={alarmsQuery.data ?? []} />

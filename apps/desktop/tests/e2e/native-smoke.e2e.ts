@@ -1,5 +1,6 @@
 import { $, browser, expect } from "@wdio/globals";
 import "@wdio/tauri-service";
+import { writeFile } from "node:fs/promises";
 
 describe("Day Schedule Next native smoke", () => {
   const title = `E2E予定-${Date.now()}`;
@@ -309,7 +310,153 @@ describe("Day Schedule Next native smoke", () => {
     await browser.switchToWindow(compactHandle);
     await $(".compact-shell").waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-compact.png");
+    await browser.closeWindow();
     await browser.switchToWindow(originalHandle);
     await $(".app-shell").waitForDisplayed();
+  });
+
+  it("keeps 500-item scroll and drag work within the 60fps main-thread budget", async () => {
+    await browser.setTimeout({ script: 120_000 });
+    await setLogicalWindowSize(1180, 820);
+    const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
+      today: string;
+      timezoneId: string;
+    };
+    await browser.tauri.execute(async ({ core }, input) => {
+      const dayStart = new Date(`${input.today}T00:00:00`);
+      for (let index = 0; index < 500; index += 1) {
+        const start = new Date(dayStart);
+        start.setMinutes(Math.floor((index * 1440) / 500));
+        const end = new Date(start.getTime() + 2 * 60_000);
+        await core.invoke("schedule_create", {
+          draft: {
+            title: `E2E性能予定-${String(index).padStart(3, "0")}`,
+            description: "",
+            location: "",
+            startUtc: start.toISOString(),
+            endUtc: end.toISOString(),
+            timezoneId: input.timezoneId,
+            allDay: false,
+            allDayStartDate: null,
+            allDayEndDateExclusive: null,
+            status: "scheduled",
+            project: "E2E性能",
+            category: "synthetic",
+            tags: [],
+            color: "#6F96F4",
+            priority: "normal",
+            recurrenceRule: null,
+            recurrenceExdates: [],
+            startNotificationMinutes: null,
+            endNotificationMinutes: null,
+          },
+        });
+      }
+    }, bootstrap);
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await browser.tauri.execute(({ core }) => core.invoke("main_window_show"));
+    await browser.pause(500);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+    await $(".timeline-viewport").waitForDisplayed();
+
+    const profile = (await browser.execute(() => {
+      const viewport = document.querySelector(".timeline-viewport");
+      const canvas = document.querySelector(".timeline-canvas");
+      if (!(viewport instanceof HTMLElement) || !(canvas instanceof HTMLElement)) {
+        return { error: "timeline_not_found" };
+      }
+      canvas.setPointerCapture = () => undefined;
+      const percentile95 = (values: number[]) => {
+        const ordered = [...values].sort((left, right) => left - right);
+        return ordered[Math.ceil(ordered.length * 0.95) - 1] ?? 0;
+      };
+      const sample = (step: (run: number) => void) => {
+        const samples: number[] = [];
+        for (let run = 0; run < 30; run += 1) {
+          const started = performance.now();
+          step(run);
+          canvas.getBoundingClientRect();
+          samples.push(performance.now() - started);
+        }
+        return { p95Ms: percentile95(samples), samplesMs: samples };
+      };
+      const maxScroll = Math.max(1, viewport.scrollHeight - viewport.clientHeight);
+      const scroll = sample((run) => {
+        viewport.scrollTop = maxScroll * (((run * 7) % 30) / 29);
+        viewport.dispatchEvent(new Event("scroll"));
+      });
+      const bounds = viewport.getBoundingClientRect();
+      const origin = {
+        x: Math.round(bounds.left + Math.min(300, bounds.width - 48)),
+        y: Math.round(bounds.top + 100),
+      };
+      const drag = sample((run) => {
+        canvas.dispatchEvent(
+          new PointerEvent("pointerdown", {
+            bubbles: true,
+            button: 0,
+            buttons: 1,
+            clientX: origin.x,
+            clientY: origin.y,
+            pointerId: 100 + run,
+            pointerType: "mouse",
+          }),
+        );
+        canvas.dispatchEvent(
+          new PointerEvent("pointermove", {
+            bubbles: true,
+            button: 0,
+            buttons: 1,
+            clientX: origin.x,
+            clientY: origin.y + 52,
+            pointerId: 100 + run,
+            pointerType: "mouse",
+          }),
+        );
+        canvas.dispatchEvent(
+          new PointerEvent("pointercancel", {
+            bubbles: true,
+            pointerId: 100 + run,
+            pointerType: "mouse",
+          }),
+        );
+      });
+      return {
+        sampleRuns: 30,
+        measurement: "synchronous event dispatch and forced current layout",
+        scroll,
+        drag,
+        renderedScheduleNodes: document.querySelectorAll(".timeline-event").length,
+      };
+    })) as {
+      error?: string;
+      sampleRuns?: number;
+      measurement?: string;
+      scroll?: { p95Ms: number; samplesMs: number[] };
+      drag?: { p95Ms: number; samplesMs: number[] };
+      renderedScheduleNodes?: number;
+    };
+    await writeFile(
+      "./test-results/native-performance.json",
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          measuredAtUtc: new Date().toISOString(),
+          platform: process.platform,
+          architecture: process.arch,
+          itemCount: 500,
+          thresholdMainThreadBudgetP95Ms: 16.7,
+          ...profile,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    expect(profile.error).toBeUndefined();
+    expect(profile.sampleRuns).toBe(30);
+    expect(profile.renderedScheduleNodes).toBeLessThan(200);
+    expect(profile.scroll?.p95Ms).toBeLessThanOrEqual(16.7);
+    expect(profile.drag?.p95Ms).toBeLessThanOrEqual(16.7);
   });
 });

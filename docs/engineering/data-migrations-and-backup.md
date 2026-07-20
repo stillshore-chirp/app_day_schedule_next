@@ -24,6 +24,7 @@
 - metadata: app version、schema、created time、hash、size、verification。
 - default retention is finite and never deletes the only verified backup。
 - backup directory is app data, not repository or source tree。
+- manual backup は operation ID で取り消せる。`VACUUM INTO` 自体の実行中は SQLite を強制中断せず、戻り後に取消を検査して未検証候補を削除し、履歴へ記録しない。
 
 ## 4. Restore
 
@@ -70,3 +71,9 @@ Rules:
 
 - schema version、counts、integrity result、migration list、backup metadata only。
 - event titles、descriptions、token、calendar IDs、absolute user paths are excluded or masked。
+
+## 8. Export cancellation
+
+- JSON export は target と同じ directory の `.part` へ書き、cancel token を collection 間、encode 後、publish 前に検査する。
+- 取消または write / rename failure では `.part` を削除する。
+- target rename 完了後は成功として扱い、完成済み export を暗黙削除しない。

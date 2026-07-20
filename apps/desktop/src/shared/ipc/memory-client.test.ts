@@ -75,6 +75,9 @@ describe("MemoryAppClient", () => {
       focusWorkMinutes: 45,
     });
     expect(settings.focusWorkMinutes).toBe(45);
+    const defaults = await client.defaultSettings();
+    expect(defaults.focusWorkMinutes).toBe(25);
+    expect(defaults.theme).toBe("system");
     expect((await client.focusCommand("start")).phase).toBe("working");
     expect((await client.focusCommand("pause")).phase).toBe("paused");
     expect((await client.focusCommand("resume")).phase).toBe("working");
@@ -190,7 +193,7 @@ describe("MemoryAppClient", () => {
     await client.createSchedule(draft);
     await client.undo();
     expect((await client.redo()).changedIds.length).toBeGreaterThan(0);
-    expect((await client.runSync()).state).toBe("disconnected");
+    expect((await client.runSync(crypto.randomUUID())).state).toBe("disconnected");
     expect((await client.diagnostics()).integrity).toBe("ok");
     await expect(client.openCompactWindow()).resolves.toBeUndefined();
   });
@@ -215,12 +218,14 @@ describe("MemoryAppClient", () => {
     await expect(client.resolveSyncConflict()).rejects.toThrow("conflict_not_found");
     expect((await client.exportDiagnostics()).fileName).toBe("diagnostics.json");
     await expect(client.setWindowAlwaysOnTop()).resolves.toBeUndefined();
-    expect((await client.exportData("/tmp/example.json")).fileName).toBe("example.json");
+    expect((await client.exportData("/tmp/example.json", crypto.randomUUID())).fileName).toBe(
+      "example.json",
+    );
     expect((await client.previewImport()).formatVersion).toBe(1);
     expect((await client.importData()).importedScheduleCount).toBe(0);
     expect((await client.previewLegacyImport()).excluded).toContain("旧ウィンドウ位置");
     expect((await client.importLegacy()).selectedTemplateId).toBeTruthy();
-    expect((await client.createBackup()).verified).toBe(true);
+    expect((await client.createBackup(crypto.randomUUID())).verified).toBe(true);
     expect(await client.listBackups()).toEqual([]);
     expect((await client.stageRestore("backup-id")).requiresRestart).toBe(true);
     expect(await client.pollNotifications()).toEqual([]);

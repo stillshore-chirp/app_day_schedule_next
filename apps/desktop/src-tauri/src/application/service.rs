@@ -10,6 +10,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
+    application::OperationRegistry,
     domain::{
         AppError, AppResult, DayTemplate, DayTemplateDraft, FocusCommand, FocusPhase, FocusState,
         FreeAlarm, FreeAlarmDraft, QuickBlock, QuickBlockDraft, RecurrenceEditScope, Schedule,
@@ -67,6 +68,8 @@ pub struct AppService {
     clock: Arc<dyn Clock>,
     focus_runtime: Arc<tokio::sync::Mutex<Option<FocusRuntime>>>,
     sync_gate: Arc<tokio::sync::Mutex<()>>,
+    operations: OperationRegistry,
+    process_started_at: Instant,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -92,12 +95,14 @@ pub struct WindowPreferences {
 }
 
 impl AppService {
-    pub fn new(database: Database) -> Self {
+    pub fn new_started_at(database: Database, process_started_at: Instant) -> Self {
         Self {
             database,
             clock: Arc::new(SystemClock::new()),
             focus_runtime: Arc::new(tokio::sync::Mutex::new(None)),
             sync_gate: Arc::new(tokio::sync::Mutex::new(())),
+            operations: OperationRegistry::default(),
+            process_started_at,
         }
     }
 
@@ -109,7 +114,18 @@ impl AppService {
             clock,
             focus_runtime: Arc::new(tokio::sync::Mutex::new(None)),
             sync_gate: Arc::new(tokio::sync::Mutex::new(())),
+            operations: OperationRegistry::default(),
+            process_started_at: Instant::now(),
         }
+    }
+
+    pub fn mark_ui_ready(&self) -> u64 {
+        let elapsed = self.process_started_at.elapsed().as_millis() as u64;
+        #[cfg(feature = "e2e")]
+        if std::env::var("DAY_SCHEDULE_PERF_LOG").as_deref() == Ok("1") {
+            println!("DAY_SCHEDULE_UI_READY_MS={elapsed}");
+        }
+        elapsed
     }
 
     pub async fn bootstrap(&self) -> AppResult<Bootstrap> {
@@ -213,6 +229,10 @@ impl AppService {
 
     pub async fn settings(&self) -> AppResult<Settings> {
         self.database.settings().await
+    }
+
+    pub fn default_settings(&self) -> Settings {
+        Settings::default()
     }
 
     pub async fn window_always_on_top(&self, label: &str) -> AppResult<bool> {
@@ -485,15 +505,22 @@ impl AppService {
         *self.focus_runtime.lock().await = None;
     }
 
-    pub async fn run_sync(&self) -> AppResult<SyncSummary> {
-        let Ok(_guard) = self.sync_gate.try_lock() else {
-            return self.database.sync_summary().await;
-        };
-        let summary = self.database.sync_summary().await?;
-        if summary.state == SyncSummaryState::Disconnected {
-            return Ok(summary);
+    pub async fn run_sync(&self, operation_id: Uuid) -> AppResult<SyncSummary> {
+        let cancellation = self.operations.begin(operation_id).await?;
+        let result = async {
+            let Ok(_guard) = self.sync_gate.try_lock() else {
+                return self.database.sync_summary().await;
+            };
+            cancellation.check()?;
+            let summary = self.database.sync_summary().await?;
+            if summary.state == SyncSummaryState::Disconnected {
+                return Ok(summary);
+            }
+            self.database.run_google_sync(&cancellation).await
         }
-        self.database.run_google_sync().await
+        .await;
+        self.operations.finish(operation_id).await;
+        result
     }
 
     pub async fn sync_queue(&self) -> AppResult<Vec<SyncQueueItem>> {
@@ -534,12 +561,18 @@ impl AppService {
         Ok(result)
     }
 
-    pub async fn export_data(&self, path: &Path) -> AppResult<ExportResult> {
+    pub async fn export_data(&self, operation_id: Uuid, path: &Path) -> AppResult<ExportResult> {
+        let cancellation = self.operations.begin(operation_id).await?;
         let timezone_id = iana_time_zone::get_timezone()
             .ok()
             .filter(|value| value.parse::<Tz>().is_ok())
             .unwrap_or_else(|| "UTC".into());
-        self.database.export_json(path, &timezone_id).await
+        let result = self
+            .database
+            .export_json_cancelable(path, &timezone_id, &cancellation)
+            .await;
+        self.operations.finish(operation_id).await;
+        result
     }
 
     pub fn preview_import(&self, path: &Path) -> AppResult<ImportPreview> {
@@ -567,10 +600,18 @@ impl AppService {
         self.database.import_legacy(path, fingerprint).await
     }
 
-    pub async fn create_backup(&self) -> AppResult<BackupRecord> {
-        self.database
-            .create_backup("daily", env!("CARGO_PKG_VERSION"))
-            .await
+    pub async fn create_backup(&self, operation_id: Uuid) -> AppResult<BackupRecord> {
+        let cancellation = self.operations.begin(operation_id).await?;
+        let result = self
+            .database
+            .create_backup_cancelable("daily", env!("CARGO_PKG_VERSION"), &cancellation)
+            .await;
+        self.operations.finish(operation_id).await;
+        result
+    }
+
+    pub async fn cancel_operation(&self, operation_id: Uuid) -> bool {
+        self.operations.cancel(operation_id).await
     }
 
     pub async fn backups(&self) -> AppResult<Vec<BackupRecord>> {

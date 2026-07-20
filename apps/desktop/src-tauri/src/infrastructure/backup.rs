@@ -6,7 +6,10 @@ use sha2::{Digest, Sha256};
 use sqlx::{Connection, Row, SqliteConnection, sqlite::SqliteConnectOptions};
 use uuid::Uuid;
 
-use crate::domain::{AppError, AppResult};
+use crate::{
+    application::OperationCancellation,
+    domain::{AppError, AppResult},
+};
 
 use super::Database;
 
@@ -157,10 +160,22 @@ impl Database {
     }
 
     pub async fn create_backup(&self, reason: &str, app_version: &str) -> AppResult<BackupRecord> {
+        self.create_backup_cancelable(reason, app_version, &OperationCancellation::default())
+            .await
+    }
+
+    pub async fn create_backup_cancelable(
+        &self,
+        reason: &str,
+        app_version: &str,
+        cancellation: &OperationCancellation,
+    ) -> AppResult<BackupRecord> {
+        cancellation.check()?;
         let database_path = self.database_path()?;
         let backup_directory = backup_directory(database_path)?;
         fs::create_dir_all(&backup_directory)
             .map_err(|error| AppError::database("backup-directory", error))?;
+        cancellation.check()?;
         let schema_version = schema_version(&self.pool).await?;
         let created_at = Utc::now();
         let id = Uuid::new_v4();
@@ -180,12 +195,27 @@ impl Database {
             .execute(&self.pool)
             .await
             .map_err(|error| AppError::database("backup-checkpoint", error))?;
+        cancellation.check()?;
         sqlx::query("VACUUM INTO ?")
             .bind(target.to_string_lossy().as_ref())
             .execute(&self.pool)
             .await
             .map_err(|error| AppError::database("backup-vacuum", error))?;
-        let (size_bytes, sha256) = verify_database_file(&target).await?;
+        if let Err(error) = cancellation.check() {
+            let _ = fs::remove_file(&target);
+            return Err(error);
+        }
+        let (size_bytes, sha256) = match verify_database_file(&target).await {
+            Ok(result) => result,
+            Err(error) => {
+                let _ = fs::remove_file(&target);
+                return Err(error);
+            }
+        };
+        if let Err(error) = cancellation.check() {
+            let _ = fs::remove_file(&target);
+            return Err(error);
+        }
         sqlx::query(
             "INSERT INTO backup_history(id, relative_name, sha256, schema_version, app_version, size_bytes, verified, created_at_utc) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
         )
@@ -482,6 +512,23 @@ mod tests {
                 .is_file()
         );
         assert_eq!(database.list_backups().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn cancelled_backup_creates_no_history_or_backup_file() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("data.sqlite3");
+        let database = Database::open(&path).await.unwrap();
+        let cancellation = OperationCancellation::default();
+        cancellation.cancel();
+
+        let result = database
+            .create_backup_cancelable("daily", "test", &cancellation)
+            .await;
+
+        assert!(matches!(result, Err(AppError::Cancelled { .. })));
+        assert!(database.list_backups().await.unwrap().is_empty());
+        assert!(!directory.path().join("backups").exists());
     }
 
     #[tokio::test]

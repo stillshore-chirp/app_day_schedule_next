@@ -6,7 +6,7 @@
 - Branch: `codex/complete-v1-spec`
 - 対象: Day Schedule Next v0.1.0 初回実装、全画面、macOS / Windows
 - 現在の判定: Release candidate。CI、Must acceptance の残件、対象 OS の manual release matrix が終わるまで Complete / 即出荷可能とは判定しない
-- P0: 30回起動p95、500件frame pacing、長処理cancel、許容差付きvisual baseline、UI文言の翻訳キー移行、対象OS実機 gate
+- P0: 対象OS実機 gate
 - P1: 200% text / high DPI、multi-monitor、署名済み配布
 - P2: WebDriver service の embedded mode でも外部 `tauri-driver` 未導入を表示する非阻害 diagnostic
 
@@ -42,7 +42,7 @@ Precondition: 初回利用、Today、今日の予定なし、Google 未接続、
 |---|---|---|---|---|
 | First use / empty | 今日、空の理由、最初の作成 | 作成／別日／template | heading、status、button | Pass |
 | Normal | strip、timeline、Now、selected inspector | create / edit / duplicate / delete | role / label / visible focus | Pass |
-| Many / overlap | side-by-side lane、100件 page、500件一括変更 | select / filter / page / bulk / Undo | timeline virtualization、DB atomicity、50k DB test | Pass functional; frame pacing pending |
+| Many / overlap | side-by-side lane、100件 page、500件一括変更 | select / filter / page / bulk / Undo | timeline virtualization、DB atomicity、50k DB test、native 30-run budget | Pass; 188 DOM、scroll p95 2ms、drag p95 0ms |
 | Cross-midnight / all-day | day segment、local date range | direct edit | Rust boundary tests | Pass |
 | Loading | 対象を確認中 | wait / retry | `role=status` | Pass |
 | Search none | 検索結果なしを通常 empty と区別 | filter clear | visible message | Pass |
@@ -52,7 +52,7 @@ Precondition: 初回利用、Today、今日の予定なし、Google 未接続、
 | Sync pending / offline | ローカル保存済み、次回 retry | local continue / retry | status + queue fields | Pass mock |
 | Auth required | 再接続が必要 | explicit reconnect | safe category only | Pass mock |
 | Conflict | count、fields、delete conflict | field choice / resolve | navigation badge / form | Pass mock + component |
-| Backup / import | preview、件数、対象、progress | cancel / commit | fieldset / status | Pass integration |
+| Backup / import | preview、件数、対象、progress | cancel / commit | fieldset / status | Pass integration; export / backup cancel cleanup tested |
 | Fatal DB | 起動不可、予定未変更、復旧説明 | retry / backup recovery | boot main + danger status | Pass component |
 | Compact | current / next / remaining / Focus | open main / Focus | separate labeled window | Pass implementation; OS manual pending |
 | Narrow | navigation / settings usable at 720×720 | all primary navigation | native screenshot | Pass |
@@ -103,29 +103,33 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 | P0 | Cross-platform release | Windows / macOS x64 の最新 head CI と manual OS adapter未確認 | local hostはmacOS arm64のみ | CI後もmanual matrixが必要。Open release gate |
 | P1 | List classification | 絞り込みだけで一括変更が未接続 | FR-IT-002 | 最大500件、単一transaction / Outbox / one-action Undo、native E2E。Fixed |
 | P1 | Focus actual | 予定へ紐付けても実績が予定側へ集計表示されない | FR-FC-006 | `focus_history` を予定IDで集計し編集画面へ表示、DB test。Fixed |
-| P1 | 500 item render | timeline が全予定DOMを常時生成 | NFR-PF-003 | viewport前後2時間だけを描画するvirtual windowと500件test。Functional fixed; frame pacing measurement Open |
-| P0 | Performance evidence | 50k indexed searchは測定、cold/warm startup 30-run・500 item p95 frame pacingは未測定 | NFR-PF-001 / 003 | 基準端末のrelease measurementが必要。Open release gate |
-| P0 | Long operation cancel | sync / backup / export はasyncだがuser cancel tokenがない | NFR-PF-006 | cancellable background operation contractが必要。Open release gate |
-| P0 | Visual regression | 5主要surfaceのnative screenshotはあるがpixel baseline / tolerance comparisonがない | NFR-TS-006 | 安定fixtureと許容差付きbaseline checkが必要。Open release gate |
-| P0 | Localization structure | navigation等のcatalogはあるがUI文言がTSXへ散在 | FR-SH-009 | ja catalogへ全表示文言を移しkey auditをCI化する必要。Open release gate |
+| P1 | 500 item render | timeline が全予定DOMを常時生成 | NFR-PF-003 | viewport前後1時間だけを描画するvirtual window、500件unit / native測定で188 DOM。Fixed |
+| P0 | Performance evidence | 50k indexed searchは測定、cold/warm startup 30-run・500 item p95 frame pacingは未測定 | NFR-PF-001 / 003 | M5 Pro release buildでwarm p95 392ms / fresh-profile p95 400ms、native 500件main-thread scroll p95 2ms / drag 0msを各30回記録。Fixed; compositor実測はplatform manualへ分離 |
+| P0 | Long operation cancel | sync / backup / export はasyncだがuser cancel tokenがない | NFR-PF-006 | operation registry、typed cancel command、UI取消、sync safe boundaries、export / backup cleanupを実装。Fixed |
+| P0 | Visual regression | 5主要surfaceのnative screenshotはあるがpixel baseline / tolerance comparisonがない | NFR-TS-006 | macOS arm64 baseline、channel差32・4% pixel許容差、寸法厳密一致、赤色diff artifactをCIへ追加。Fixed |
+| P0 | Localization structure | navigation等のcatalogはあるがUI文言がTSXへ散在 | FR-SH-009 | production UIで検出した日本語文言と日時localeを型付きja catalogへ移し、英語catalogを同一key集合で追加できるtranslatorとCI source auditを実装。Fixed |
+| P1 | Settings recovery | 各設定を安全な既定値へ戻す導線がない | FR-ST-001 | Rustの正本 `Settings::default` をtyped IPCで取得し、Google接続・予定データを変更せず保存前フォームへ反映する導線を追加。Fixed |
 | P1 | CI runtime | GitHub Actions v4がNode.js 20廃止警告を生成 | latest head CI annotation | 公式current majorのcheckout / setup-node / upload-artifact v7へ更新。Fixed; latest head CIで再検証 |
 
 ## 9. Evidence
 
 - Before: repository に app scaffold がなく、画面差分を取得不能。最初の接続済み empty state は [`native-initial-empty.jpeg`](../../evidence/issue-4/native-initial-empty.jpeg)。
 - After: `docs/evidence/issue-4/` の Today、List、narrow Settings、Template editor / library、Focus、Week、Compact、Data / Conflict screenshots（synthetic dataのみ）。
-- Native test: real Tauri / IPC / SQLite を macOS local で6 scenarios通過。
+- Native test: real Tauri / IPC / SQLite を macOS local で7 scenarios通過。
+- Performance: [`startup-performance-macos-arm64.json`](../../evidence/issue-4/startup-performance-macos-arm64.json) と [`performance-500-macos-arm64.json`](../../evidence/issue-4/performance-500-macos-arm64.json) に測定定義、閾値、全30 sampleを保存。
 - Test data: `E2E予定-*` 等の synthetic label。account、calendar / event ID、token、local DB path を含まない。
 
 ## 10. Executed validation
 
 | Check | Result | Evidence |
 |---|---|---|
-| Rust all-feature suite | Pass, 49 tests | domain / DB / sync mock / notification / backup / import |
-| Frontend unit | Pass, 23 tests | coverage report 87.65% statements; 500件virtual windowを含む |
+| Rust all-feature suite | Pass, 53 tests | domain / DB / sync mock / cancellation / notification / backup / import |
+| Frontend unit | Pass, 23 tests | UTC / Asia-Tokyo の双方、coverage report 87.35% statements; 500件virtual windowを含む |
 | Accessibility | Pass, 2 tests | axe app shell / empty state |
-| Native E2E macOS | Pass, 6 scenarios | real IPC / SQLite、settings restart、pointer drag、bulk classification + screenshots |
+| Native E2E macOS | Pass, 7 scenarios | real IPC / SQLite、settings restart、pointer drag、bulk classification、500件budget + screenshots |
 | 50k search | Pass | Rust integration target <150ms |
+| Release startup | Pass | macOS arm64 warm p95 392ms / fresh-profile p95 400ms、各30回 |
+| 500 item main-thread budget | Pass | 188 DOM、scroll p95 2ms / drag p95 0ms、各30回、16.7ms budget |
 | pnpm audit moderate | Pass | no known vulnerabilities |
 | cargo-deny | Pass | advisories / licenses / sources |
 
@@ -149,10 +153,5 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 | sleep / resume / clock jump actual OS | deterministic testsのみ | lifecycle delivery差 | 10分以内／超の実機sleep test |
 | 200% text / high DPI / multi-monitor | local automated suite対象外 | clipping / window restore | platform visual matrix |
 | signed / notarized distribution | personal unsigned v0.1 scope | OS reputation warning | signing Issue before third-party release |
-| 30回 cold / warm start p95 | 基準端末のrelease計測未実施 | 起動性能要件を証明できない | benchmark記録を添付 |
-| 500件 scroll / drag p95 frame pacing | virtualization unitのみ | 60fps相当を証明できない | profiler traceを30回計測 |
-| sync / backup / export cancel | cancellation contract未実装 | 長処理を利用者が止められない | operation ID + cancel commandを実装 |
-| visual pixel baseline | screenshot目視のみ | 許容差超過をCIで阻止できない | deterministic fixture + baseline compare |
-| 全UI翻訳key audit | catalogは一部のみ | 英語追加時に画面文言を探索修正する必要 | ja catalog移行 + source audit |
 
 これらは実装を「存在する release candidate」とすることは妨げませんが、すべてが観測されるまで「即出荷可能」「Complete」とは判定しません。

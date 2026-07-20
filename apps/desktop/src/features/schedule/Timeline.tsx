@@ -1,3 +1,4 @@
+import { translate } from "../../shared/i18n/messages";
 import {
   useEffect,
   useMemo,
@@ -90,10 +91,10 @@ export function Timeline({
     const updateViewport = () => {
       sessionStorage.setItem(storageKey, String(viewport.scrollTop));
       if (viewport.clientHeight <= 0) return;
-      const startMinute = Math.max(0, (viewport.scrollTop / hourHeight) * 60 - 120);
+      const startMinute = Math.max(0, (viewport.scrollTop / hourHeight) * 60 - 60);
       const endMinute = Math.min(
         1440,
-        ((viewport.scrollTop + viewport.clientHeight) / hourHeight) * 60 + 120,
+        ((viewport.scrollTop + viewport.clientHeight) / hourHeight) * 60 + 60,
       );
       setVisibleRange((current) =>
         Math.abs(current.startMinute - startMinute) < 1 &&
@@ -269,14 +270,14 @@ export function Timeline({
     <section className="timeline-panel" aria-labelledby="timeline-title">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">分単位で調整</span>
-          <h2 id="timeline-title">詳細タイムライン</h2>
+          <span className="eyebrow">{translate("features.schedule.Timeline.001")}</span>
+          <h2 id="timeline-title">{translate("features.schedule.Timeline.002")}</h2>
         </div>
         <div className="button-row">
           <button
             className="icon-button"
             type="button"
-            aria-label="縮小"
+            aria-label={translate("features.schedule.Timeline.003")}
             onClick={() => changeZoom(-1)}
           >
             −
@@ -287,29 +288,29 @@ export function Timeline({
           <button
             className="icon-button"
             type="button"
-            aria-label="拡大"
+            aria-label={translate("features.schedule.Timeline.004")}
             onClick={() => changeZoom(1)}
           >
             ＋
           </button>
           <button className="button button--subtle" type="button" onClick={onCreate}>
-            空き時間に予定を作成
+            {translate("features.schedule.Timeline.005")}
           </button>
         </div>
       </div>
       <p className="timeline-instructions" id="timeline-instructions">
-        空き領域をドラッグして作成。予定本体で移動、上下端で開始・終了を変更。Escで取消。選択中は矢印で移動、Shift＋矢印で終了、Option＋矢印で開始を調整します。
+        {translate("features.schedule.Timeline.006")}
       </p>
       {saving ? (
         <p className="save-indicator" role="status">
-          この端末に保存中…
+          {translate("features.schedule.Timeline.007")}
         </p>
       ) : null}
       <div
         className="timeline-viewport"
         ref={viewportRef}
         tabIndex={0}
-        aria-label="24時間の詳細タイムライン"
+        aria-label={translate("features.schedule.Timeline.008")}
         aria-describedby="timeline-instructions"
       >
         <div
@@ -338,7 +339,12 @@ export function Timeline({
                 className="timeline-event"
                 key={`${item.schedule.id}-${item.schedule.startUtc}`}
                 type="button"
-                aria-label={`${item.schedule.title}、${formatTime(item.schedule.startUtc)}から${formatTime(item.schedule.endUtc)}、${item.schedule.syncStatus}`}
+                aria-label={translate("features.schedule.Timeline.009", [
+                  item.schedule.title,
+                  formatTime(item.schedule.startUtc),
+                  formatTime(item.schedule.endUtc),
+                  item.schedule.syncStatus,
+                ])}
                 aria-describedby={detailsId}
                 aria-pressed={selectedId === item.schedule.id}
                 data-current={current || undefined}
@@ -361,21 +367,35 @@ export function Timeline({
                 <span>
                   {formatTime(item.schedule.startUtc)}–{formatTime(item.schedule.endUtc)}
                 </span>
-                {current ? <span className="state-chip">進行中</span> : null}
+                {current ? (
+                  <span className="state-chip">{translate("features.schedule.Timeline.010")}</span>
+                ) : null}
                 <span className="timeline-event-details" id={detailsId} role="tooltip">
                   <strong>{item.schedule.title}</strong>
                   {item.schedule.description ? <span>{item.schedule.description}</span> : null}
-                  {item.schedule.location ? <span>場所: {item.schedule.location}</span> : null}
+                  {item.schedule.location ? (
+                    <span>
+                      {translate("features.schedule.Timeline.011")}
+                      {item.schedule.location}
+                    </span>
+                  ) : null}
                   {item.schedule.project || item.schedule.category ? (
                     <span>
-                      分類: {item.schedule.project || "未分類"} /{" "}
-                      {item.schedule.category || "未分類"}
+                      {translate("features.schedule.Timeline.012")}
+                      {item.schedule.project || translate("features.schedule.Timeline.013")} /{" "}
+                      {item.schedule.category || translate("features.schedule.Timeline.014")}
                     </span>
                   ) : null}
                   {item.schedule.tags.length ? (
-                    <span>タグ: {item.schedule.tags.join("、")}</span>
+                    <span>
+                      {translate("features.schedule.Timeline.015")}
+                      {item.schedule.tags.join("、")}
+                    </span>
                   ) : null}
-                  <span>同期: {item.schedule.syncStatus}</span>
+                  <span>
+                    {translate("features.schedule.Timeline.016")}
+                    {item.schedule.syncStatus}
+                  </span>
                 </span>
                 <span
                   className="timeline-resize-handle timeline-resize-handle--end"
@@ -391,12 +411,16 @@ export function Timeline({
               style={{ top: preview.top, height: preview.height }}
               role="status"
             >
-              <strong>{drag?.kind === "create" ? "新しい予定" : drag?.schedule?.title}</strong>
+              <strong>
+                {drag?.kind === "create"
+                  ? translate("features.schedule.Timeline.017")
+                  : drag?.schedule?.title}
+              </strong>
               <span>
                 {formatTime(drag?.startUtc ?? "")}–{formatTime(drag?.endUtc ?? "")}・
                 {formatDuration(preview.durationMinutes)}
               </span>
-              <small>Escで取消</small>
+              <small>{translate("features.schedule.Timeline.018")}</small>
             </div>
           ) : null}
           {isToday ? (

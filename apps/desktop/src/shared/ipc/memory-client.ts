@@ -1,3 +1,4 @@
+import { translate } from "../i18n/messages";
 import {
   type BackupRecord,
   type Bootstrap,
@@ -47,6 +48,25 @@ interface Snapshot {
   schedules: Schedule[];
 }
 
+const defaultSettings: Settings = {
+  theme: "system",
+  locale: "ja",
+  snapMinutes: 5,
+  closeBehavior: "tray",
+  notificationGraceMinutes: 10,
+  notificationMaxReplay: 3,
+  focusWorkMinutes: 25,
+  focusBreakMinutes: 5,
+  scheduleNotificationsEnabled: true,
+  osNotificationsEnabled: true,
+  soundNotificationsEnabled: false,
+  focusLongBreakMinutes: 15,
+  focusLongBreakEvery: 4,
+  focusAutoStart: false,
+  focusNotificationsEnabled: true,
+  lastTemplateId: null,
+};
+
 function syntheticSchedules(now: Date): Schedule[] {
   const at = (hour: number, minute: number): string => {
     const value = new Date(now);
@@ -57,7 +77,7 @@ function syntheticSchedules(now: Date): Schedule[] {
   return [
     {
       id: "00000000-0000-4000-8000-000000000001",
-      title: "設計レビュー",
+      title: translate("shared.ipc.memory-client.001"),
       description: "synthetic fixture",
       location: "",
       startUtc: at(9, 0),
@@ -67,9 +87,9 @@ function syntheticSchedules(now: Date): Schedule[] {
       allDayStartDate: null,
       allDayEndDateExclusive: null,
       status: "completed",
-      project: "個人開発",
-      category: "設計",
-      tags: ["レビュー"],
+      project: translate("shared.ipc.memory-client.002"),
+      category: translate("shared.ipc.memory-client.003"),
+      tags: [translate("shared.ipc.memory-client.004")],
       color: "#B7CCFA",
       priority: "high",
       recurrenceRule: null,
@@ -82,7 +102,7 @@ function syntheticSchedules(now: Date): Schedule[] {
     },
     {
       id: "00000000-0000-4000-8000-000000000002",
-      title: "同期仕様を実装",
+      title: translate("shared.ipc.memory-client.005"),
       description: "synthetic fixture",
       location: "",
       startUtc: at(10, 30),
@@ -92,8 +112,8 @@ function syntheticSchedules(now: Date): Schedule[] {
       allDayStartDate: null,
       allDayEndDateExclusive: null,
       status: "in_progress",
-      project: "個人開発",
-      category: "実装",
+      project: translate("shared.ipc.memory-client.006"),
+      category: translate("shared.ipc.memory-client.007"),
       tags: ["Google", "Rust"],
       color: "#B9EBC4",
       priority: "urgent",
@@ -107,7 +127,7 @@ function syntheticSchedules(now: Date): Schedule[] {
     },
     {
       id: "00000000-0000-4000-8000-000000000003",
-      title: "昼休み",
+      title: translate("shared.ipc.memory-client.008"),
       description: "",
       location: "",
       startUtc: at(13, 0),
@@ -117,8 +137,8 @@ function syntheticSchedules(now: Date): Schedule[] {
       allDayStartDate: null,
       allDayEndDateExclusive: null,
       status: "scheduled",
-      project: "私用",
-      category: "休憩",
+      project: translate("shared.ipc.memory-client.009"),
+      category: translate("shared.ipc.memory-client.010"),
       tags: [],
       color: "#F8D29B",
       priority: "normal",
@@ -134,14 +154,18 @@ function syntheticSchedules(now: Date): Schedule[] {
 }
 
 export class MemoryAppClient implements AppClient {
+  async markUiReady(): Promise<number> {
+    return Math.round(performance.now());
+  }
+
   private schedules: Schedule[];
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
   private templates: DayTemplate[] = [
     {
       id: "00000000-0000-4000-8000-000000000001",
-      name: "基本",
-      description: "削除・名前変更できない既定テンプレート",
+      name: translate("shared.ipc.memory-client.011"),
+      description: translate("shared.ipc.memory-client.012"),
       color: "#6F96F4",
       weekdaysMask: 127,
       isBuiltin: true,
@@ -152,24 +176,7 @@ export class MemoryAppClient implements AppClient {
   ];
   private quickBlocks: QuickBlock[] = [];
   private freeAlarms: FreeAlarm[] = [];
-  private settings: Settings = {
-    theme: "system",
-    locale: "ja",
-    snapMinutes: 5,
-    closeBehavior: "tray",
-    notificationGraceMinutes: 10,
-    notificationMaxReplay: 3,
-    focusWorkMinutes: 25,
-    focusBreakMinutes: 5,
-    scheduleNotificationsEnabled: true,
-    osNotificationsEnabled: true,
-    soundNotificationsEnabled: false,
-    focusLongBreakMinutes: 15,
-    focusLongBreakEvery: 4,
-    focusAutoStart: false,
-    focusNotificationsEnabled: true,
-    lastTemplateId: null,
-  };
+  private settings: Settings = structuredClone(defaultSettings);
   private focus: FocusState = {
     phase: "idle",
     startedAt: null,
@@ -338,6 +345,10 @@ export class MemoryAppClient implements AppClient {
     return structuredClone(this.settings);
   }
 
+  async defaultSettings(): Promise<Settings> {
+    return structuredClone(defaultSettings);
+  }
+
   async focusCommand(
     command: "start" | "pause" | "resume" | "stop" | "skip",
     linkedScheduleId?: string,
@@ -386,8 +397,14 @@ export class MemoryAppClient implements AppClient {
     return { scheduleItemId, workSeconds: 0 };
   }
 
-  async runSync(): Promise<SyncSummary> {
+  async runSync(operationId: string): Promise<SyncSummary> {
+    void operationId;
     return this.syncSummary();
+  }
+
+  async cancelOperation(operationId: string): Promise<boolean> {
+    void operationId;
+    return false;
   }
 
   async listSyncQueue(): Promise<SyncQueueItem[]> {
@@ -539,7 +556,7 @@ export class MemoryAppClient implements AppClient {
       overlappingItemCount: 0,
       localReplaceCandidateCount: 0,
       externalPreservedCount: 0,
-      syncTarget: "この端末（ローカル）",
+      syncTarget: translate("shared.ipc.memory-client.013"),
     };
   }
 
@@ -560,7 +577,7 @@ export class MemoryAppClient implements AppClient {
     const created = preview.items.map((item) => ({
       id: crypto.randomUUID(),
       title: item.title,
-      description: "テンプレートから適用",
+      description: translate("shared.ipc.memory-client.014"),
       location: "",
       startUtc: item.startUtc,
       endUtc: item.endUtc,
@@ -590,7 +607,8 @@ export class MemoryAppClient implements AppClient {
     return Promise.resolve();
   }
 
-  async exportData(path: string): Promise<ExportResult> {
+  async exportData(path: string, operationId: string): Promise<ExportResult> {
+    void operationId;
     return {
       fileName: path.split(/[\\/]/).at(-1) ?? "export.json",
       bytesWritten: 0,
@@ -602,7 +620,8 @@ export class MemoryAppClient implements AppClient {
   }
 
   async deleteAllUserData(confirmation: string): Promise<number> {
-    if (confirmation !== "すべてのローカルデータを削除") throw new Error("confirmation_mismatch");
+    if (confirmation !== translate("shared.ipc.memory-client.015"))
+      throw new Error("confirmation_mismatch");
     const count = this.schedules.length;
     this.schedules = [];
     this.templates = this.templates
@@ -653,7 +672,7 @@ export class MemoryAppClient implements AppClient {
       templateCount: 0,
       quickBlockCount: 0,
       alarmCount: 0,
-      warnings: ["デモモードではファイルを読み込みません。"],
+      warnings: [translate("shared.ipc.memory-client.016")],
     };
   }
 
@@ -678,8 +697,12 @@ export class MemoryAppClient implements AppClient {
       invalidTimeCount: 0,
       duplicateNameCount: 0,
       lastProfileFound: false,
-      warnings: ["デモモードでは旧DBを読み込みません。"],
-      excluded: ["旧ウィンドウ位置", "Windows専用音", "デバッグ出力"],
+      warnings: [translate("shared.ipc.memory-client.017")],
+      excluded: [
+        translate("shared.ipc.memory-client.018"),
+        translate("shared.ipc.memory-client.019"),
+        translate("shared.ipc.memory-client.020"),
+      ],
     };
   }
 
@@ -693,7 +716,8 @@ export class MemoryAppClient implements AppClient {
     };
   }
 
-  async createBackup(): Promise<BackupRecord> {
+  async createBackup(operationId: string): Promise<BackupRecord> {
+    void operationId;
     return {
       id: crypto.randomUUID(),
       fileName: "synthetic-backup.sqlite3",

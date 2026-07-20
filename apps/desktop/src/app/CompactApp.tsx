@@ -1,3 +1,4 @@
+import { appLocale, translate } from "../shared/i18n/messages";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FocusState, Schedule } from "../shared/contracts";
@@ -41,15 +42,15 @@ export function CompactApp({ client }: { client: AppClient }) {
   if (bootstrap.isLoading || schedules.isLoading) {
     return (
       <main className="compact-shell compact-shell--center" role="status">
-        予定を開いています…
+        {translate("app.CompactApp.001")}
       </main>
     );
   }
   if (!bootstrap.data || bootstrap.isError || schedules.isError) {
     return (
       <main className="compact-shell compact-shell--center">
-        <StatusMessage tone="danger" title="コンパクト表示を開けませんでした">
-          データは変更されていません。メイン画面の「データと診断」を確認してください。
+        <StatusMessage tone="danger" title={translate("app.CompactApp.002")}>
+          {translate("app.CompactApp.003")}
         </StatusMessage>
       </main>
     );
@@ -63,7 +64,7 @@ export function CompactApp({ client }: { client: AppClient }) {
           <h1>Day Schedule Next</h1>
         </div>
         <time dateTime={now.toISOString()}>
-          {new Intl.DateTimeFormat("ja-JP", {
+          {new Intl.DateTimeFormat(appLocale, {
             hour: "2-digit",
             minute: "2-digit",
             second: "2-digit",
@@ -71,24 +72,31 @@ export function CompactApp({ client }: { client: AppClient }) {
         </time>
       </header>
       <section className="compact-current" aria-labelledby="compact-current-title">
-        <span>現在</span>
-        <h2 id="compact-current-title">{primary?.title ?? "進行中の予定はありません"}</h2>
+        <span>{translate("app.CompactApp.004")}</span>
+        <h2 id="compact-current-title">{primary?.title ?? translate("app.CompactApp.005")}</h2>
         {primary ? (
           <p>
-            {formatTime(primary.startUtc)}–{formatTime(primary.endUtc)}・残り{" "}
-            {remaining(primary.endUtc, now)}
+            {formatTime(primary.startUtc)}–{formatTime(primary.endUtc)}
+            {translate("app.CompactApp.006")} {remaining(primary.endUtc, now)}
           </p>
         ) : (
-          <p>次の予定まで、自由に使える時間です。</p>
+          <p>{translate("app.CompactApp.007")}</p>
         )}
-        {current.length > 1 ? <p className="state-chip">同時進行 {current.length}件</p> : null}
+        {current.length > 1 ? (
+          <p className="state-chip">
+            {translate("app.CompactApp.008")}
+            {current.length}
+            {translate("app.CompactApp.009")}
+          </p>
+        ) : null}
       </section>
       <section className="compact-next" aria-labelledby="compact-next-title">
-        <span>次</span>
-        <h2 id="compact-next-title">{next?.title ?? "24時間以内の予定はありません"}</h2>
+        <span>{translate("app.CompactApp.010")}</span>
+        <h2 id="compact-next-title">{next?.title ?? translate("app.CompactApp.011")}</h2>
         {next ? (
           <p>
-            {formatTime(next.startUtc)} 開始・あと {remaining(next.startUtc, now)}
+            {formatTime(next.startUtc)} {translate("app.CompactApp.012")}
+            {remaining(next.startUtc, now)}
           </p>
         ) : null}
       </section>
@@ -107,7 +115,9 @@ export function CompactApp({ client }: { client: AppClient }) {
           disabled={busy}
           onClick={() => void focusCommand(bootstrap.data.focus)}
         >
-          {bootstrap.data.focus.phase === "idle" ? "Focus開始" : "Focus終了"}
+          {bootstrap.data.focus.phase === "idle"
+            ? translate("app.CompactApp.013")
+            : translate("app.CompactApp.014")}
         </button>
         <span role="status">{syncLabel(bootstrap.data.sync.state)}</span>
       </footer>
@@ -122,15 +132,19 @@ function CompactAgenda({ items, now }: { items: Schedule[]; now: Date }) {
     .slice(0, 4);
   return (
     <section className="compact-agenda" aria-labelledby="compact-agenda-title">
-      <h2 id="compact-agenda-title">この後の予定</h2>
-      {upcoming.length === 0 ? <p>表示する予定はありません。</p> : null}
+      <h2 id="compact-agenda-title">{translate("app.CompactApp.015")}</h2>
+      {upcoming.length === 0 ? <p>{translate("app.CompactApp.016")}</p> : null}
       <ol>
         {upcoming.map((item) => (
           <li key={item.id}>
             <i style={{ backgroundColor: item.color }} aria-hidden="true" />
             <time dateTime={item.startUtc}>{formatTime(item.startUtc)}</time>
             <strong>{item.title}</strong>
-            <span>{item.syncStatus === "conflict" ? "競合あり" : statusLabel(item.status)}</span>
+            <span>
+              {item.syncStatus === "conflict"
+                ? translate("app.CompactApp.017")
+                : statusLabel(item.status)}
+            </span>
           </li>
         ))}
       </ol>
@@ -151,25 +165,25 @@ function remaining(target: string, now: Date): string {
 function syncLabel(state: string): string {
   return (
     {
-      disconnected: "ローカルのみ",
-      connecting: "接続中",
-      synced: "同期済み",
-      pending: "同期待ち",
-      syncing: "同期中",
-      offline: "オフライン",
-      retry_scheduled: "再試行待ち",
-      conflict: "競合あり",
-      auth_required: "再接続が必要",
-    }[state] ?? "状態確認中"
+      disconnected: translate("app.CompactApp.018"),
+      connecting: translate("app.CompactApp.019"),
+      synced: translate("app.CompactApp.020"),
+      pending: translate("app.CompactApp.021"),
+      syncing: translate("app.CompactApp.022"),
+      offline: translate("app.CompactApp.023"),
+      retry_scheduled: translate("app.CompactApp.024"),
+      conflict: translate("app.CompactApp.025"),
+      auth_required: translate("app.CompactApp.026"),
+    }[state] ?? translate("app.CompactApp.027")
   );
 }
 
 function statusLabel(status: Schedule["status"]): string {
   return {
-    not_started: "未着手",
-    scheduled: "予定済み",
-    in_progress: "進行中",
-    completed: "完了",
-    cancelled: "取消",
+    not_started: translate("app.CompactApp.028"),
+    scheduled: translate("app.CompactApp.029"),
+    in_progress: translate("app.CompactApp.030"),
+    completed: translate("app.CompactApp.031"),
+    cancelled: translate("app.CompactApp.032"),
   }[status];
 }

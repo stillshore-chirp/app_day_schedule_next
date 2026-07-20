@@ -6,6 +6,8 @@ pub type AppResult<T> = Result<T, AppError>;
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("{message}")]
+    Cancelled { message: String, recovery: String },
+    #[error("{message}")]
     Validation { message: String, recovery: String },
     #[error("{message}")]
     Conflict { message: String, recovery: String },
@@ -37,6 +39,13 @@ pub struct UserSafeError {
 impl From<AppError> for UserSafeError {
     fn from(error: AppError) -> Self {
         match error {
+            AppError::Cancelled { message, recovery } => Self {
+                code: "cancelled",
+                message,
+                recovery,
+                retryable: true,
+                diagnostic_id: None,
+            },
             AppError::Validation { message, recovery } => Self {
                 code: "validation",
                 message,

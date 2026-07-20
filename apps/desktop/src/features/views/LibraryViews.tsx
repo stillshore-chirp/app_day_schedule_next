@@ -1,3 +1,4 @@
+import { appLocale, translate } from "../../shared/i18n/messages";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -15,7 +16,15 @@ import type { AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 import { ViewTitle } from "./CalendarViews";
 
-const WEEKDAYS = ["月", "火", "水", "木", "金", "土", "日"];
+const WEEKDAYS = [
+  translate("features.views.LibraryViews.001"),
+  translate("features.views.LibraryViews.002"),
+  translate("features.views.LibraryViews.003"),
+  translate("features.views.LibraryViews.004"),
+  translate("features.views.LibraryViews.005"),
+  translate("features.views.LibraryViews.006"),
+  translate("features.views.LibraryViews.007"),
+];
 
 function minuteToTime(value: number): string {
   return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
@@ -82,7 +91,7 @@ export function TemplatesView({
           setDraft(toTemplateDraft(initial));
         }
       })
-      .catch(() => active && setError("テンプレートを読み込めませんでした。"));
+      .catch(() => active && setError(translate("features.views.LibraryViews.008")));
     return () => {
       active = false;
     };
@@ -101,7 +110,7 @@ export function TemplatesView({
   const saveTemplate = async () => {
     const parsed = dayTemplateDraftSchema.safeParse(draft);
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "入力を確認してください。");
+      setError(parsed.error.issues[0]?.message ?? translate("features.views.LibraryViews.009"));
       return;
     }
     setBusy(true);
@@ -113,9 +122,9 @@ export function TemplatesView({
       });
       await refresh();
       chooseTemplate(saved);
-      setMessage("テンプレートをこの端末に保存しました。");
+      setMessage(translate("features.views.LibraryViews.010"));
     } catch {
-      setError("保存できませんでした。一覧を更新してから再試行してください。");
+      setError(translate("features.views.LibraryViews.011"));
     } finally {
       setBusy(false);
     }
@@ -128,9 +137,9 @@ export function TemplatesView({
       setSelected(null);
       setDraft(emptyTemplate());
       await refresh();
-      setMessage("テンプレートを削除しました。");
+      setMessage(translate("features.views.LibraryViews.012"));
     } catch {
-      setError("既定テンプレートは削除できません。一覧を更新して再試行してください。");
+      setError(translate("features.views.LibraryViews.013"));
     } finally {
       setBusy(false);
       setDeleteTarget(null);
@@ -152,7 +161,7 @@ export function TemplatesView({
       isActive: quickEditing?.isActive ?? true,
     });
     if (!parsed.success) {
-      setError("Quick Blockのタイトル、時刻、所要分を確認してください。");
+      setError(translate("features.views.LibraryViews.014"));
       return;
     }
     setBusy(true);
@@ -163,9 +172,13 @@ export function TemplatesView({
       });
       clearQuickEditor();
       await refresh();
-      setMessage(quickEditing ? "Quick Blockを更新しました。" : "Quick Blockを保存しました。");
+      setMessage(
+        quickEditing
+          ? translate("features.views.LibraryViews.015")
+          : translate("features.views.LibraryViews.016"),
+      );
     } catch {
-      setError("Quick Blockを保存できませんでした。一覧を更新して再試行してください。");
+      setError(translate("features.views.LibraryViews.017"));
     } finally {
       setBusy(false);
     }
@@ -185,7 +198,9 @@ export function TemplatesView({
 
   const editQuickBlock = (item: QuickBlock, duplicate = false) => {
     setQuickEditing(duplicate ? null : item);
-    setQuickTitle(duplicate ? `${item.title} のコピー` : item.title);
+    setQuickTitle(
+      duplicate ? translate("features.views.LibraryViews.018", [item.title]) : item.title,
+    );
     setQuickTime(minuteToTime(item.startMinute));
     setQuickDuration(item.durationMinutes);
     setQuickColor(item.color);
@@ -246,7 +261,7 @@ export function TemplatesView({
         }),
       );
     } catch {
-      setError("プレビューできませんでした。夏時間の境界またはブロック時刻を確認してください。");
+      setError(translate("features.views.LibraryViews.019"));
     } finally {
       setBusy(false);
     }
@@ -266,11 +281,11 @@ export function TemplatesView({
       setPreview(null);
       setMessage(
         applyMode === "replace"
-          ? "対象日の予定を置き換えました。「元に戻す」で一括回復できます。"
-          : "対象日へテンプレートを追加しました。「元に戻す」で一括回復できます。",
+          ? translate("features.views.LibraryViews.020")
+          : translate("features.views.LibraryViews.021"),
       );
     } catch {
-      setError("適用できませんでした。既存の予定は変更されていません。");
+      setError(translate("features.views.LibraryViews.022"));
     } finally {
       setBusy(false);
     }
@@ -279,22 +294,26 @@ export function TemplatesView({
   return (
     <main className="secondary-view library-view">
       <ViewTitle
-        eyebrow="一日の型と定常ブロック"
-        title="テンプレート"
-        description="複数の一日の型と、テンプレートに依存しないQuick Blockを永続管理します。"
+        eyebrow={translate("features.views.LibraryViews.023")}
+        title={translate("features.views.LibraryViews.024")}
+        description={translate("features.views.LibraryViews.025")}
       />
       {message ? (
         <StatusMessage
           tone="success"
           title={message}
-          action={<button onClick={() => setMessage(null)}>閉じる</button>}
+          action={
+            <button onClick={() => setMessage(null)}>
+              {translate("features.views.LibraryViews.026")}
+            </button>
+          }
         />
       ) : null}
       {error ? <StatusMessage tone="danger" title={error} /> : null}
       <div className="library-layout">
         <section className="library-list" aria-labelledby="template-list-title">
           <div className="section-heading section-heading--compact">
-            <h2 id="template-list-title">一日のテンプレート</h2>
+            <h2 id="template-list-title">{translate("features.views.LibraryViews.027")}</h2>
             <button
               className="button button--subtle"
               type="button"
@@ -303,7 +322,7 @@ export function TemplatesView({
                 setDraft(emptyTemplate());
               }}
             >
-              ＋ 新規
+              {translate("features.views.LibraryViews.028")}
             </button>
           </div>
           {templates.map((template, index) => (
@@ -317,15 +336,23 @@ export function TemplatesView({
                 <i style={{ backgroundColor: template.color }} />
                 <span>
                   <strong>{template.name}</strong>
-                  <small>{template.blocks.length}ブロック</small>
+                  <small>
+                    {template.blocks.length}
+                    {translate("features.views.LibraryViews.029")}
+                  </small>
                 </span>
-                {template.isBuiltin ? <em>既定</em> : null}
+                {template.isBuiltin ? (
+                  <em>{translate("features.views.LibraryViews.030")}</em>
+                ) : null}
               </button>
-              <div className="compact-actions" aria-label={`${template.name}の一覧操作`}>
+              <div
+                className="compact-actions"
+                aria-label={translate("features.views.LibraryViews.031", [template.name])}
+              >
                 <button
                   className="icon-button"
                   disabled={index === 0}
-                  aria-label={`${template.name}を上へ移動`}
+                  aria-label={translate("features.views.LibraryViews.032", [template.name])}
                   onClick={() => void moveTemplate(template.id, -1)}
                 >
                   ↑
@@ -333,17 +360,20 @@ export function TemplatesView({
                 <button
                   className="icon-button"
                   disabled={index === templates.length - 1}
-                  aria-label={`${template.name}を下へ移動`}
+                  aria-label={translate("features.views.LibraryViews.033", [template.name])}
                   onClick={() => void moveTemplate(template.id, 1)}
                 >
                   ↓
                 </button>
                 <button
                   className="icon-button"
-                  aria-label={`${template.name}を複製`}
+                  aria-label={translate("features.views.LibraryViews.034", [template.name])}
                   onClick={() => {
                     setSelected(null);
-                    setDraft({ ...toTemplateDraft(template), name: `${template.name} のコピー` });
+                    setDraft({
+                      ...toTemplateDraft(template),
+                      name: translate("features.views.LibraryViews.035", [template.name]),
+                    });
                   }}
                 >
                   ⧉
@@ -354,11 +384,13 @@ export function TemplatesView({
         </section>
         <section className="library-editor" aria-labelledby="template-editor-title">
           <h2 id="template-editor-title">
-            {selected ? "テンプレートを編集" : "テンプレートを作成"}
+            {selected
+              ? translate("features.views.LibraryViews.036")
+              : translate("features.views.LibraryViews.037")}
           </h2>
           <div className="field-pair">
             <label>
-              名前
+              {translate("features.views.LibraryViews.038")}
               <input
                 value={draft.name}
                 disabled={selected?.isBuiltin}
@@ -366,7 +398,7 @@ export function TemplatesView({
               />
             </label>
             <label>
-              色
+              {translate("features.views.LibraryViews.039")}
               <input
                 type="color"
                 value={draft.color}
@@ -375,14 +407,14 @@ export function TemplatesView({
             </label>
           </div>
           <label>
-            説明
+            {translate("features.views.LibraryViews.040")}
             <textarea
               value={draft.description}
               onChange={(event) => setDraft({ ...draft, description: event.target.value })}
             />
           </label>
           <fieldset className="weekday-picker">
-            <legend>対象曜日</legend>
+            <legend>{translate("features.views.LibraryViews.041")}</legend>
             {WEEKDAYS.map((label, index) => (
               <label key={label}>
                 <input
@@ -397,7 +429,7 @@ export function TemplatesView({
             ))}
           </fieldset>
           <div className="section-heading section-heading--compact">
-            <h3>ブロック</h3>
+            <h3>{translate("features.views.LibraryViews.042")}</h3>
             <button
               type="button"
               className="button button--subtle"
@@ -407,7 +439,7 @@ export function TemplatesView({
                   blocks: [
                     ...draft.blocks,
                     {
-                      title: "新しいブロック",
+                      title: translate("features.views.LibraryViews.043"),
                       startMinute: 540,
                       durationMinutes: 30,
                       color: draft.color,
@@ -418,11 +450,11 @@ export function TemplatesView({
                 })
               }
             >
-              ＋ ブロック
+              {translate("features.views.LibraryViews.044")}
             </button>
           </div>
           {draft.blocks.length === 0 ? (
-            <p className="field-help">ブロックはまだありません。</p>
+            <p className="field-help">{translate("features.views.LibraryViews.045")}</p>
           ) : (
             <TemplateVisualEditor draft={draft} setDraft={setDraft} />
           )}
@@ -430,7 +462,7 @@ export function TemplatesView({
             {draft.blocks.map((block, index) => (
               <div className="block-editor" key={`${index}-${block.startMinute}`}>
                 <label>
-                  タイトル
+                  {translate("features.views.LibraryViews.046")}
                   <input
                     value={block.title}
                     onChange={(event) =>
@@ -439,7 +471,7 @@ export function TemplatesView({
                   />
                 </label>
                 <label>
-                  開始
+                  {translate("features.views.LibraryViews.047")}
                   <input
                     type="time"
                     value={minuteToTime(block.startMinute)}
@@ -451,7 +483,7 @@ export function TemplatesView({
                   />
                 </label>
                 <label>
-                  所要分
+                  {translate("features.views.LibraryViews.048")}
                   <input
                     type="number"
                     min={1}
@@ -465,7 +497,7 @@ export function TemplatesView({
                   />
                 </label>
                 <label>
-                  色
+                  {translate("features.views.LibraryViews.049")}
                   <input
                     type="color"
                     value={block.color}
@@ -475,7 +507,7 @@ export function TemplatesView({
                   />
                 </label>
                 <label>
-                  プロジェクト
+                  {translate("features.views.LibraryViews.050")}
                   <input
                     value={block.project}
                     onChange={(event) =>
@@ -484,7 +516,7 @@ export function TemplatesView({
                   />
                 </label>
                 <label>
-                  カテゴリ
+                  {translate("features.views.LibraryViews.051")}
                   <input
                     value={block.category}
                     onChange={(event) =>
@@ -496,7 +528,7 @@ export function TemplatesView({
                   type="button"
                   className="icon-button"
                   disabled={index === 0}
-                  aria-label={`${block.title}を上へ移動`}
+                  aria-label={translate("features.views.LibraryViews.052", [block.title])}
                   onClick={() => setDraft({ ...draft, blocks: moveAt(draft.blocks, index, -1) })}
                 >
                   ↑
@@ -505,7 +537,7 @@ export function TemplatesView({
                   type="button"
                   className="icon-button"
                   disabled={index === draft.blocks.length - 1}
-                  aria-label={`${block.title}を下へ移動`}
+                  aria-label={translate("features.views.LibraryViews.053", [block.title])}
                   onClick={() => setDraft({ ...draft, blocks: moveAt(draft.blocks, index, 1) })}
                 >
                   ↓
@@ -513,10 +545,13 @@ export function TemplatesView({
                 <button
                   type="button"
                   className="icon-button"
-                  aria-label={`${block.title}を複製`}
+                  aria-label={translate("features.views.LibraryViews.054", [block.title])}
                   onClick={() => {
                     const blocks = [...draft.blocks];
-                    blocks.splice(index + 1, 0, { ...block, title: `${block.title} のコピー` });
+                    blocks.splice(index + 1, 0, {
+                      ...block,
+                      title: translate("features.views.LibraryViews.055", [block.title]),
+                    });
                     setDraft({ ...draft, blocks });
                   }}
                 >
@@ -525,7 +560,7 @@ export function TemplatesView({
                 <button
                   type="button"
                   className="icon-button"
-                  aria-label={`${block.title}を削除`}
+                  aria-label={translate("features.views.LibraryViews.056", [block.title])}
                   onClick={() =>
                     setDraft({
                       ...draft,
@@ -544,20 +579,22 @@ export function TemplatesView({
               disabled={busy}
               onClick={() => void saveTemplate()}
             >
-              {busy ? "保存中…" : "テンプレートを保存"}
+              {busy
+                ? translate("features.views.LibraryViews.057")
+                : translate("features.views.LibraryViews.058")}
             </button>
             {selected && !selected.isBuiltin ? (
               deleteTarget === selected.id ? (
                 <span className="inline-confirm" role="alert">
-                  <strong>削除しますか？</strong>
+                  <strong>{translate("features.views.LibraryViews.059")}</strong>
                   <button
                     className="button button--danger"
                     onClick={() => void removeTemplate(selected)}
                   >
-                    削除
+                    {translate("features.views.LibraryViews.060")}
                   </button>
                   <button className="button" onClick={() => setDeleteTarget(null)}>
-                    残す
+                    {translate("features.views.LibraryViews.061")}
                   </button>
                 </span>
               ) : (
@@ -565,17 +602,17 @@ export function TemplatesView({
                   className="button button--danger-outline"
                   onClick={() => setDeleteTarget(selected.id)}
                 >
-                  削除…
+                  {translate("features.views.LibraryViews.062")}
                 </button>
               )
             ) : null}
           </div>
           {selected ? (
             <section className="template-apply" aria-labelledby="template-apply-title">
-              <h3 id="template-apply-title">日付へ適用</h3>
+              <h3 id="template-apply-title">{translate("features.views.LibraryViews.063")}</h3>
               <div className="inline-form">
                 <label>
-                  対象日
+                  {translate("features.views.LibraryViews.064")}
                   <input
                     type="date"
                     value={applyDate}
@@ -586,7 +623,7 @@ export function TemplatesView({
                   />
                 </label>
                 <label>
-                  適用方式
+                  {translate("features.views.LibraryViews.065")}
                   <select
                     value={applyMode}
                     onChange={(event) => {
@@ -594,40 +631,49 @@ export function TemplatesView({
                       setPreview(null);
                     }}
                   >
-                    <option value="add">既存予定へ追加</option>
-                    <option value="replace">対象日の予定を置換</option>
+                    <option value="add">{translate("features.views.LibraryViews.066")}</option>
+                    <option value="replace">{translate("features.views.LibraryViews.067")}</option>
                   </select>
                 </label>
                 <button className="button" disabled={busy} onClick={() => void previewTemplate()}>
-                  適用前にプレビュー
+                  {translate("features.views.LibraryViews.068")}
                 </button>
               </div>
               {applyMode === "replace" ? (
-                <StatusMessage
-                  tone="warning"
-                  title="置換は対象日のローカル予定だけを削除対象にします"
-                >
-                  Google由来の予定は保持します。適用は1操作として保存され、直後なら「元に戻す」でローカル予定をまとめて回復できます。
+                <StatusMessage tone="warning" title={translate("features.views.LibraryViews.069")}>
+                  {translate("features.views.LibraryViews.070")}
                 </StatusMessage>
               ) : null}
               {preview ? (
                 <div className="apply-preview">
-                  <h4>{preview.items.length}件を適用します</h4>
+                  <h4>
+                    {preview.items.length}
+                    {translate("features.views.LibraryViews.071")}
+                  </h4>
                   <dl className="preview-summary">
                     <div>
-                      <dt>重複する生成予定</dt>
-                      <dd>{preview.overlappingItemCount}件</dd>
+                      <dt>{translate("features.views.LibraryViews.072")}</dt>
+                      <dd>
+                        {preview.overlappingItemCount}
+                        {translate("features.views.LibraryViews.073")}
+                      </dd>
                     </div>
                     <div>
-                      <dt>置換対象のローカル予定</dt>
-                      <dd>{preview.localReplaceCandidateCount}件</dd>
+                      <dt>{translate("features.views.LibraryViews.074")}</dt>
+                      <dd>
+                        {preview.localReplaceCandidateCount}
+                        {translate("features.views.LibraryViews.075")}
+                      </dd>
                     </div>
                     <div>
-                      <dt>保持する外部予定</dt>
-                      <dd>{preview.externalPreservedCount}件</dd>
+                      <dt>{translate("features.views.LibraryViews.076")}</dt>
+                      <dd>
+                        {preview.externalPreservedCount}
+                        {translate("features.views.LibraryViews.077")}
+                      </dd>
                     </div>
                     <div>
-                      <dt>同期先</dt>
+                      <dt>{translate("features.views.LibraryViews.078")}</dt>
                       <dd>{preview.syncTarget}</dd>
                     </div>
                   </dl>
@@ -636,7 +682,7 @@ export function TemplatesView({
                       <li key={`${item.startUtc}-${item.title}`}>
                         <i style={{ background: item.color }} />
                         <time>
-                          {new Intl.DateTimeFormat("ja-JP", {
+                          {new Intl.DateTimeFormat(appLocale, {
                             hour: "2-digit",
                             minute: "2-digit",
                           }).format(new Date(item.startUtc))}
@@ -653,10 +699,12 @@ export function TemplatesView({
                       disabled={busy}
                       onClick={() => void applyTemplate()}
                     >
-                      {applyMode === "replace" ? "この内容で置換" : "この内容を追加"}
+                      {applyMode === "replace"
+                        ? translate("features.views.LibraryViews.079")
+                        : translate("features.views.LibraryViews.080")}
                     </button>
                     <button className="button" onClick={() => setPreview(null)}>
-                      戻って修正
+                      {translate("features.views.LibraryViews.081")}
                     </button>
                   </div>
                 </div>
@@ -667,17 +715,15 @@ export function TemplatesView({
       </div>
       <section className="quick-block-section" aria-labelledby="quick-block-title">
         <h2 id="quick-block-title">Quick Block</h2>
-        <p>毎日のNowとタイムラインへ含める、テンプレート非依存の定常ブロックです。</p>
-        <p className="field-help">
-          無効にすると24時間表示、Now、通知から外れます。データと設定は残ります。
-        </p>
+        <p>{translate("features.views.LibraryViews.082")}</p>
+        <p className="field-help">{translate("features.views.LibraryViews.083")}</p>
         <div className="inline-form">
           <label>
-            タイトル
+            {translate("features.views.LibraryViews.084")}
             <input value={quickTitle} onChange={(event) => setQuickTitle(event.target.value)} />
           </label>
           <label>
-            開始
+            {translate("features.views.LibraryViews.085")}
             <input
               type="time"
               value={quickTime}
@@ -685,7 +731,7 @@ export function TemplatesView({
             />
           </label>
           <label>
-            所要分
+            {translate("features.views.LibraryViews.086")}
             <input
               type="number"
               min={1}
@@ -695,7 +741,7 @@ export function TemplatesView({
             />
           </label>
           <label>
-            色
+            {translate("features.views.LibraryViews.087")}
             <input
               type="color"
               value={quickColor}
@@ -703,23 +749,23 @@ export function TemplatesView({
             />
           </label>
           <label>
-            プロジェクト
+            {translate("features.views.LibraryViews.088")}
             <input value={quickProject} onChange={(event) => setQuickProject(event.target.value)} />
           </label>
           <label>
-            カテゴリ
+            {translate("features.views.LibraryViews.089")}
             <input
               value={quickCategory}
               onChange={(event) => setQuickCategory(event.target.value)}
             />
           </label>
           <NotificationOffsetSelect
-            label="開始通知"
+            label={translate("features.views.LibraryViews.090")}
             value={quickStartNotification}
             onChange={setQuickStartNotification}
           />
           <NotificationOffsetSelect
-            label="終了通知"
+            label={translate("features.views.LibraryViews.091")}
             value={quickEndNotification}
             onChange={setQuickEndNotification}
           />
@@ -728,11 +774,13 @@ export function TemplatesView({
             disabled={busy}
             onClick={() => void saveQuickBlock()}
           >
-            {quickEditing ? "変更を保存" : "追加"}
+            {quickEditing
+              ? translate("features.views.LibraryViews.092")
+              : translate("features.views.LibraryViews.093")}
           </button>
           {quickEditing ? (
             <button className="button" onClick={clearQuickEditor}>
-              編集を取消
+              {translate("features.views.LibraryViews.094")}
             </button>
           ) : null}
         </div>
@@ -742,27 +790,36 @@ export function TemplatesView({
               <span>
                 <strong>{item.title}</strong>
                 <small>
-                  {minuteToTime(item.startMinute)}・{item.durationMinutes}分・{item.timezoneId}
+                  {minuteToTime(item.startMinute)}・{item.durationMinutes}
+                  {translate("features.views.LibraryViews.095")}
+                  {item.timezoneId}
                   {item.project || item.category
-                    ? `・${item.project || "未分類"}/${item.category || "未分類"}`
+                    ? translate("features.views.LibraryViews.096", [
+                        item.project || translate("features.schedule.Timeline.013"),
+                        item.category || translate("features.schedule.Timeline.014"),
+                      ])
                     : ""}
-                  ・開始通知{notificationSummary(item.startNotificationMinutes)}・終了通知
+                  {translate("features.views.LibraryViews.097")}
+                  {notificationSummary(item.startNotificationMinutes)}
+                  {translate("features.views.LibraryViews.098")}
                   {notificationSummary(item.endNotificationMinutes)}
                 </small>
               </span>
               <button className="button" onClick={() => editQuickBlock(item)}>
-                編集
+                {translate("features.views.LibraryViews.099")}
               </button>
               <button className="button" onClick={() => editQuickBlock(item, true)}>
-                複製
+                {translate("features.views.LibraryViews.100")}
               </button>
               <button className="button" onClick={() => void toggleQuickBlock(item)}>
-                {item.isActive ? "有効" : "無効"}
+                {item.isActive
+                  ? translate("features.views.LibraryViews.101")
+                  : translate("features.views.LibraryViews.102")}
               </button>
               <button
                 className="icon-button"
                 disabled={index === 0}
-                aria-label={`${item.title}を上へ移動`}
+                aria-label={translate("features.views.LibraryViews.103", [item.title])}
                 onClick={() => void moveQuickBlock(item.id, -1)}
               >
                 ↑
@@ -770,7 +827,7 @@ export function TemplatesView({
               <button
                 className="icon-button"
                 disabled={index === quickBlocks.length - 1}
-                aria-label={`${item.title}を下へ移動`}
+                aria-label={translate("features.views.LibraryViews.104", [item.title])}
                 onClick={() => void moveQuickBlock(item.id, 1)}
               >
                 ↓
@@ -783,7 +840,7 @@ export function TemplatesView({
                     .then(refresh)
                 }
               >
-                削除
+                {translate("features.views.LibraryViews.105")}
               </button>
             </li>
           ))}
@@ -804,7 +861,7 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
     client
       .listFreeAlarms()
       .then(setAlarms)
-      .catch(() => setError("アラームを読み込めませんでした。"));
+      .catch(() => setError(translate("features.views.LibraryViews.106")));
   useEffect(() => void refresh(), [client]);
   const save = async () => {
     const parsed = freeAlarmDraftSchema.safeParse({
@@ -814,7 +871,7 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
       weekdaysMask,
       enabled: true,
     });
-    if (!parsed.success) return setError("ラベル、時刻、曜日を確認してください。");
+    if (!parsed.success) return setError(translate("features.views.LibraryViews.107"));
     try {
       await client.saveFreeAlarm({
         ...(editing ? { id: editing.id, expectedVersion: editing.version } : {}),
@@ -823,7 +880,7 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
       clearEditor();
       await refresh();
     } catch {
-      setError("アラームを保存できませんでした。一覧を更新して再試行してください。");
+      setError(translate("features.views.LibraryViews.108"));
     }
   };
   const clearEditor = () => {
@@ -834,7 +891,7 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
   };
   const edit = (item: FreeAlarm, duplicate = false) => {
     setEditing(duplicate ? null : item);
-    setLabel(duplicate ? `${item.label} のコピー` : item.label);
+    setLabel(duplicate ? translate("features.views.LibraryViews.109", [item.label]) : item.label);
     setTime(minuteToTime(item.minuteOfDay));
     setWeekdaysMask(item.weekdaysMask);
   };
@@ -859,38 +916,40 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
       await client.reorderFreeAlarms(ids);
       await refresh();
     } catch {
-      setError("一覧が更新されました。読み込み直してから並べ替えてください。");
+      setError(translate("features.views.LibraryViews.110"));
     }
   };
   return (
     <main className="secondary-view library-view">
       <ViewTitle
-        eyebrow="予定から独立した通知"
-        title="アラーム"
-        description="ローカル時刻、IANAタイムゾーン、曜日、有効状態を明示して管理します。"
+        eyebrow={translate("features.views.LibraryViews.111")}
+        title={translate("features.views.LibraryViews.112")}
+        description={translate("features.views.LibraryViews.113")}
       />
       {error ? <StatusMessage tone="danger" title={error} /> : null}
       <section className="alarm-editor">
         <div className="inline-form">
           <label>
-            ラベル
+            {translate("features.views.LibraryViews.114")}
             <input value={label} onChange={(event) => setLabel(event.target.value)} />
           </label>
           <label>
-            時刻
+            {translate("features.views.LibraryViews.115")}
             <input type="time" value={time} onChange={(event) => setTime(event.target.value)} />
           </label>
           <button className="button button--primary" onClick={() => void save()}>
-            {editing ? "変更を保存" : "アラームを追加"}
+            {editing
+              ? translate("features.views.LibraryViews.116")
+              : translate("features.views.LibraryViews.117")}
           </button>
           {editing ? (
             <button className="button" onClick={clearEditor}>
-              編集を取消
+              {translate("features.views.LibraryViews.118")}
             </button>
           ) : null}
         </div>
         <fieldset className="weekday-picker">
-          <legend>曜日</legend>
+          <legend>{translate("features.views.LibraryViews.119")}</legend>
           {WEEKDAYS.map((day, index) => (
             <label key={day}>
               <input
@@ -904,8 +963,8 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
         </fieldset>
       </section>
       {alarms.length === 0 ? (
-        <StatusMessage title="アラームはまだありません">
-          予定とは独立した最初のアラームを追加できます。
+        <StatusMessage title={translate("features.views.LibraryViews.120")}>
+          {translate("features.views.LibraryViews.121")}
         </StatusMessage>
       ) : null}
       <ul className="operational-list">
@@ -919,18 +978,20 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
               </small>
             </span>
             <button className="button" onClick={() => edit(item)}>
-              編集
+              {translate("features.views.LibraryViews.122")}
             </button>
             <button className="button" onClick={() => edit(item, true)}>
-              複製
+              {translate("features.views.LibraryViews.123")}
             </button>
             <button className="button" onClick={() => void toggle(item)}>
-              {item.enabled ? "有効" : "無効"}
+              {item.enabled
+                ? translate("features.views.LibraryViews.124")
+                : translate("features.views.LibraryViews.125")}
             </button>
             <button
               className="icon-button"
               disabled={index === 0}
-              aria-label={`${item.label}を上へ移動`}
+              aria-label={translate("features.views.LibraryViews.126", [item.label])}
               onClick={() => void move(item.id, -1)}
             >
               ↑
@@ -938,7 +999,7 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
             <button
               className="icon-button"
               disabled={index === alarms.length - 1}
-              aria-label={`${item.label}を下へ移動`}
+              aria-label={translate("features.views.LibraryViews.127", [item.label])}
               onClick={() => void move(item.id, 1)}
             >
               ↓
@@ -951,13 +1012,13 @@ export function AlarmsView({ client, timezoneId }: { client: AppClient; timezone
                   .then(refresh)
               }
             >
-              削除
+              {translate("features.views.LibraryViews.128")}
             </button>
           </li>
         ))}
       </ul>
-      <StatusMessage title="通知権限と完全終了">
-        OS通知が未許可の場合は設定画面から許可してください。アプリが完全終了している間は通知できません。
+      <StatusMessage title={translate("features.views.LibraryViews.129")}>
+        {translate("features.views.LibraryViews.130")}
       </StatusMessage>
     </main>
   );
@@ -997,8 +1058,8 @@ function TemplateVisualEditor({
     <section className="template-visual-editor" aria-labelledby="template-strip-title">
       <div className="section-heading section-heading--compact">
         <div>
-          <h3 id="template-strip-title">24時間ストリップ</h3>
-          <p className="field-help">日跨ぎ部分は「翌日」として表示します。</p>
+          <h3 id="template-strip-title">{translate("features.views.LibraryViews.131")}</h3>
+          <p className="field-help">{translate("features.views.LibraryViews.132")}</p>
         </div>
       </div>
       <div className="template-strip-scale" aria-hidden="true">
@@ -1008,7 +1069,11 @@ function TemplateVisualEditor({
         <span>18</span>
         <span>24</span>
       </div>
-      <div className="template-strip" role="list" aria-label="テンプレートの24時間ストリップ">
+      <div
+        className="template-strip"
+        role="list"
+        aria-label={translate("features.views.LibraryViews.133")}
+      >
         {draft.blocks.map((block, index) => {
           const todayMinutes = Math.min(block.durationMinutes, 1440 - block.startMinute);
           const nextDayMinutes = Math.max(0, block.durationMinutes - todayMinutes);
@@ -1022,30 +1087,37 @@ function TemplateVisualEditor({
                   width: `${Math.max(1.5, (todayMinutes / 1440) * 100)}%`,
                   backgroundColor: block.color,
                 }}
-                aria-label={`${block.title}、${minuteToTime(block.startMinute)}開始、${block.durationMinutes}分`}
+                aria-label={translate("features.views.LibraryViews.134", [
+                  block.title,
+                  minuteToTime(block.startMinute),
+                  block.durationMinutes,
+                ])}
                 onClick={() => document.getElementById(`template-block-${index}`)?.focus()}
               >
                 {block.title}
               </button>
               {nextDayMinutes > 0 ? (
-                <span className="template-strip-overflow">翌日 +{nextDayMinutes}分</span>
+                <span className="template-strip-overflow">
+                  {translate("features.views.LibraryViews.135")}
+                  {nextDayMinutes}
+                  {translate("features.views.LibraryViews.136")}
+                </span>
               ) : null}
             </div>
           );
         })}
       </div>
       <div className="template-detail-timeline" aria-labelledby="template-detail-title">
-        <h3 id="template-detail-title">詳細タイムライン</h3>
-        <p className="field-help">
-          スライダーをドラッグ、または矢印キーで1分ずつ移動・リサイズできます。下の入力欄でも同じ値を編集できます。
-        </p>
+        <h3 id="template-detail-title">{translate("features.views.LibraryViews.137")}</h3>
+        <p className="field-help">{translate("features.views.LibraryViews.138")}</p>
         {draft.blocks.map((block, index) => {
           const endMinute = block.startMinute + block.durationMinutes;
           return (
             <fieldset className="template-range-editor" key={`${block.title}-${index}`}>
               <legend>{block.title}</legend>
               <label>
-                開始 {minuteToTime(block.startMinute)}
+                {translate("features.views.LibraryViews.139")}
+                {minuteToTime(block.startMinute)}
                 <input
                   id={`template-block-${index}`}
                   type="range"
@@ -1061,7 +1133,8 @@ function TemplateVisualEditor({
                 />
               </label>
               <label>
-                終了 {formatTemplateEnd(endMinute)}
+                {translate("features.views.LibraryViews.140")}
+                {formatTemplateEnd(endMinute)}
                 <input
                   type="range"
                   min={block.startMinute + 1}
@@ -1086,7 +1159,7 @@ function TemplateVisualEditor({
 function formatTemplateEnd(value: number): string {
   const day = Math.floor(value / 1440);
   const time = minuteToTime(value % 1440);
-  return day > 0 ? `翌日 ${time}` : time;
+  return day > 0 ? translate("features.views.LibraryViews.141", [time]) : time;
 }
 
 function updateBlock(
@@ -1112,7 +1185,10 @@ function moveAt<T>(items: T[], index: number, direction: -1 | 1): T[] {
 }
 
 function weekdaySummary(mask: number): string {
-  return WEEKDAYS.filter((_, index) => (mask & (1 << index)) !== 0).join("・") || "曜日なし";
+  return (
+    WEEKDAYS.filter((_, index) => (mask & (1 << index)) !== 0).join("・") ||
+    translate("features.views.LibraryViews.142")
+  );
 }
 
 function movedIds<T extends { id: string }>(items: T[], id: string, direction: -1 | 1) {
@@ -1125,8 +1201,10 @@ function movedIds<T extends { id: string }>(items: T[], id: string, direction: -
 }
 
 function notificationSummary(value: number | null): string {
-  if (value === null) return "なし";
-  return value === 0 ? "ちょうど" : `${value}分前`;
+  if (value === null) return translate("features.views.LibraryViews.143");
+  return value === 0
+    ? translate("features.views.LibraryViews.144")
+    : translate("features.views.LibraryViews.145", [value]);
 }
 
 function NotificationOffsetSelect({
@@ -1142,13 +1220,13 @@ function NotificationOffsetSelect({
     <label>
       {label}
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="">なし</option>
-        <option value="0">時刻ちょうど</option>
-        <option value="5">5分前</option>
-        <option value="10">10分前</option>
-        <option value="15">15分前</option>
-        <option value="30">30分前</option>
-        <option value="60">60分前</option>
+        <option value="">{translate("features.views.LibraryViews.146")}</option>
+        <option value="0">{translate("features.views.LibraryViews.147")}</option>
+        <option value="5">{translate("features.views.LibraryViews.148")}</option>
+        <option value="10">{translate("features.views.LibraryViews.149")}</option>
+        <option value="15">{translate("features.views.LibraryViews.150")}</option>
+        <option value="30">{translate("features.views.LibraryViews.151")}</option>
+        <option value="60">{translate("features.views.LibraryViews.152")}</option>
       </select>
     </label>
   );
