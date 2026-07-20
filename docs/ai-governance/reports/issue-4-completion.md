@@ -48,7 +48,7 @@ Precondition: 初回利用、Today、今日の予定なし、Google 未接続、
 | Loading | 対象を確認中 | wait / retry | `role=status` | Pass |
 | Search none | 検索結果なしを通常 empty と区別 | filter clear | visible message | Pass |
 | Input / DST error | 原因、未保存、回復 | 値を修正 | associated form / safe error | Pass |
-| Permission denied | OS通知不可、音の独立、設定導線 | request / OS settings | state text not color-only | Pass automated; OS manual pending |
+| Permission denied / DST skip | OS通知不可、音の独立、設定導線、DST見送り理由 | request / OS settings / 通知配信履歴 | state text not color-only、内部categoryを日本語化 | Pass automated + native synthetic evidence; OS manual pending |
 | Google disconnected | 未接続 | JSON import / connect | explicit state | Pass |
 | Sync pending / offline | ローカル保存済み、次回 retry | local continue / retry | status + queue fields | Pass mock |
 | Auth required | 再接続が必要 | explicit reconnect | safe category only | Pass mock |
@@ -78,7 +78,7 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 - 「この端末に保存」と「Google 同期待ち／同期済み」を分離。
 - template replace はローカル予定だけを対象とし、Google由来を保持すること、件数、Undo を表示。
 - delete all は完全一致確認文、Google disconnect は local data impact を選択。
-- notification は permission と complete exit 制約を明示。
+- notification は permission と complete exit 制約を明示。自由アラームの DST gap / ambiguity は時刻を黙ってずらさず、理由付きの見送りとして通知配信履歴へ1回だけ残す。
 - repetitive flow は template / Quick Block / duplicate / saved selection / tray Quick Add で短縮。
 - timeline zoom / scroll / reference minute、last template、window settings を保持。
 - sync queue は項目／全体 retry、conflict は field choice。
@@ -88,9 +88,9 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 ## 7. Domain safety review
 
 - Time: UTC instant + IANA timezone、MinuteOfDay、`[start,end)`、DST gap / overlap、all-day dates、recurrence scope を test。
-- Notification: persistent key、grace、replay limit、active Quick Block linkage、Focus history。
-- Sync: local transaction + Outbox、pagination atomic token、410 full sync、401 / 412 / 429 / 5xx / offline、same-field conflict。
-- Data: migration v1→v10、optimistic version、read-only preview / fingerprint、single transaction import、verified backup、staged restore、Windows-safe DB swap、atomic delete.
+- Notification: persistent key、grace、replay limit、active Quick Block linkage、Focus history、DST gap / ambiguity の理由付きskipと重複抑止。
+- Sync: local transaction + Outbox、pagination atomic token、410 full sync の欠落mapping照合、pending local editの削除競合保持、401 / 412 / 429 / 5xx / offline、same-field conflict、credential削除失敗時の接続保持。
+- Data: migration v1→v10、optimistic version、read-only preview / fingerprint、single transaction import、verified backup、staged candidate migration before active swap、Windows-safe DB swap、atomic delete.
 - Security: strict CSP、scoped capability、credential store、structured redaction、dependency / license / source audit。
 
 ## 8. Counter-review findings
@@ -117,6 +117,10 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 | P1 | Windows restore swap | 既存宛先への `rename` に依存しWindowsで復元切替が失敗し得た | Codex review thread / filesystem regression | 現DBを一時退避して候補をrenameし、失敗・中断時に退避DBを回復。Fixed |
 | P1 | Dependency freshness gate | transitive `modern-tar@0.7.7` が公開24時間未満でinstall policyに拒否された | pnpm supply-chain verification | 親の互換範囲 `^0.7.3` 内で2026-03-18公開の0.7.6へ固定。install scriptはesbuildのみ許可しdriver downloaderは拒否。Fixed |
 | P1 | Short schedule density | 30分予定でdetailのtitle / timeが上下端にclipし、overviewは先頭1文字だけが残った | user screenshot + synthetic native reproduction | detailを高さ依存の1行／複数行へ切替、overviewは45分以下をmarker化。完全なaccessible name / tooltip / Inspectorを保持し、native geometry testとbefore / afterで固定。Fixed |
+| P1 | Restore migration order | 復元候補のmigrationがactive DB切替後まで遅延し、失敗時に起動不能となり得た | Codex review thread / staged restore regression | staging path上でmigration・integrity・smokeを完了後にだけswap。失敗時にactive markerが残る回帰テスト。Fixed |
+| P1 | 410 full sync | token失効後のfull syncで一覧から消えた既存mappingを照合せず、remote削除を復活させ得た | Codex review thread / mock Google regression | 全ページのremote ID集合とmappingを同一transactionで照合。clean itemは削除、pending local editは削除競合として保持。Fixed |
+| P2 | Google credential cleanup | account / mapping削除後にkeyring削除が失敗するとcredential参照と再試行手段を失った | Codex review thread / injected keyring failure | keyring削除成功後だけDB transactionを実行。失敗時はaccount / Outbox / local sync stateを不変に固定。Fixed |
+| P2 | DST alarm observability | gap / ambiguityの自由アラームを無言でskipしていた | Codex review thread / Europe-Berlin fixtures | 安定delivery keyで1回だけ`skipped`記録し、診断UIでは内部categoryを日本語理由へ変換。列幅も固定。Fixed |
 
 ## 9. Evidence
 
@@ -124,6 +128,7 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 - After: `docs/evidence/issue-4/` の Today、List、narrow Settings、Template editor / library、Focus、Week、Compact、Data / Conflict screenshots（synthetic dataのみ）。
 - Short schedule before: [`overview`](../../evidence/issue-4/native-short-schedule-overview-before.png) / [`detail`](../../evidence/issue-4/native-short-schedule-detail-before.png)。30分予定の先頭1文字化とtitle / time clipを同じisolated fixtureで再現。
 - Short schedule after: [`overview`](../../evidence/issue-4/native-short-schedule-overview-after.png) / [`detail`](../../evidence/issue-4/native-short-schedule-detail-after.png)。marker化、1行title、選択Inspector、完全なaccessible nameを同じviewport / fixtureで確認。
+- Notification history before / after: [`raw category`](../../evidence/issue-4/native-notification-history-before.png) / [`user-facing reason`](../../evidence/issue-4/native-notification-history-after.png)。同じ1180×820 logical viewportとsynthetic台帳で、`dst_gap` から「DSTにより存在しない時刻のため見送り」への変換、4列の非圧縮表示を確認。
 - Native test: real Tauri / IPC / SQLite を macOS local で8 scenarios通過。30分予定はoverview marker、detail 1行化、完全なaccessible name、title / timeがカード上下端を越えないgeometryを検証。
 - Performance: [`startup-performance-macos-arm64.json`](../../evidence/issue-4/startup-performance-macos-arm64.json) と [`performance-500-macos-arm64.json`](../../evidence/issue-4/performance-500-macos-arm64.json) に測定定義、閾値、全30 sampleを保存。
 - Test data: `E2E予定-*` 等の synthetic label。account、calendar / event ID、token、local DB path を含まない。
@@ -132,10 +137,11 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 
 | Check | Result | Evidence |
 |---|---|---|
-| Rust all-feature suite | Pass, 57 tests | domain / DB / sync mock / cancellation / notification / backup / import / review regressions |
+| Rust all-feature suite | Pass, 62 tests | domain / DB / sync mock / cancellation / notification / backup / import / restore migration / 410 reconciliation / credential cleanup / DST regressions |
 | Frontend unit | Pass, 25 tests | UTC / Asia-Tokyo の双方、coverage report 87.35% statements; 30分予定のdensityと500件virtual windowを含む |
 | Accessibility | Pass, 2 tests | axe app shell / empty state |
 | Native E2E macOS | Pass, 8 scenarios | real IPC / SQLite、settings restart、pointer drag、bulk classification、30分予定のgeometry、500件budget + screenshots |
+| Notification history native E2E | Pass, 1 scenario | real IPC / SQLite台帳、DST category表示、1180×820 before / after screenshots |
 | 50k search | Pass | Rust integration target <150ms |
 | Release startup | Pass | macOS arm64 warm p95 392ms / fresh-profile p95 400ms、各30回 |
 | 500 item main-thread budget | Pass | 188 DOM、scroll p95 2ms / drag p95 0ms、各30回、16.7ms budget |

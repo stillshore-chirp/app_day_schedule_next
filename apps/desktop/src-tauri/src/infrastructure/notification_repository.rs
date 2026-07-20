@@ -1,4 +1,6 @@
-use chrono::{DateTime, Datelike, Days, Duration, LocalResult, NaiveTime, TimeZone, Utc};
+use chrono::{
+    DateTime, Datelike, Days, Duration, LocalResult, NaiveDateTime, NaiveTime, TimeZone, Utc,
+};
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -60,6 +62,7 @@ struct Candidate {
     body: String,
     os_notification: bool,
     sound: bool,
+    skip_reason: Option<&'static str>,
 }
 
 impl Database {
@@ -127,17 +130,24 @@ impl Database {
         for candidate in candidates {
             let rule_id = ensure_rule(&mut transaction, &candidate).await?;
             let delivery_key = delivery_key(&candidate);
+            let (initial_result, initial_error) = candidate
+                .skip_reason
+                .map_or(("failed", Some("delivery_pending")), |reason| {
+                    ("skipped", Some(reason))
+                });
             let result = sqlx::query(
-                "INSERT OR IGNORE INTO notification_deliveries(delivery_key, rule_id, occurrence_at_utc, result, attempted_at_utc, error_category) VALUES (?, ?, ?, 'failed', ?, 'delivery_pending')",
+                "INSERT OR IGNORE INTO notification_deliveries(delivery_key, rule_id, occurrence_at_utc, result, attempted_at_utc, error_category) VALUES (?, ?, ?, ?, ?, ?)",
             )
             .bind(&delivery_key)
             .bind(rule_id)
             .bind(candidate.occurrence_at.to_rfc3339())
+            .bind(initial_result)
             .bind(now.to_rfc3339())
+            .bind(initial_error)
             .execute(&mut *transaction)
             .await
             .map_err(|error| AppError::database("notification-claim", error))?;
-            if result.rows_affected() == 1 {
+            if result.rows_affected() == 1 && candidate.skip_reason.is_none() {
                 if candidate.os_notification || candidate.sound {
                     deliveries.push(NotificationDelivery {
                         delivery_key,
@@ -246,6 +256,7 @@ impl Database {
                         body: title.clone(),
                         os_notification: settings.os_notifications_enabled,
                         sound: settings.sound_notifications_enabled,
+                        skip_reason: None,
                     });
                 }
             }
@@ -262,6 +273,7 @@ impl Database {
                         body: title,
                         os_notification: settings.os_notifications_enabled,
                         sound: settings.sound_notifications_enabled,
+                        skip_reason: None,
                     });
                 }
             }
@@ -299,9 +311,17 @@ impl Database {
                     continue;
                 }
                 let local = date.and_time(time);
-                let occurrence = match timezone.from_local_datetime(&local) {
-                    LocalResult::Single(value) => value.with_timezone(&Utc),
-                    LocalResult::None | LocalResult::Ambiguous(_, _) => continue,
+                let (occurrence, skip_reason) = match timezone.from_local_datetime(&local) {
+                    LocalResult::Single(value) => (value.with_timezone(&Utc), None),
+                    LocalResult::None => {
+                        let Some(reference) = first_valid_instant_after(timezone, local) else {
+                            continue;
+                        };
+                        (reference, Some("dst_gap"))
+                    }
+                    LocalResult::Ambiguous(first, second) => {
+                        (first.min(second).with_timezone(&Utc), Some("dst_ambiguous"))
+                    }
                 };
                 if occurrence > after && occurrence <= now {
                     candidates.push(Candidate {
@@ -314,6 +334,7 @@ impl Database {
                         body: row.get("label"),
                         os_notification: settings.os_notifications_enabled,
                         sound: settings.sound_notifications_enabled,
+                        skip_reason,
                     });
                 }
             }
@@ -381,6 +402,7 @@ impl Database {
                             body: body.clone(),
                             os_notification: settings.os_notifications_enabled,
                             sound: settings.sound_notifications_enabled,
+                            skip_reason: None,
                         });
                     }
                 }
@@ -398,6 +420,7 @@ impl Database {
                             body: body.clone(),
                             os_notification: settings.os_notifications_enabled,
                             sound: settings.sound_notifications_enabled,
+                            skip_reason: None,
                         });
                     }
                 }
@@ -472,8 +495,20 @@ impl Database {
             .into(),
             os_notification: settings.os_notifications_enabled,
             sound: settings.sound_notifications_enabled,
+            skip_reason: None,
         }])
     }
+}
+
+fn first_valid_instant_after(timezone: Tz, local: NaiveDateTime) -> Option<DateTime<Utc>> {
+    (1..=2_880).find_map(|minutes| {
+        let candidate = local.checked_add_signed(Duration::minutes(minutes))?;
+        match timezone.from_local_datetime(&candidate) {
+            LocalResult::Single(value) => Some(value.with_timezone(&Utc)),
+            LocalResult::Ambiguous(first, second) => Some(first.min(second).with_timezone(&Utc)),
+            LocalResult::None => None,
+        }
+    })
 }
 
 async fn ensure_rule(
@@ -530,7 +565,7 @@ fn parse_datetime(value: &str) -> AppResult<DateTime<Utc>> {
 mod tests {
     use chrono::TimeZone;
 
-    use crate::domain::{Priority, QuickBlockDraft, ScheduleDraft, ScheduleStatus};
+    use crate::domain::{FreeAlarmDraft, Priority, QuickBlockDraft, ScheduleDraft, ScheduleStatus};
 
     use super::*;
 
@@ -635,6 +670,44 @@ mod tests {
         assert_eq!(database.poll_notifications(now).await.unwrap().len(), 1);
         set_last_check(&database, now - Duration::seconds(1), now).await;
         assert!(database.poll_notifications(now).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn free_alarm_dst_gap_and_ambiguity_are_recorded_as_skipped_once() {
+        for (now, expected_category) in [
+            (
+                Utc.with_ymd_and_hms(2026, 3, 29, 1, 0, 0).unwrap(),
+                "dst_gap",
+            ),
+            (
+                Utc.with_ymd_and_hms(2026, 10, 25, 0, 30, 0).unwrap(),
+                "dst_ambiguous",
+            ),
+        ] {
+            let database = Database::open_memory().await.unwrap();
+            database
+                .save_free_alarm(
+                    None,
+                    None,
+                    FreeAlarmDraft {
+                        label: "DST境界".into(),
+                        minute_of_day: 150,
+                        timezone_id: "Europe/Berlin".into(),
+                        weekdays_mask: 127,
+                        enabled: true,
+                    },
+                )
+                .await
+                .unwrap();
+            set_last_check(&database, now - Duration::seconds(1), now).await;
+
+            assert!(database.poll_notifications(now).await.unwrap().is_empty());
+            assert!(database.poll_notifications(now).await.unwrap().is_empty());
+            let ledger = database.notification_ledger().await.unwrap();
+            assert_eq!(ledger.len(), 1);
+            assert_eq!(ledger[0].result, "skipped");
+            assert_eq!(ledger[0].error_category.as_deref(), Some(expected_category));
+        }
     }
 
     async fn set_last_check(database: &Database, after: DateTime<Utc>, now: DateTime<Utc>) {

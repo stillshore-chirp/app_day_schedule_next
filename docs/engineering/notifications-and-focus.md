@@ -13,6 +13,7 @@
 - app start / schedule edit / permission change / resume / timezone change で再計算する。
 - one in-memory timer に依存せず、persistent ledger と reconciliation を使う。
 - callback は idempotent。
+- 自由アラームの wall-clock 時刻が DST gap / ambiguity に当たる場合は黙って補正も配信もせず、安定した delivery key で `skipped` と理由を台帳へ1回だけ記録する。
 
 ## 3. Sleep / resume / clock jump
 
@@ -57,6 +58,7 @@ transition は persisted timestamps、accumulated elapsed、cycle count、linked
 ## 8. Tests
 
 - duplicate callback、restart、resume、permission denied。
+- 自由アラームの DST gap / ambiguity が配信されず、理由付きで重複なく記録されること。
 - pause / resume repeated、stop from each state、break skip。
 - wall clock forward / backward、timezone change。
 - long sleep、grace boundary、max replay。

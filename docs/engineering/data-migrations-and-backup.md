@@ -39,6 +39,8 @@
 9. reopen and bootstrap。
 10. failure returns to original DB。If interruption leaves only the displacement file, the next startup restores it before applying another staged candidate。
 
+候補の migration、integrity check、smoke query は staging path 上で完了させ、active DB の displacement / rename より前に失敗を確定する。候補検証の失敗では active DB を変更しない。
+
 ## 5. Legacy Python app import
 
 Source expected tables may include `profiles`, `schedules`, `instant_schedules`, `free_alarms`。

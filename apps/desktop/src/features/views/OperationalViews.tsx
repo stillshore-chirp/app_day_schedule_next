@@ -1439,9 +1439,7 @@ export function DiagnosticsView({ client }: { client: AppClient }) {
                     <td>{new Date(item.occurrenceAt).toLocaleString(appLocale)}</td>
                     <td>{new Date(item.attemptedAt).toLocaleString(appLocale)}</td>
                     <td>{notificationResultLabel(item.result)}</td>
-                    <td>
-                      {item.errorCategory ?? translate("features.views.OperationalViews.235")}
-                    </td>
+                    <td>{notificationErrorLabel(item.errorCategory)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1464,6 +1462,21 @@ function notificationResultLabel(result: NotificationLedgerItem["result"]): stri
     failed: translate("features.views.OperationalViews.239"),
     expired: translate("features.views.OperationalViews.240"),
   }[result];
+}
+
+function notificationErrorLabel(category: string | null): string {
+  if (!category) return translate("features.views.OperationalViews.235");
+  return (
+    {
+      dst_gap: translate("features.views.OperationalViews.338"),
+      dst_ambiguous: translate("features.views.OperationalViews.339"),
+      channels_disabled: translate("features.views.OperationalViews.340"),
+      delivery_pending: translate("features.views.OperationalViews.341"),
+      permission_not_granted: translate("features.views.OperationalViews.342"),
+      os_notification_failed: translate("features.views.OperationalViews.343"),
+      sound_failed: translate("features.views.OperationalViews.344"),
+    }[category] ?? translate("features.views.OperationalViews.345")
+  );
 }
 
 function SyncOperationsPanel({ client }: { client: AppClient }) {

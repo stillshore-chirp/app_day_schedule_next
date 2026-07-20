@@ -46,7 +46,7 @@ network request を DB write transaction 中に待ちません。
 - page processing と new token 保存は一つの local transaction へまとめる。
 - incremental は同じ query shape と previous token を使う。
 - deleted events を含めて処理する。
-- 410 は対象 calendar の remote shadow と token を再構築する。
+- 410 は対象 calendar の remote shadow と token を再構築する。full sync の全ページに現れなかった既存 mapping は remote deletion として同じ transaction で照合し、未送信ローカル変更があれば削除競合として保持する。
 - full resync が local entity / pending Outbox を削除しない。
 
 ## 5. Push
@@ -92,6 +92,7 @@ base から local だけ変更、remote だけ変更は自動 merge。両方が�
 - manual sync は operation ID に紐づく cancel token を持つ。取消要求は page fetch 前後、Outbox item 間、pull transaction commit 前で検査する。remote write 完了後の取消では確定済み結果を保持し、未完了 Outbox を決定的 event ID で再試行する。
 - Undo / Redo は同一 transaction 内で過去版の未完了 Outbox を `superseded` として完了し、復元した entity に単調増加する version を与えて create / update / delete の補償操作を積み直す。
 - Google disconnect は account / mapping の削除前に未完了 Outbox を `disconnected` として完了し、その対象 entity を `local_only` へ戻す。別アカウントや別カレンダーへの再接続で古い操作を暗黙に転送しない。
+- Google disconnect は OS 秘密ストアの credential 削除が成功してから account / mapping を transaction で削除する。credential 削除に失敗した場合は接続 metadata、mapping、未完了 Outbox、ローカル予定を変更せず、再試行できる状態を保つ。
 
 ## 9. Tests
 

@@ -6,7 +6,10 @@ import "@wdio/tauri-service";
 
 const executable = process.platform === "win32" ? "day-schedule-next.exe" : "day-schedule-next";
 const appBinaryPath = path.resolve("../../target/debug", executable);
-const isolatedDataDirectory = mkdtempSync(path.join(tmpdir(), "day-schedule-native-e2e-"));
+const inheritedDataDirectory = process.env.DAY_SCHEDULE_TEST_DATA_DIR;
+const ownsIsolatedDataDirectory = !inheritedDataDirectory;
+const isolatedDataDirectory =
+  inheritedDataDirectory ?? mkdtempSync(path.join(tmpdir(), "day-schedule-native-e2e-"));
 process.env.DAY_SCHEDULE_TEST_DATA_DIR = isolatedDataDirectory;
 
 export const config: WebdriverIO.Config = {
@@ -39,6 +42,8 @@ export const config: WebdriverIO.Config = {
     await mkdir(path.resolve("./test-results"), { recursive: true });
   },
   onComplete: () => {
-    rmSync(isolatedDataDirectory, { recursive: true, force: true });
+    if (ownsIsolatedDataDirectory) {
+      rmSync(isolatedDataDirectory, { recursive: true, force: true });
+    }
   },
 };

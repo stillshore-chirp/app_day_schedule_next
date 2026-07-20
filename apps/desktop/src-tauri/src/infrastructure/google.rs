@@ -1,5 +1,7 @@
 use std::{
+    collections::HashSet,
     fs,
+    future::Future,
     path::Path,
     sync::atomic::{AtomicBool, Ordering},
     time::Duration as StdDuration,
@@ -429,6 +431,18 @@ impl Database {
     }
 
     pub async fn disconnect_google(&self, mode: DisconnectMode) -> AppResult<u64> {
+        self.disconnect_google_with(mode, delete_keyring).await
+    }
+
+    async fn disconnect_google_with<F, Fut>(
+        &self,
+        mode: DisconnectMode,
+        delete_credential: F,
+    ) -> AppResult<u64>
+    where
+        F: FnOnce(String) -> Fut,
+        Fut: Future<Output = AppResult<()>>,
+    {
         let account = sqlx::query(
             "SELECT id, credential_key FROM google_accounts WHERE status != 'disconnected' LIMIT 1",
         )
@@ -440,6 +454,9 @@ impl Database {
         };
         let account_id: String = account.get("id");
         let credential_key: Option<String> = account.get("credential_key");
+        if let Some(key) = credential_key {
+            delete_credential(key).await?;
+        }
         let mapped_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(DISTINCT schedule_item_id) FROM sync_mappings m JOIN google_calendars c ON c.id = m.calendar_id WHERE c.account_id = ?",
         )
@@ -493,9 +510,6 @@ impl Database {
             .commit()
             .await
             .map_err(|error| AppError::database("google-disconnect-commit", error))?;
-        if let Some(key) = credential_key {
-            delete_keyring(key).await?;
-        }
         Ok(mapped_count.max(0) as u64)
     }
 
@@ -1330,6 +1344,7 @@ async fn pull_one_calendar_at(
     let mut retried_full = false;
     loop {
         cancellation.check()?;
+        let is_full_sync = sync_token.is_none();
         let mut page_token: Option<String> = None;
         let mut final_sync_token: Option<String> = None;
         let mut staged_events = Vec::new();
@@ -1399,6 +1414,11 @@ async fn pull_one_calendar_at(
             .begin()
             .await
             .map_err(|error| AppError::database("sync-pull-begin", error))?;
+        let seen_remote_event_ids = staged_events
+            .iter()
+            .filter_map(|event| event.get("id").and_then(Value::as_str))
+            .map(str::to_owned)
+            .collect::<HashSet<_>>();
         for event in staged_events {
             cancellation.check()?;
             apply_remote_event(
@@ -1406,6 +1426,15 @@ async fn pull_one_calendar_at(
                 request.local_calendar_id,
                 request.access_role,
                 event,
+            )
+            .await?;
+        }
+        if is_full_sync {
+            reconcile_missing_remote_events(
+                &mut transaction,
+                request.local_calendar_id,
+                request.access_role,
+                &seen_remote_event_ids,
             )
             .await?;
         }
@@ -1429,6 +1458,37 @@ async fn pull_one_calendar_at(
             .map_err(|error| AppError::database("sync-pull-commit", error))?;
         return Ok(());
     }
+}
+
+async fn reconcile_missing_remote_events(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    calendar_id: &str,
+    access_role: &str,
+    seen_remote_event_ids: &HashSet<String>,
+) -> AppResult<()> {
+    let mapped_remote_event_ids: Vec<String> = sqlx::query_scalar(
+        "SELECT remote_event_id FROM sync_mappings WHERE calendar_id = ? ORDER BY remote_event_id",
+    )
+    .bind(calendar_id)
+    .fetch_all(&mut **transaction)
+    .await
+    .map_err(|error| AppError::database("sync-full-mapping-list", error))?;
+    for remote_event_id in mapped_remote_event_ids {
+        if seen_remote_event_ids.contains(&remote_event_id) {
+            continue;
+        }
+        apply_remote_event(
+            transaction,
+            calendar_id,
+            access_role,
+            serde_json::json!({
+                "id": remote_event_id,
+                "status": "cancelled",
+            }),
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 fn check_optional_cancellation(cancellation: Option<&OperationCancellation>) -> AppResult<()> {
@@ -2857,7 +2917,36 @@ mod tests {
     #[tokio::test]
     async fn expired_sync_token_retries_full_without_committing_the_stale_token() {
         let database = Database::open_memory().await.unwrap();
-        let calendar_id = seed_calendar(&database, Some("stale-token")).await;
+        let calendar_id = seed_calendar(&database, None).await;
+        let (initial_api_root, initial_server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [remote_event("removed-before-resync", "Removed remotely")],
+                "nextSyncToken": "initial-token"
+            }),
+        )])
+        .await;
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &initial_api_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        initial_server.await.unwrap();
+        sqlx::query("UPDATE google_calendars SET sync_token = 'stale-token' WHERE id = ?")
+            .bind(&calendar_id)
+            .execute(&database.pool)
+            .await
+            .unwrap();
         let (api_root, server) = spawn_http_sequence(vec![
             MockHttpResponse::json("410 Gone", serde_json::json!({ "error": "gone" })),
             MockHttpResponse::json(
@@ -2891,6 +2980,100 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(token, "fresh-token");
+        let deleted_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM schedule_items WHERE deleted_at_utc IS NOT NULL",
+        )
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert_eq!(deleted_count, 1);
+    }
+
+    #[tokio::test]
+    async fn full_resync_preserves_pending_local_edit_as_a_delete_conflict() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, None).await;
+        let (initial_api_root, initial_server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [remote_event("pending-local-event", "Remote base")],
+                "nextSyncToken": "initial-token"
+            }),
+        )])
+        .await;
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &initial_api_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        initial_server.await.unwrap();
+        let schedule_id: String =
+            sqlx::query_scalar("SELECT schedule_item_id FROM sync_mappings WHERE calendar_id = ?")
+                .bind(&calendar_id)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        let schedule_id = parse_uuid(&schedule_id).unwrap();
+        let schedule = database.schedule(schedule_id).await.unwrap();
+        let mut local_draft = schedule.draft;
+        local_draft.title = "Pending local edit".into();
+        database
+            .update_schedule(schedule_id, schedule.version, local_draft)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE google_calendars SET sync_token = 'stale-token' WHERE id = ?")
+            .bind(&calendar_id)
+            .execute(&database.pool)
+            .await
+            .unwrap();
+
+        let (api_root, server) = spawn_http_sequence(vec![
+            MockHttpResponse::json("410 Gone", serde_json::json!({ "error": "gone" })),
+            MockHttpResponse::json(
+                "200 OK",
+                serde_json::json!({ "items": [], "nextSyncToken": "fresh-token" }),
+            ),
+        ])
+        .await;
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: Some("stale-token"),
+                api_root: &api_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+
+        let preserved = database.schedule(schedule_id).await.unwrap();
+        assert_eq!(preserved.draft.title, "Pending local edit");
+        assert!(preserved.deleted_at.is_none());
+        assert_eq!(preserved.sync_status, SyncStatus::Conflict);
+        let conflict_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sync_conflicts WHERE schedule_item_id = ? AND status = 'unresolved'",
+        )
+        .bind(schedule_id.to_string())
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert_eq!(conflict_count, 1);
     }
 
     #[tokio::test]
@@ -3023,5 +3206,42 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(account_count, 0);
+    }
+
+    #[tokio::test]
+    async fn disconnect_keeps_account_and_local_state_when_keyring_deletion_fails() {
+        let database = Database::open_memory().await.unwrap();
+        seed_calendar(&database, None).await;
+        sqlx::query("UPDATE google_accounts SET credential_key = 'synthetic-key'")
+            .execute(&database.pool)
+            .await
+            .unwrap();
+        let schedule = database.create_schedule(local_draft()).await.unwrap();
+
+        let result = database
+            .disconnect_google_with(DisconnectMode::KeepLocal, |_| async {
+                Err(unavailable(
+                    "OS秘密ストアからGoogle認証情報を削除できません。",
+                    "接続は保持されています。OSの資格情報ストアを確認して再試行してください。",
+                ))
+            })
+            .await;
+
+        assert!(matches!(result, Err(AppError::Unavailable { .. })));
+        let account_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM google_accounts")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap();
+        let pending_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sync_outbox WHERE completed_at_utc IS NULL")
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        assert_eq!(account_count, 1);
+        assert_eq!(pending_count, 1);
+        assert_eq!(
+            database.schedule(schedule.id).await.unwrap().sync_status,
+            SyncStatus::Pending
+        );
     }
 }

@@ -356,8 +356,38 @@ impl Database {
             verify_database_file(&rollback).await?;
         }
         let swap = database_path.with_extension("sqlite3.restore-part");
+        if swap.exists() {
+            fs::remove_file(&swap)
+                .map_err(|error| AppError::database("restore-stale-swap-cleanup", error))?;
+        }
+        remove_sidecar(&swap, "-wal")?;
+        remove_sidecar(&swap, "-shm")?;
         fs::copy(&pending, &swap)
             .map_err(|error| AppError::database("restore-swap-copy", error))?;
+        verify_database_file(&swap).await?;
+        let candidate = Database::open(&swap).await.map_err(|_| AppError::Unavailable {
+            message: "バックアップを現在のデータ形式へ更新できませんでした。".into(),
+            recovery:
+                "現在のデータは切り替えていません。別のバックアップを選ぶか、診断情報を確認してください。"
+                    .into(),
+            retryable: false,
+        })?;
+        let (busy, _, _): (i64, i64, i64) = sqlx::query_as("PRAGMA wal_checkpoint(TRUNCATE)")
+            .fetch_one(&candidate.pool)
+            .await
+            .map_err(|error| AppError::database("restore-candidate-checkpoint", error))?;
+        if busy != 0 {
+            return Err(AppError::Unavailable {
+                message: "復元候補の更新を確定できませんでした。".into(),
+                recovery:
+                    "現在のデータは切り替えていません。アプリを再起動して復元をやり直してください。"
+                        .into(),
+                retryable: true,
+            });
+        }
+        candidate.pool.close().await;
+        remove_sidecar(&swap, "-wal")?;
+        remove_sidecar(&swap, "-shm")?;
         verify_database_file(&swap).await?;
         replace_existing_database(&swap, database_path)?;
         remove_sidecar(database_path, "-wal")?;
@@ -635,5 +665,80 @@ mod tests {
                         .contains("pre-restore")
                 })
         );
+    }
+
+    #[tokio::test]
+    async fn pending_restore_is_migrated_before_the_database_is_replaced() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("data.sqlite3");
+        let database = Database::open(&path).await.unwrap();
+        database.pool.close().await;
+
+        let backup_directory = directory.path().join("backups");
+        fs::create_dir_all(&backup_directory).unwrap();
+        let pending = backup_directory.join(PENDING_RESTORE_NAME);
+        let options = SqliteConnectOptions::new()
+            .filename(&pending)
+            .create_if_missing(true);
+        let mut connection = SqliteConnection::connect_with(&options).await.unwrap();
+        sqlx::raw_sql(include_str!("../../migrations/0001_initial.sql"))
+            .execute(&mut connection)
+            .await
+            .unwrap();
+        connection.close().await.unwrap();
+        let (_, hash) = verify_database_file(&pending).await.unwrap();
+        fs::write(backup_directory.join(PENDING_RESTORE_HASH_NAME), hash).unwrap();
+
+        assert!(Database::apply_pending_restore(&path).await.unwrap());
+        let restored = Database::open(&path).await.unwrap();
+        let schema: String =
+            sqlx::query_scalar("SELECT value FROM app_meta WHERE key = 'schema_version'")
+                .fetch_one(&restored.pool)
+                .await
+                .unwrap();
+        assert_eq!(schema, CURRENT_SCHEMA_VERSION.to_string());
+    }
+
+    #[tokio::test]
+    async fn failed_candidate_migration_keeps_the_active_database_unchanged() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("data.sqlite3");
+        let database = Database::open(&path).await.unwrap();
+        sqlx::query(
+            "INSERT INTO app_meta(key, value, updated_at_utc) VALUES ('active-marker', 'kept', ?)",
+        )
+        .bind(Utc::now().to_rfc3339())
+        .execute(&database.pool)
+        .await
+        .unwrap();
+        database.pool.close().await;
+
+        let backup_directory = directory.path().join("backups");
+        fs::create_dir_all(&backup_directory).unwrap();
+        let pending = backup_directory.join(PENDING_RESTORE_NAME);
+        let options = SqliteConnectOptions::new()
+            .filename(&pending)
+            .create_if_missing(true);
+        let mut connection = SqliteConnection::connect_with(&options).await.unwrap();
+        sqlx::raw_sql(include_str!("../../migrations/0001_initial.sql"))
+            .execute(&mut connection)
+            .await
+            .unwrap();
+        sqlx::query("ALTER TABLE schedule_items ADD COLUMN priority TEXT")
+            .execute(&mut connection)
+            .await
+            .unwrap();
+        connection.close().await.unwrap();
+        let (_, hash) = verify_database_file(&pending).await.unwrap();
+        fs::write(backup_directory.join(PENDING_RESTORE_HASH_NAME), hash).unwrap();
+
+        assert!(Database::apply_pending_restore(&path).await.is_err());
+        let active = Database::open(&path).await.unwrap();
+        let marker: String =
+            sqlx::query_scalar("SELECT value FROM app_meta WHERE key = 'active-marker'")
+                .fetch_one(&active.pool)
+                .await
+                .unwrap();
+        assert_eq!(marker, "kept");
     }
 }

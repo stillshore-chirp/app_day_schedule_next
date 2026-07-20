@@ -1804,6 +1804,32 @@ tbody tr:focus {
   color: var(--text-muted);
 }
 
+.notification-history table {
+  min-width: 760px;
+  table-layout: fixed;
+}
+
+.notification-history th:nth-child(1),
+.notification-history th:nth-child(2) {
+  width: 23%;
+}
+
+.notification-history th:nth-child(3) {
+  width: 14%;
+}
+
+.notification-history th:nth-child(4) {
+  width: 40%;
+}
+
+.notification-history td:nth-child(-n + 3) {
+  white-space: nowrap;
+}
+
+.notification-history td:nth-child(4) {
+  overflow-wrap: anywhere;
+}
+
 .library-view {
   display: grid;
   gap: 22px;
