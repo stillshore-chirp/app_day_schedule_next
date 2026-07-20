@@ -1,19 +1,24 @@
 name: Dependency audit
 
 on:
-  push:
-    branches:
-      - main
-      - codex/**
   pull_request:
     branches:
       - main
+    paths:
+      - package.json
+      - apps/desktop/package.json
+      - pnpm-lock.yaml
+      - Cargo.toml
+      - Cargo.lock
+      - apps/desktop/src-tauri/Cargo.toml
+      - deny.toml
+      - .github/workflows/dependency-audit.yml
   workflow_dispatch:
   schedule:
-    - cron: "41 17 * * 2"
+    - cron: "41 17 1 * *"
 
 concurrency:
-  group: dependency-audit-${{ github.ref }}
+  group: dependency-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -23,11 +28,7 @@ jobs:
   dependency-audit:
     name: Known vulnerabilities, licenses and sources
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      checks: write
-      issues: write
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -43,13 +44,7 @@ jobs:
           corepack prepare pnpm@10.13.1 --activate
       - name: Audit JavaScript dependencies
         run: pnpm audit --audit-level moderate
-      - name: Install Rust advisory scanner
-        run: cargo install cargo-audit --version 0.22.2 --locked
-      - name: Audit Rust advisories
-        # sqlx 0.8 keeps its disabled MySQL/RSA optional package in Cargo.lock.
-        # cargo-deny below audits the actual macOS/Windows target graphs without this exception.
-        run: cargo audit --ignore RUSTSEC-2023-0071
-      - name: Verify Rust licenses and sources
+      - name: Verify Rust advisories, licenses and sources
         uses: EmbarkStudios/cargo-deny-action@v2.1.1
         with:
           rust-version: "1.89.0"

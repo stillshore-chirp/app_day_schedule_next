@@ -52,7 +52,7 @@ VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --feature
 pnpm test:e2e
 ```
 
-CI は macOS arm64、macOS x64、Windows x64 で Rust test、Tauri debug installer build、ネイティブ E2E を実行します。詳細は [`docs/testing/index.md`](docs/testing/index.md) と [`docs/release-quality-gates.md`](docs/release-quality-gates.md) にあります。
+個人利用向けに、PR CI は harness / frontend と、native 影響時の macOS arm64 Rust test・通常 Tauri no-bundle build に絞っています。macOS x64 / Windows、ネイティブ E2E、unsigned installer は手動の `Native release validation` workflow で対象を選び、実際に利用またはrelease判断する時だけ実行します。詳細は [`docs/testing/index.md`](docs/testing/index.md) と [`docs/release-quality-gates.md`](docs/release-quality-gates.md) にあります。
 
 ## データとセキュリティ
 
@@ -78,4 +78,4 @@ CI は macOS arm64、macOS x64、Windows x64 で Rust test、Tauri debug install
 
 ## ライセンス
 
-MIT License。依存ライセンスと既知 advisory は `deny.toml` と Dependency audit workflow で継続監査します。
+MIT License。依存ライセンスと既知 advisory は `deny.toml` と、依存変更PR・月次・手動で動く Dependency audit workflow で継続監査します。

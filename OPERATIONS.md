@@ -82,8 +82,9 @@ pnpm tauri:build:debug
 
 ## リリース
 
-- CI は macOS arm64、macOS x64、Windows x64 で Rust test と unsigned debug installer build を行います。
-- Native E2E は同じ3環境で synthetic fixture だけを使用します。
+- PR CI は重複するpush実行を作らず、harness / frontend と、native影響時のmacOS arm64 Rust test・通常Tauri no-bundle buildを行います。
+- macOS x64 / Windows、Native E2E、unsigned debug installerは `Native release validation` workflowで対象を選択します。普段は実際に使うmacOS arm64だけ、release判断時は`all`と`build_installers=true`を指定します。
+- Dependency auditは依存ファイル変更PR、月1回、手動実行に限定します。Dependabotのversion updateも3 ecosystemを月次groupにします。
 - 個人利用でも、対象 OS で install、launch、quit、tray、window、notification、credential store、OAuth loopback、backup / restore を観測します。
 - unsigned build の警告を隠しません。署名・公証・code signing を導入するまで第三者向け正式配布物と呼びません。
 - signing secret、証明書、credential JSON は repository / artifact へ置きません。

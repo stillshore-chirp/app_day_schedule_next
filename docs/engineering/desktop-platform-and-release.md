@@ -25,7 +25,9 @@ pnpm build
 pnpm tauri:build:debug
 ```
 
-CI は3 platform で format、clippy、all-feature test、debug bundle を生成します。Native E2E は別 workflow で E2E 専用 identifier `com.stillshorechirp.dayschedulenext.e2e` と feature を使い、通常 bundle に WebDriver plugin を含めません。
+PR CI は全PRでharness / frontendを実行し、`apps/desktop`、Rust workspace、lockfile等に変更がある場合だけ、個人利用の主対象である`macos-15`でformat、clippy、all-feature test、通常identifierのno-bundle buildを実行します。open PRへのpushと`pull_request`の二重起動、毎回のinstaller artifact生成は行いません。
+
+macOS x64 / Windows、Native E2E、installer生成は `Native release validation` の手動入力へ移します。通常は`macos-arm64`だけを選択し、release判断時は`platform=all`、`build_installers=true`で3 platformを検証します。Native E2Eは専用identifier `com.stillshorechirp.dayschedulenext.e2e` とfeatureを使い、通常bundleにWebDriver pluginを含めません。失敗診断とinstaller artifactは7日で失効します。
 
 ## 3. Tauri security
 
@@ -79,7 +81,7 @@ window state は logical label で保存し、main / Compact の always-on-top �
 
 1. [`docs/release-quality-gates.md`](../release-quality-gates.md) を埋める。
 2. dependency audit、public text scan、CSP / capability review を通す。
-3. macOS arm64 / x64、Windows x64 の latest commit CI と native E2E を確認する。
+3. latest commit のPR quality / macOS arm64 native smokeを確認し、`Native release validation`を`platform=all`、`build_installers=true`で実行してmacOS arm64 / x64、Windows x64のnative E2Eとinstallerを確認する。
 4. 対象 OS で clean install、launch、single instance、tray、Compact、notification、credential store、OAuth loopback、backup / restore、upgrade / uninstall を観測する。
 5. 200% text、OS scaling、multi-monitor はリスクに応じて観測し、未実行を明示する。
 6. artifact 名、SHA、version、source commit、観測者、日付を release note に残す。

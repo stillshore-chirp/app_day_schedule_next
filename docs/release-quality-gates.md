@@ -68,7 +68,8 @@ Day Schedule Next を「出荷可能」と呼ぶための最終ゲートです�
 - reachable TODO / dummy / panic / swallowed error / unconnected UI がない。
 - disabled control に理由と有効化条件がある。
 - test skip / allow / capability exception に追跡理由がある。
-- CI success、Codex review、review threads resolved。
+- PR quality / native smoke CI success。release判断では手動の全platform native E2E / installer workflowもsuccess。
+- Codex review、review threads resolved。
 
 ## 判定
 

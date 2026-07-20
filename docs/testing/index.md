@@ -29,7 +29,7 @@ pnpm tauri:build:debug
 git diff --check
 ```
 
-`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。
+`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎます。
 
 ## 3. Frontend unit / accessibility
 
@@ -83,7 +83,9 @@ pnpm test:e2e
 - 30分予定のoverview marker、detail 1行density、完全なaccessible name、title / timeのcard内geometry
 - 専用一時DBへ500予定を実IPCで投入し、仮想化DOM上限とscroll / dragのmain-thread 16.7ms budgetを各30回測定
 
-CI は `macos-15`、`macos-15-intel`、`windows-latest` で同じ suite を実行します。失敗時は screenshot とマスク対象を確認した log を artifact にします。macOS arm64 では続けて `scripts/compare-visual-snapshots.swift` を実行し、Today、Week、Template、Compact、Conflict を channel差32・不一致pixel 4%の許容差で比較します。超過時は赤い差分PNGを artifact に残し、意図した変更だけ baseline 更新としてレビューします。
+Native E2E はPRごとには起動しません。`Native release validation` workflowで`macos-arm64`、`macos-x64`、`windows-x64`、`all`から対象を選びます。通常の個人利用確認はmacOS arm64、release判断は`all`です。失敗時だけscreenshotとマスク対象を確認したlogを7日間artifactにします。macOS arm64では続けて`scripts/compare-visual-snapshots.swift`を実行し、Today、Week、Template、Compact、Conflictをchannel差32・不一致pixel 4%の許容差で比較します。超過時は赤い差分PNGを確認し、意図した変更だけbaseline更新としてレビューします。
+
+`build_installers=true`を指定した場合だけ、E2E成功後にWebDriver pluginを含まない通常identifierのunsigned debug installerを作り、7日間保持します。
 
 ## 6. Dependency / source security
 
@@ -92,7 +94,7 @@ pnpm audit --audit-level moderate
 cargo deny --all-features check advisories licenses sources
 ```
 
-Dependency audit workflow は上記に加えて RustSec audit を定期実行します。`deny.toml` の advisory ignore は、Tauri の transitive dependency に安全な upgrade がない例外だけを理由付きで限定します。Tauri 更新時に必ず再評価します。
+Dependency audit workflow は依存ファイル変更PR、月1回、手動実行で上記を確認します。Rust advisoryは`cargo-deny`へ一本化し、毎回の`cargo install cargo-audit`と重複判定を削除します。`deny.toml`のadvisory ignoreは、Tauriのtransitive dependencyに安全なupgradeがない例外だけを理由付きで限定し、Tauri更新時に必ず再評価します。
 
 ## 7. Visual / state matrix
 
@@ -130,9 +132,9 @@ warm profile は未計測の1回で事前起動後に同じsynthetic profileを3
 
 | Check | macOS arm64 | macOS x64 | Windows x64 |
 |---|---:|---:|---:|
-| compile / Rust test | CI required | CI required | CI required |
-| native IPC E2E | CI required | CI required | CI required |
-| unsigned installer artifact | CI required | CI required | CI required |
+| compile / Rust test | native変更PRで自動 | release時に手動 | release時に手動 |
+| native IPC E2E | release時に手動 | release時に手動 | release時に手動 |
+| unsigned installer artifact | 必要時に手動 | 必要時に手動 | 必要時に手動 |
 | clean install / launch / quit | release manual | release manual | release manual |
 | Keychain / Credential Manager | release manual | release manual | release manual |
 | notification permission / delivery | release manual | release manual | release manual |
@@ -141,7 +143,7 @@ warm profile は未計測の1回で事前起動後に同じsynthetic profileを3
 | sleep / resume / clock jump | release manual | risk-based | release manual |
 | high DPI / multi-monitor / uninstall | risk-based | risk-based | risk-based |
 
-Build successだけでは実機権限と OS lifecycle を検証したことになりません。release 判定では CI URL、artifact、実機観測者、日付を記録します。
+全PRでharness / frontend quality gateは自動実行します。private repositoryの個人利用ではbranch protectionを利用できない場合があるため、merge前にPRの`Quality gate`と、native変更時の`Native smoke (macOS arm64)`を人が確認します。Build successだけでは実機権限とOS lifecycleを検証したことになりません。release判定では手動workflow URL、artifact、実機観測者、日付を記録します。
 
 ## 10. Evidence
 

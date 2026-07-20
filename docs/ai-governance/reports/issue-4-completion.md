@@ -154,7 +154,7 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 - [x] `codex/complete-v1-spec` branch.
 - [x] Changes committed and pushed.
 - [x] Non-draft PR #5 exists.
-- [ ] Latest head CI successful on macOS arm64 / x64 and Windows x64.
+- [ ] Latest headのPR quality / macOS arm64 native smokeと、手動release validation（all platform）が成功。
 - [ ] Codex review and unresolved review threads checked after CI.
 - [ ] Clean install / permission / keyring / OAuth / sleep manual matrix recorded.
 
@@ -164,10 +164,10 @@ Primary action は Today の「＋予定」、date / sync / current-next は固�
 |---|---|---|---|
 | Windows Credential Manager / notification / OAuth real flow | Windows実機なし | OS adapter / permission差 | Windows release smoke |
 | macOS x64 Keychain / notification / OAuth | x64実機なし | Rosetta / x64 adapter差 | x64 release smoke |
-| clean installer upgrade / uninstall | unsigned CI artifactは生成、clean install未実施 | bundle / data retention差 | CI artifactでmanual smoke |
+| clean installer upgrade / uninstall | local macOS arm64 DMGのみ生成、手動all-platform workflow未実施 | bundle / data retention差 | `platform=all`、`build_installers=true`のartifactでmanual smoke |
 | sleep / resume / clock jump actual OS | deterministic testsのみ | lifecycle delivery差 | 10分以内／超の実機sleep test |
 | 200% text / high DPI / multi-monitor | local automated suite対象外 | clipping / window restore | platform visual matrix |
-| macOS arm64 pixel baseline local比較 | 現在のdesktop captureが1440×920、CI baselineが1024×681で寸法不一致 | 通常Today surfaceのpixel差分はlatest CIでのみ判定 | macOS arm64 CIのvisual comparisonを確認 |
+| macOS arm64 pixel baseline local比較 | 現在のdesktop captureが1440×920、baselineが1024×681で寸法不一致 | 通常Today surfaceのpixel差分は手動native release validationで判定 | macOS arm64 visual comparisonを手動実行 |
 | signed / notarized distribution | personal unsigned v0.1 scope | OS reputation warning | signing Issue before third-party release |
 
 これらは実装を「存在する release candidate」とすることは妨げませんが、すべてが観測されるまで「即出荷可能」「Complete」とは判定しません。
