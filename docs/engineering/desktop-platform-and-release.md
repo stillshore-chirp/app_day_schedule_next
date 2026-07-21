@@ -25,6 +25,8 @@ pnpm build
 pnpm tauri:build:debug
 ```
 
+ローカルで利用するアプリを生成する場合は、repository root で上記のうち `corepack enable`、依存関係の install、`pnpm tauri:build:debug` を順に実行します。生成物は `target/debug/bundle/` 以下の実行 OS 用ディレクトリに作られます。この手順は手元で利用するアプリの生成だけを対象とし、公開用 artifact の作成や第三者への配布準備を意味しません。
+
 PR CI は全PRでharness / frontendを実行し、`apps/desktop`、Rust workspace、lockfile等に変更がある場合だけ、個人利用の主対象である`macos-15`でformat、clippy、all-feature test、通常identifierのno-bundle buildを実行します。open PRへのpushと`pull_request`の二重起動、毎回のinstaller artifact生成は行いません。
 
 macOS x64 / Windows、Native E2E、installer生成は `Native release validation` の手動入力へ移します。通常は`macos-arm64`だけを選択し、release判断時は`platform=all`、`build_installers=true`で3 platformを検証します。Native E2Eは専用identifier `com.stillshorechirp.dayschedulenext.e2e` とfeatureを使い、通常bundleにWebDriver pluginを含めません。失敗診断とinstaller artifactは7日で失効します。
