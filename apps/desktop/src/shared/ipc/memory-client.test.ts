@@ -221,7 +221,7 @@ describe("MemoryAppClient", () => {
     expect((await client.exportData("/tmp/example.json", crypto.randomUUID())).fileName).toBe(
       "example.json",
     );
-    expect((await client.previewImport()).formatVersion).toBe(1);
+    expect((await client.previewImport()).formatVersion).toBe(2);
     expect((await client.importData()).importedScheduleCount).toBe(0);
     expect((await client.previewLegacyImport()).excluded).toContain("旧ウィンドウ位置");
     expect((await client.importLegacy()).selectedTemplateId).toBeTruthy();

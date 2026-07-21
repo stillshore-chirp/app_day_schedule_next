@@ -855,6 +855,8 @@ function DataTransferPanel({ client }: { client: AppClient }) {
           exported.fileName,
           exported.scheduleCount,
           exported.templateCount,
+          exported.timerCount,
+          exported.timerSetCount,
         ]),
       );
     } catch (caught) {
@@ -1002,6 +1004,10 @@ function DataTransferPanel({ client }: { client: AppClient }) {
           {result.importedQuickBlockCount}
           {translate("features.views.OperationalViews.141")}
           {result.importedAlarmCount}
+          {translate("features.views.OperationalViews.346")}
+          {result.importedTimerCount}
+          {translate("features.views.OperationalViews.347")}
+          {result.importedTimerSetCount}
           {translate("features.views.OperationalViews.142")}
           {result.preservedExternalScheduleCount > 0
             ? translate("features.views.OperationalViews.143", [
@@ -1058,6 +1064,20 @@ function DataTransferPanel({ client }: { client: AppClient }) {
               <dd>
                 {preview.alarmCount}
                 {translate("features.views.OperationalViews.154")}
+              </dd>
+            </div>
+            <div>
+              <dt>{translate("features.views.OperationalViews.348")}</dt>
+              <dd>
+                {preview.timerCount}
+                {translate("features.views.OperationalViews.149")}
+              </dd>
+            </div>
+            <div>
+              <dt>{translate("features.views.OperationalViews.349")}</dt>
+              <dd>
+                {preview.timerSetCount}
+                {translate("features.views.OperationalViews.149")}
               </dd>
             </div>
           </dl>
@@ -1475,6 +1495,7 @@ function notificationErrorLabel(category: string | null): string {
       permission_not_granted: translate("features.views.OperationalViews.342"),
       os_notification_failed: translate("features.views.OperationalViews.343"),
       sound_failed: translate("features.views.OperationalViews.344"),
+      replay_limit: translate("features.views.OperationalViews.350"),
     }[category] ?? translate("features.views.OperationalViews.345")
   );
 }

@@ -6,6 +6,7 @@ pub mod recurrence;
 pub mod schedule;
 pub mod sync;
 pub mod time;
+pub mod timer;
 
 pub use error::{AppError, AppResult, UserSafeError};
 pub use focus::validate_transition as validate_focus_transition;
@@ -23,3 +24,8 @@ pub use schedule::{
 };
 pub use sync::{SyncSummary, SyncSummaryState};
 pub use time::{LocalTimeResolution, resolve_local_time};
+pub use timer::{
+    StopwatchCommand, StopwatchState, StopwatchStatus, TimerCommand, TimerDraft, TimerSet,
+    TimerSetItem, TimerState, TimerStatus, normalize_timer_set_name, validate_stopwatch_transition,
+    validate_timer_transition,
+};

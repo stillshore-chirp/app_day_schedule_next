@@ -40,6 +40,12 @@ import {
   type VersionedSave,
   type TemplatePreview,
   type TemplateTarget,
+  type Timer,
+  type TimerCommand,
+  type TimerDraft,
+  type TimerSet,
+  type Stopwatch,
+  type StopwatchCommand,
 } from "../contracts";
 import { fromZonedTime } from "date-fns-tz";
 import type { AppClient, DiagnosticsSnapshot } from "./client";
@@ -185,6 +191,11 @@ export class MemoryAppClient implements AppClient {
     cycle: 0,
     linkedScheduleId: null,
   };
+  private timers: Timer[] = [];
+  private timerRunAnchors = new Map<string, { startedAt: number; elapsedAtStart: number }>();
+  private timerSets: TimerSet[] = [];
+  private stopwatchState: Stopwatch = { status: "idle", elapsedSeconds: 0, version: 0 };
+  private stopwatchAnchor: { startedAt: number; elapsedAtStart: number } | null = null;
 
   constructor(schedules = syntheticSchedules(new Date())) {
     this.schedules = structuredClone(schedules);
@@ -193,7 +204,7 @@ export class MemoryAppClient implements AppClient {
   async bootstrap(): Promise<Bootstrap> {
     const now = new Date();
     return {
-      schemaVersion: 10,
+      schemaVersion: 11,
       appVersion: "0.1.0-test",
       today: now.toISOString().slice(0, 10),
       timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo",
@@ -397,6 +408,189 @@ export class MemoryAppClient implements AppClient {
     return { scheduleItemId, workSeconds: 0 };
   }
 
+  async listTimers(): Promise<Timer[]> {
+    this.refreshTimers();
+    return structuredClone(this.timers);
+  }
+
+  async createTimer(draft: TimerDraft): Promise<Timer> {
+    if (!Number.isInteger(draft.durationSeconds) || draft.durationSeconds < 1) {
+      throw new Error("invalid_timer_duration");
+    }
+    const created: Timer = {
+      id: crypto.randomUUID(),
+      label: draft.label.trim(),
+      durationSeconds: draft.durationSeconds,
+      status: "idle",
+      elapsedSeconds: 0,
+      remainingSeconds: draft.durationSeconds,
+      version: 0,
+    };
+    this.timers.push(created);
+    return structuredClone(created);
+  }
+
+  async updateTimer(id: string, expectedVersion: number, draft: TimerDraft): Promise<Timer> {
+    this.refreshTimers();
+    const timer = this.requireTimer(id, expectedVersion);
+    if (timer.status === "running" || timer.status === "paused") {
+      throw new Error("timer_is_active");
+    }
+    timer.label = draft.label.trim();
+    timer.durationSeconds = draft.durationSeconds;
+    timer.status = "idle";
+    timer.elapsedSeconds = 0;
+    timer.remainingSeconds = draft.durationSeconds;
+    timer.version += 1;
+    return structuredClone(timer);
+  }
+
+  async deleteTimer(id: string, expectedVersion: number): Promise<void> {
+    const timer = this.requireTimer(id, expectedVersion);
+    this.timerRunAnchors.delete(timer.id);
+    this.timers = this.timers.filter((item) => item.id !== id);
+  }
+
+  async timerCommand(id: string, expectedVersion: number, command: TimerCommand): Promise<Timer> {
+    this.refreshTimers();
+    const timer = this.requireTimer(id, expectedVersion);
+    const now = Date.now();
+    if (command === "start" && (timer.status === "idle" || timer.status === "completed")) {
+      timer.status = "running";
+      timer.elapsedSeconds = 0;
+      timer.remainingSeconds = timer.durationSeconds;
+      this.timerRunAnchors.set(id, { startedAt: now, elapsedAtStart: 0 });
+    } else if (command === "pause" && timer.status === "running") {
+      timer.status = "paused";
+      this.timerRunAnchors.delete(id);
+    } else if (command === "resume" && timer.status === "paused") {
+      timer.status = "running";
+      this.timerRunAnchors.set(id, { startedAt: now, elapsedAtStart: timer.elapsedSeconds });
+    } else if (command === "reset") {
+      timer.status = "idle";
+      timer.elapsedSeconds = 0;
+      timer.remainingSeconds = timer.durationSeconds;
+      this.timerRunAnchors.delete(id);
+    } else {
+      throw new Error("invalid_timer_transition");
+    }
+    timer.version += 1;
+    return structuredClone(timer);
+  }
+
+  async listTimerSets(): Promise<TimerSet[]> {
+    return structuredClone(this.timerSets);
+  }
+
+  async createTimerSet(name: string): Promise<TimerSet> {
+    const normalized = name.trim();
+    if (!normalized || this.timers.length === 0) throw new Error("invalid_timer_set");
+    if (
+      this.timerSets.some(
+        (item) => item.name.toLocaleLowerCase() === normalized.toLocaleLowerCase(),
+      )
+    ) {
+      throw new Error("timer_set_name_conflict");
+    }
+    const created: TimerSet = {
+      id: crypto.randomUUID(),
+      name: normalized,
+      version: 0,
+      items: this.timers.map((timer, index) => ({
+        label: timer.label,
+        durationSeconds: timer.durationSeconds,
+        sortOrder: index,
+      })),
+    };
+    this.timerSets.push(created);
+    return structuredClone(created);
+  }
+
+  async applyTimerSet(id: string, expectedVersion: number): Promise<Timer[]> {
+    const set = this.timerSets.find((item) => item.id === id);
+    if (!set || set.version !== expectedVersion) throw new Error("timer_set_version_conflict");
+    const created: Timer[] = [];
+    for (const item of set.items) {
+      created.push(
+        await this.createTimer({ label: item.label, durationSeconds: item.durationSeconds }),
+      );
+    }
+    return created;
+  }
+
+  async deleteTimerSet(id: string, expectedVersion: number): Promise<void> {
+    const set = this.timerSets.find((item) => item.id === id);
+    if (!set || set.version !== expectedVersion) throw new Error("timer_set_version_conflict");
+    this.timerSets = this.timerSets.filter((item) => item.id !== id);
+  }
+
+  async stopwatch(): Promise<Stopwatch> {
+    this.refreshStopwatch();
+    return structuredClone(this.stopwatchState);
+  }
+
+  async stopwatchCommand(expectedVersion: number, command: StopwatchCommand): Promise<Stopwatch> {
+    this.refreshStopwatch();
+    if (this.stopwatchState.version !== expectedVersion) {
+      throw new Error("stopwatch_version_conflict");
+    }
+    const now = Date.now();
+    if (command === "start" && this.stopwatchState.status === "idle") {
+      this.stopwatchState.status = "running";
+      this.stopwatchState.elapsedSeconds = 0;
+      this.stopwatchAnchor = { startedAt: now, elapsedAtStart: 0 };
+    } else if (command === "pause" && this.stopwatchState.status === "running") {
+      this.stopwatchState.status = "paused";
+      this.stopwatchAnchor = null;
+    } else if (command === "resume" && this.stopwatchState.status === "paused") {
+      this.stopwatchState.status = "running";
+      this.stopwatchAnchor = {
+        startedAt: now,
+        elapsedAtStart: this.stopwatchState.elapsedSeconds,
+      };
+    } else if (command === "reset") {
+      this.stopwatchState.status = "idle";
+      this.stopwatchState.elapsedSeconds = 0;
+      this.stopwatchAnchor = null;
+    } else {
+      throw new Error("invalid_stopwatch_transition");
+    }
+    this.stopwatchState.version += 1;
+    return structuredClone(this.stopwatchState);
+  }
+
+  private refreshTimers(): void {
+    const now = Date.now();
+    for (const timer of this.timers) {
+      if (timer.status !== "running") continue;
+      const anchor = this.timerRunAnchors.get(timer.id);
+      if (!anchor) continue;
+      timer.elapsedSeconds = Math.min(
+        timer.durationSeconds,
+        anchor.elapsedAtStart + Math.floor((now - anchor.startedAt) / 1000),
+      );
+      timer.remainingSeconds = timer.durationSeconds - timer.elapsedSeconds;
+      if (timer.remainingSeconds === 0) {
+        timer.status = "completed";
+        timer.version += 1;
+        this.timerRunAnchors.delete(timer.id);
+      }
+    }
+  }
+
+  private refreshStopwatch(): void {
+    if (this.stopwatchState.status !== "running" || !this.stopwatchAnchor) return;
+    this.stopwatchState.elapsedSeconds =
+      this.stopwatchAnchor.elapsedAtStart +
+      Math.floor((Date.now() - this.stopwatchAnchor.startedAt) / 1000);
+  }
+
+  private requireTimer(id: string, expectedVersion: number): Timer {
+    const timer = this.timers.find((item) => item.id === id);
+    if (!timer || timer.version !== expectedVersion) throw new Error("timer_version_conflict");
+    return timer;
+  }
+
   async runSync(operationId: string): Promise<SyncSummary> {
     void operationId;
     return this.syncSummary();
@@ -426,7 +620,7 @@ export class MemoryAppClient implements AppClient {
   async diagnostics(): Promise<DiagnosticsSnapshot> {
     return {
       appVersion: "0.1.0-test",
-      schemaVersion: 10,
+      schemaVersion: 11,
       databaseState: "ready",
       scheduleCount: this.schedules.filter((item) => item.deletedAt === null).length,
       deletedCount: this.schedules.filter((item) => item.deletedAt !== null).length,
@@ -616,6 +810,8 @@ export class MemoryAppClient implements AppClient {
       templateCount: this.templates.length,
       quickBlockCount: this.quickBlocks.length,
       alarmCount: this.freeAlarms.length,
+      timerCount: this.timers.length,
+      timerSetCount: this.timerSets.length,
     };
   }
 
@@ -633,6 +829,11 @@ export class MemoryAppClient implements AppClient {
       }));
     this.quickBlocks = [];
     this.freeAlarms = [];
+    this.timers = [];
+    this.timerSets = [];
+    this.timerRunAnchors.clear();
+    this.stopwatchState = { status: "idle", elapsedSeconds: 0, version: 0 };
+    this.stopwatchAnchor = null;
     this.settings = {
       theme: "system",
       locale: "ja",
@@ -665,13 +866,15 @@ export class MemoryAppClient implements AppClient {
   async previewImport(): Promise<ImportPreview> {
     return {
       fingerprint: "0".repeat(64),
-      formatVersion: 1,
+      formatVersion: 2,
       createdAt: new Date().toISOString(),
       sourceTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       scheduleCount: 0,
       templateCount: 0,
       quickBlockCount: 0,
       alarmCount: 0,
+      timerCount: this.timers.length,
+      timerSetCount: this.timerSets.length,
       warnings: [translate("shared.ipc.memory-client.016")],
     };
   }
@@ -682,6 +885,8 @@ export class MemoryAppClient implements AppClient {
       importedTemplateCount: 0,
       importedQuickBlockCount: 0,
       importedAlarmCount: 0,
+      importedTimerCount: 0,
+      importedTimerSetCount: 0,
       preservedExternalScheduleCount: 0,
     };
   }
@@ -722,7 +927,7 @@ export class MemoryAppClient implements AppClient {
       id: crypto.randomUUID(),
       fileName: "synthetic-backup.sqlite3",
       sizeBytes: 0,
-      schemaVersion: 10,
+      schemaVersion: 11,
       appVersion: "demo",
       verified: true,
       createdAt: new Date().toISOString(),

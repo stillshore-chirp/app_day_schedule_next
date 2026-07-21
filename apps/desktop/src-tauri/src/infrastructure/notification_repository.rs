@@ -1,5 +1,6 @@
 use chrono::{
-    DateTime, Datelike, Days, Duration, LocalResult, NaiveDateTime, NaiveTime, TimeZone, Utc,
+    DateTime, Datelike, Days, Duration, LocalResult, NaiveDateTime, NaiveTime, SecondsFormat,
+    TimeZone, Utc,
 };
 use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
@@ -115,11 +116,23 @@ impl Database {
             self.free_alarm_candidates(last_check, now, &settings)
                 .await?,
         );
+        candidates.extend(self.timer_candidates(last_check, now, &settings).await?);
         if settings.focus_notifications_enabled {
             candidates.extend(self.focus_candidates(last_check, now, &settings).await?);
         }
         candidates.sort_by_key(|candidate| candidate.occurrence_at);
-        candidates.truncate(usize::from(settings.notification_max_replay));
+        let max_replay = usize::from(settings.notification_max_replay);
+        let mut replay_count = 0;
+        for candidate in &mut candidates {
+            if candidate.skip_reason.is_some() {
+                continue;
+            }
+            if replay_count < max_replay {
+                replay_count += 1;
+            } else {
+                candidate.skip_reason = Some("replay_limit");
+            }
+        }
 
         let mut transaction = self
             .pool
@@ -498,6 +511,43 @@ impl Database {
             skip_reason: None,
         }])
     }
+
+    async fn timer_candidates(
+        &self,
+        after: DateTime<Utc>,
+        now: DateTime<Utc>,
+        settings: &Settings,
+    ) -> AppResult<Vec<Candidate>> {
+        let rows = sqlx::query(
+            "SELECT run_id, label, completed_at_utc FROM timer_run_completions WHERE completed_at_utc > ? AND completed_at_utc <= ? ORDER BY completed_at_utc, run_id",
+        )
+        .bind(after.to_rfc3339_opts(SecondsFormat::Millis, true))
+        .bind(now.to_rfc3339_opts(SecondsFormat::Millis, true))
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| AppError::database("notification-timer-query", error))?;
+        rows.into_iter()
+            .map(|row| {
+                let label: String = row.get("label");
+                Ok(Candidate {
+                    entity_type: "timer",
+                    entity_id: row.get("run_id"),
+                    phase: "complete",
+                    offset_minutes: 0,
+                    occurrence_at: parse_datetime(row.get("completed_at_utc"))?,
+                    title: "タイマーが終了しました".into(),
+                    body: if label.is_empty() {
+                        "タイマー".into()
+                    } else {
+                        label
+                    },
+                    os_notification: settings.os_notifications_enabled,
+                    sound: settings.sound_notifications_enabled,
+                    skip_reason: None,
+                })
+            })
+            .collect()
+    }
 }
 
 fn first_valid_instant_after(timezone: Tz, local: NaiveDateTime) -> Option<DateTime<Utc>> {
@@ -565,7 +615,10 @@ fn parse_datetime(value: &str) -> AppResult<DateTime<Utc>> {
 mod tests {
     use chrono::TimeZone;
 
-    use crate::domain::{FreeAlarmDraft, Priority, QuickBlockDraft, ScheduleDraft, ScheduleStatus};
+    use crate::domain::{
+        FreeAlarmDraft, Priority, QuickBlockDraft, ScheduleDraft, ScheduleStatus, TimerDraft,
+        TimerStatus,
+    };
 
     use super::*;
 
@@ -708,6 +761,86 @@ mod tests {
             assert_eq!(ledger[0].result, "skipped");
             assert_eq!(ledger[0].error_category.as_deref(), Some(expected_category));
         }
+    }
+
+    #[tokio::test]
+    async fn timer_completion_notification_is_claimed_once_per_run() {
+        let database = Database::open_memory().await.unwrap();
+        let timer = database
+            .create_timer(TimerDraft {
+                label: "お茶".into(),
+                duration_seconds: 60,
+            })
+            .await
+            .unwrap();
+        let now = Utc.with_ymd_and_hms(2026, 7, 20, 10, 0, 0).unwrap();
+        let run_id = Uuid::new_v4();
+        let mut running = timer.clone();
+        running.status = TimerStatus::Running;
+        running.started_at = Some(now - Duration::seconds(60));
+        running.run_id = Some(run_id);
+        let running = database
+            .save_timer_record(&running, timer.version)
+            .await
+            .unwrap();
+        database
+            .complete_timer(&running, running.version, now)
+            .await
+            .unwrap();
+
+        set_last_check(&database, now - Duration::seconds(1), now).await;
+        assert_eq!(database.poll_notifications(now).await.unwrap().len(), 1);
+        set_last_check(&database, now - Duration::seconds(1), now).await;
+        assert!(database.poll_notifications(now).await.unwrap().is_empty());
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM notification_deliveries")
+                .fetch_one(&database.pool)
+                .await
+                .unwrap(),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn simultaneous_timer_completions_over_replay_limit_are_recorded_as_skipped() {
+        let database = Database::open_memory().await.unwrap();
+        let now = Utc.with_ymd_and_hms(2026, 7, 20, 10, 0, 0).unwrap();
+
+        for index in 1..=4 {
+            let timer = database
+                .create_timer(TimerDraft {
+                    label: format!("タイマー{index}"),
+                    duration_seconds: 60,
+                })
+                .await
+                .unwrap();
+            let mut running = timer.clone();
+            running.status = TimerStatus::Running;
+            running.started_at = Some(now - Duration::seconds(60));
+            running.run_id = Some(Uuid::new_v4());
+            let running = database
+                .save_timer_record(&running, timer.version)
+                .await
+                .unwrap();
+            database
+                .complete_timer(&running, running.version, now)
+                .await
+                .unwrap();
+        }
+
+        set_last_check(&database, now - Duration::seconds(1), now).await;
+        assert_eq!(database.poll_notifications(now).await.unwrap().len(), 3);
+        let ledger = database.notification_ledger().await.unwrap();
+        assert_eq!(ledger.len(), 4);
+        assert_eq!(
+            ledger
+                .iter()
+                .filter(|item| item.error_category.as_deref() == Some("replay_limit"))
+                .count(),
+            1
+        );
+        assert!(database.poll_notifications(now).await.unwrap().is_empty());
+        assert_eq!(database.notification_ledger().await.unwrap().len(), 4);
     }
 
     async fn set_last_check(database: &Database, after: DateTime<Utc>, now: DateTime<Utc>) {

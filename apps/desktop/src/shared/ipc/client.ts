@@ -31,6 +31,9 @@ import {
   syncConflictItemSchema,
   syncQueueItemSchema,
   templatePreviewSchema,
+  timerSchema,
+  timerSetSchema,
+  stopwatchSchema,
   quickBlockSchema,
   userSafeErrorSchema,
   type BackupRecord,
@@ -76,6 +79,12 @@ import {
   type QuickBlockDraft,
   type VersionedSave,
   type UserSafeError,
+  type Timer,
+  type TimerCommand,
+  type TimerDraft,
+  type TimerSet,
+  type Stopwatch,
+  type StopwatchCommand,
 } from "../contracts";
 
 export interface DiagnosticsSnapshot {
@@ -116,6 +125,17 @@ export interface AppClient {
   currentFocus(): Promise<FocusState>;
   focusHistoryToday(): Promise<FocusHistoryReport>;
   focusScheduleSummary(scheduleItemId: string): Promise<FocusScheduleSummary>;
+  listTimers(): Promise<Timer[]>;
+  createTimer(draft: TimerDraft): Promise<Timer>;
+  updateTimer(id: string, expectedVersion: number, draft: TimerDraft): Promise<Timer>;
+  deleteTimer(id: string, expectedVersion: number): Promise<void>;
+  timerCommand(id: string, expectedVersion: number, command: TimerCommand): Promise<Timer>;
+  listTimerSets(): Promise<TimerSet[]>;
+  createTimerSet(name: string): Promise<TimerSet>;
+  applyTimerSet(id: string, expectedVersion: number): Promise<Timer[]>;
+  deleteTimerSet(id: string, expectedVersion: number): Promise<void>;
+  stopwatch(): Promise<Stopwatch>;
+  stopwatchCommand(expectedVersion: number, command: StopwatchCommand): Promise<Stopwatch>;
   runSync(operationId: string): Promise<SyncSummary>;
   cancelOperation(operationId: string): Promise<boolean>;
   listSyncQueue(): Promise<SyncQueueItem[]>;
@@ -299,6 +319,58 @@ export class TauriAppClient implements AppClient {
   async focusScheduleSummary(scheduleItemId: string): Promise<FocusScheduleSummary> {
     return focusScheduleSummarySchema.parse(
       await call("focus_schedule_summary", { scheduleItemId }),
+    );
+  }
+
+  async listTimers(): Promise<Timer[]> {
+    return timerSchema.array().parse(await call("timer_list"));
+  }
+
+  async createTimer(draft: TimerDraft): Promise<Timer> {
+    return timerSchema.parse(await call("timer_create", { draft }));
+  }
+
+  async updateTimer(id: string, expectedVersion: number, draft: TimerDraft): Promise<Timer> {
+    return timerSchema.parse(
+      await call("timer_update", { request: { id, expectedVersion, draft } }),
+    );
+  }
+
+  async deleteTimer(id: string, expectedVersion: number): Promise<void> {
+    await call("timer_delete", { request: { id, expectedVersion } });
+  }
+
+  async timerCommand(id: string, expectedVersion: number, command: TimerCommand): Promise<Timer> {
+    return timerSchema.parse(
+      await call("timer_command", { request: { id, expectedVersion, command } }),
+    );
+  }
+
+  async listTimerSets(): Promise<TimerSet[]> {
+    return timerSetSchema.array().parse(await call("timer_set_list"));
+  }
+
+  async createTimerSet(name: string): Promise<TimerSet> {
+    return timerSetSchema.parse(await call("timer_set_create", { request: { name } }));
+  }
+
+  async applyTimerSet(id: string, expectedVersion: number): Promise<Timer[]> {
+    return timerSchema
+      .array()
+      .parse(await call("timer_set_apply", { request: { id, expectedVersion } }));
+  }
+
+  async deleteTimerSet(id: string, expectedVersion: number): Promise<void> {
+    await call("timer_set_delete", { request: { id, expectedVersion } });
+  }
+
+  async stopwatch(): Promise<Stopwatch> {
+    return stopwatchSchema.parse(await call("stopwatch_state_get"));
+  }
+
+  async stopwatchCommand(expectedVersion: number, command: StopwatchCommand): Promise<Stopwatch> {
+    return stopwatchSchema.parse(
+      await call("stopwatch_command", { request: { expectedVersion, command } }),
     );
   }
 
@@ -562,6 +634,39 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   focusScheduleSummary(): Promise<FocusScheduleSummary> {
+    return Promise.reject(this.unavailable());
+  }
+  listTimers(): Promise<Timer[]> {
+    return Promise.reject(this.unavailable());
+  }
+  createTimer(): Promise<Timer> {
+    return Promise.reject(this.unavailable());
+  }
+  updateTimer(): Promise<Timer> {
+    return Promise.reject(this.unavailable());
+  }
+  deleteTimer(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+  timerCommand(): Promise<Timer> {
+    return Promise.reject(this.unavailable());
+  }
+  listTimerSets(): Promise<TimerSet[]> {
+    return Promise.reject(this.unavailable());
+  }
+  createTimerSet(): Promise<TimerSet> {
+    return Promise.reject(this.unavailable());
+  }
+  applyTimerSet(): Promise<Timer[]> {
+    return Promise.reject(this.unavailable());
+  }
+  deleteTimerSet(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+  stopwatch(): Promise<Stopwatch> {
+    return Promise.reject(this.unavailable());
+  }
+  stopwatchCommand(): Promise<Stopwatch> {
     return Promise.reject(this.unavailable());
   }
   runSync(): Promise<SyncSummary> {

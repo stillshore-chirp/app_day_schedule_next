@@ -10,6 +10,7 @@ mod legacy_import;
 mod library_repository;
 mod notification_repository;
 mod sync_repository;
+mod timer_repository;
 
 pub use backup::{BackupRecord, RestoreStageResult};
 pub use data_transfer::{ExportResult, ImportMode, ImportPreview, ImportResult};
@@ -26,3 +27,4 @@ pub use google_disabled::{
 pub use legacy_import::{LegacyImportPreview, LegacyImportResult};
 pub use notification_repository::{DeliveryResult, NotificationDelivery, NotificationLedgerItem};
 pub use sync_repository::{ConflictChoice, SyncConflictItem, SyncQueueItem};
+pub use timer_repository::{StopwatchRecord, TimerRecord};

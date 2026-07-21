@@ -11,14 +11,14 @@ use crate::{
     application::OperationCancellation,
     domain::{
         AppError, AppResult, DayTemplateDraft, FreeAlarmDraft, QuickBlockDraft, Schedule, Settings,
-        SyncStatus, TemplateBlockDraft,
+        SyncStatus, TemplateBlockDraft, TimerDraft, normalize_timer_set_name,
     },
 };
 
 use super::Database;
 use super::database::{insert_schedule, row_to_schedule};
 
-const EXPORT_FORMAT_VERSION: u32 = 1;
+const EXPORT_FORMAT_VERSION: u32 = 2;
 const MAX_IMPORT_BYTES: u64 = 25 * 1024 * 1024;
 const MAX_SCHEDULES: usize = 100_000;
 const MAX_TEMPLATES: usize = 1_000;
@@ -34,6 +34,10 @@ struct ExportEnvelope {
     templates: Vec<ExportTemplate>,
     quick_blocks: Vec<ExportQuickBlock>,
     free_alarms: Vec<ExportAlarm>,
+    #[serde(default)]
+    timers: Vec<ExportTimer>,
+    #[serde(default)]
+    timer_sets: Vec<ExportTimerSet>,
     settings: Settings,
 }
 
@@ -59,6 +63,19 @@ struct ExportAlarm {
     draft: FreeAlarmDraft,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportTimer {
+    draft: TimerDraft,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportTimerSet {
+    name: String,
+    items: Vec<TimerDraft>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportResult {
@@ -68,6 +85,8 @@ pub struct ExportResult {
     pub template_count: usize,
     pub quick_block_count: usize,
     pub alarm_count: usize,
+    pub timer_count: usize,
+    pub timer_set_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,6 +100,8 @@ pub struct ImportPreview {
     pub template_count: usize,
     pub quick_block_count: usize,
     pub alarm_count: usize,
+    pub timer_count: usize,
+    pub timer_set_count: usize,
     pub warnings: Vec<String>,
 }
 
@@ -98,6 +119,8 @@ pub struct ImportResult {
     pub imported_template_count: usize,
     pub imported_quick_block_count: usize,
     pub imported_alarm_count: usize,
+    pub imported_timer_count: usize,
+    pub imported_timer_set_count: usize,
     pub preserved_external_schedule_count: u64,
 }
 
@@ -165,6 +188,34 @@ impl Database {
             .map(|item| ExportAlarm { draft: item.draft })
             .collect::<Vec<_>>();
         cancellation.check()?;
+        let timers = self
+            .timer_records()
+            .await?
+            .into_iter()
+            .map(|timer| ExportTimer {
+                draft: TimerDraft {
+                    label: timer.label,
+                    duration_seconds: timer.duration_seconds,
+                },
+            })
+            .collect::<Vec<_>>();
+        let timer_sets = self
+            .list_timer_sets()
+            .await?
+            .into_iter()
+            .map(|set| ExportTimerSet {
+                name: set.name,
+                items: set
+                    .items
+                    .into_iter()
+                    .map(|item| TimerDraft {
+                        label: item.label,
+                        duration_seconds: item.duration_seconds,
+                    })
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        cancellation.check()?;
         let envelope = ExportEnvelope {
             format_version: EXPORT_FORMAT_VERSION,
             created_at: Utc::now(),
@@ -173,6 +224,8 @@ impl Database {
             templates,
             quick_blocks,
             free_alarms,
+            timers,
+            timer_sets,
             settings: self.settings().await?,
         };
         let bytes = serde_json::to_vec_pretty(&envelope)
@@ -205,6 +258,8 @@ impl Database {
             template_count: envelope.templates.len(),
             quick_block_count: envelope.quick_blocks.len(),
             alarm_count: envelope.free_alarms.len(),
+            timer_count: envelope.timers.len(),
+            timer_set_count: envelope.timer_sets.len(),
         })
     }
 
@@ -224,6 +279,8 @@ impl Database {
             template_count: envelope.templates.len(),
             quick_block_count: envelope.quick_blocks.len(),
             alarm_count: envelope.free_alarms.len(),
+            timer_count: envelope.timers.len(),
+            timer_set_count: envelope.timer_sets.len(),
             warnings,
         })
     }
@@ -264,6 +321,8 @@ impl Database {
             insert_templates(&mut transaction, &envelope.templates, now).await?;
         insert_quick_blocks(&mut transaction, &envelope.quick_blocks, now).await?;
         insert_alarms(&mut transaction, &envelope.free_alarms, now).await?;
+        insert_timers(&mut transaction, &envelope.timers, now).await?;
+        insert_timer_sets(&mut transaction, &envelope.timer_sets, now).await?;
         if matches!(mode, ImportMode::Replace) {
             let settings_json = serde_json::to_string(&envelope.settings)
                 .map_err(|error| AppError::database("import-settings-encode", error))?;
@@ -285,6 +344,8 @@ impl Database {
             imported_template_count,
             imported_quick_block_count: envelope.quick_blocks.len(),
             imported_alarm_count: envelope.free_alarms.len(),
+            imported_timer_count: envelope.timers.len(),
+            imported_timer_set_count: envelope.timer_sets.len(),
             preserved_external_schedule_count,
         })
     }
@@ -315,7 +376,7 @@ fn parse_and_validate_export(bytes: &[u8]) -> AppResult<ExportEnvelope> {
         .get("formatVersion")
         .and_then(Value::as_u64)
         .ok_or_else(|| invalid_import("formatVersionがありません。"))?;
-    if version != u64::from(EXPORT_FORMAT_VERSION) {
+    if version == 0 || version > u64::from(EXPORT_FORMAT_VERSION) {
         return Err(invalid_import("対応していないデータ形式です。"));
     }
     for (key, maximum) in [
@@ -331,6 +392,21 @@ fn parse_and_validate_export(bytes: &[u8]) -> AppResult<ExportEnvelope> {
             .len();
         if length > maximum {
             return Err(invalid_import("項目数が安全な上限を超えています。"));
+        }
+    }
+    if version >= 2 {
+        for (key, maximum) in [
+            ("timers", MAX_LIBRARY_ITEMS),
+            ("timerSets", MAX_LIBRARY_ITEMS),
+        ] {
+            let length = object
+                .get(key)
+                .and_then(Value::as_array)
+                .ok_or_else(|| invalid_import("必要なタイマー配列がありません。"))?
+                .len();
+            if length > maximum {
+                return Err(invalid_import("タイマー項目数が安全な上限を超えています。"));
+            }
         }
     }
     let mut envelope: ExportEnvelope = serde_json::from_value(root)
@@ -378,6 +454,33 @@ fn parse_and_validate_export(bytes: &[u8]) -> AppResult<ExportEnvelope> {
             ))
         })?;
     }
+    for (index, item) in envelope.timers.iter_mut().enumerate() {
+        item.draft = item.draft.clone().normalized().map_err(|_| {
+            invalid_import(&format!(
+                "タイマー{}件目の値が正しくありません。",
+                index + 1
+            ))
+        })?;
+    }
+    for (index, set) in envelope.timer_sets.iter_mut().enumerate() {
+        set.name = normalize_timer_set_name(set.name.clone()).map_err(|_| {
+            invalid_import(&format!(
+                "タイマー構成セット{}件目の名前が正しくありません。",
+                index + 1
+            ))
+        })?;
+        if set.items.is_empty() || set.items.len() > 500 {
+            return Err(invalid_import(
+                "タイマー構成セットの件数が正しくありません。",
+            ));
+        }
+        for item in &mut set.items {
+            *item = item
+                .clone()
+                .normalized()
+                .map_err(|_| invalid_import("タイマー構成セットの値が正しくありません。"))?;
+        }
+    }
     envelope.settings.validate()?;
     Ok(envelope)
 }
@@ -407,6 +510,39 @@ async fn replace_local_data(transaction: &mut Transaction<'_, Sqlite>) -> AppRes
         .execute(&mut **transaction)
         .await
         .map_err(|error| AppError::database("import-replace-alarms", error))?;
+    sqlx::query(
+        "DELETE FROM notification_deliveries WHERE rule_id IN (SELECT id FROM notification_rules WHERE entity_type = 'timer')",
+    )
+    .execute(&mut **transaction)
+    .await
+    .map_err(|error| AppError::database("import-replace-timer-deliveries", error))?;
+    sqlx::query("DELETE FROM notification_rules WHERE entity_type = 'timer'")
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-replace-timer-rules", error))?;
+    sqlx::query("DELETE FROM timer_run_completions")
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-replace-timer-completions", error))?;
+    sqlx::query("DELETE FROM timers")
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-replace-timers", error))?;
+    sqlx::query("DELETE FROM timer_set_items")
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-replace-timer-set-items", error))?;
+    sqlx::query("DELETE FROM timer_sets")
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-replace-timer-sets", error))?;
+    sqlx::query(
+        "UPDATE stopwatch_state SET status = 'idle', started_at_utc = NULL, elapsed_before_start_seconds = 0, version = version + 1, updated_at_utc = ? WHERE singleton_id = 1",
+    )
+    .bind(timestamp(Utc::now()))
+    .execute(&mut **transaction)
+    .await
+    .map_err(|error| AppError::database("import-replace-stopwatch", error))?;
     Ok(preserved.max(0) as u64)
 }
 
@@ -539,6 +675,109 @@ async fn insert_alarms(
     Ok(())
 }
 
+async fn insert_timers(
+    transaction: &mut Transaction<'_, Sqlite>,
+    items: &[ExportTimer],
+    now: DateTime<Utc>,
+) -> AppResult<()> {
+    let current_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM timers")
+        .fetch_one(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-timer-count", error))?;
+    if current_count + items.len() as i64 > 500 {
+        return Err(invalid_import(
+            "既存データと合わせたタイマー件数が500件を超えます。",
+        ));
+    }
+    let next_order: i64 =
+        sqlx::query_scalar("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM timers")
+            .fetch_one(&mut **transaction)
+            .await
+            .map_err(|error| AppError::database("import-timer-order", error))?;
+    for (index, item) in items.iter().enumerate() {
+        sqlx::query(
+            "INSERT INTO timers(id, label, duration_seconds, status, started_at_utc, elapsed_before_start_seconds, run_id, sort_order, version, created_at_utc, updated_at_utc) VALUES (?, ?, ?, 'idle', NULL, 0, NULL, ?, 0, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&item.draft.label)
+        .bind(item.draft.duration_seconds as i64)
+        .bind(next_order + index as i64)
+        .bind(timestamp(now))
+        .bind(timestamp(now))
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-timer", error))?;
+    }
+    Ok(())
+}
+
+async fn insert_timer_sets(
+    transaction: &mut Transaction<'_, Sqlite>,
+    sets: &[ExportTimerSet],
+    now: DateTime<Utc>,
+) -> AppResult<()> {
+    for set in sets {
+        let name = unique_timer_set_name(transaction, &set.name).await?;
+        let set_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO timer_sets(id, name, version, created_at_utc, updated_at_utc) VALUES (?, ?, 0, ?, ?)",
+        )
+        .bind(set_id.to_string())
+        .bind(name)
+        .bind(timestamp(now))
+        .bind(timestamp(now))
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-timer-set", error))?;
+        for (index, item) in set.items.iter().enumerate() {
+            sqlx::query(
+                "INSERT INTO timer_set_items(id, timer_set_id, label, duration_seconds, sort_order) VALUES (?, ?, ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(set_id.to_string())
+            .bind(&item.label)
+            .bind(item.duration_seconds as i64)
+            .bind(index as i64)
+            .execute(&mut **transaction)
+            .await
+            .map_err(|error| AppError::database("import-timer-set-item", error))?;
+        }
+    }
+    Ok(())
+}
+
+async fn unique_timer_set_name(
+    transaction: &mut Transaction<'_, Sqlite>,
+    original: &str,
+) -> AppResult<String> {
+    for suffix in 0..=9_999 {
+        let candidate = if suffix == 0 {
+            original.to_owned()
+        } else {
+            let marker = format!(" ({suffix})");
+            let keep = 100usize.saturating_sub(marker.chars().count());
+            format!(
+                "{}{}",
+                original.chars().take(keep).collect::<String>(),
+                marker
+            )
+        };
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM timer_sets WHERE name = ? COLLATE NOCASE)",
+        )
+        .bind(&candidate)
+        .fetch_one(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("import-timer-set-name", error))?;
+        if !exists {
+            return Ok(candidate);
+        }
+    }
+    Err(invalid_import(
+        "タイマー構成セット名の重複を解決できません。",
+    ))
+}
+
 fn validate_json_path(path: &Path, target: bool) -> AppResult<()> {
     let extension_valid = path
         .extension()
@@ -619,12 +858,27 @@ mod tests {
     async fn export_preview_and_atomic_import_roundtrip() {
         let source = Database::open_memory().await.unwrap();
         source.create_schedule(draft()).await.unwrap();
+        source
+            .create_timer(TimerDraft {
+                label: "紅茶".into(),
+                duration_seconds: 180,
+            })
+            .await
+            .unwrap();
+        source
+            .save_current_timers_as_set("休憩セット".into())
+            .await
+            .unwrap();
         let directory = tempdir().unwrap();
         let path = directory.path().join("export.json");
         let exported = source.export_json(&path, "Asia/Tokyo").await.unwrap();
         assert_eq!(exported.schedule_count, 1);
+        assert_eq!(exported.timer_count, 1);
+        assert_eq!(exported.timer_set_count, 1);
         let preview = Database::preview_import(&path).unwrap();
         assert_eq!(preview.schedule_count, 1);
+        assert_eq!(preview.timer_count, 1);
+        assert_eq!(preview.timer_set_count, 1);
 
         let target = Database::open_memory().await.unwrap();
         let result = target
@@ -632,11 +886,35 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result.imported_schedule_count, 1);
+        assert_eq!(result.imported_timer_count, 1);
+        assert_eq!(result.imported_timer_set_count, 1);
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM schedule_items")
             .fetch_one(&target.pool)
             .await
             .unwrap();
         assert_eq!(count, 1);
+        assert_eq!(target.timer_records().await.unwrap().len(), 1);
+        assert_eq!(target.list_timer_sets().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn version_one_export_without_timer_fields_remains_importable() {
+        let source = Database::open_memory().await.unwrap();
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("legacy-export.json");
+        source.export_json(&path, "Asia/Tokyo").await.unwrap();
+        let mut root: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let object = root.as_object_mut().unwrap();
+        object.insert("formatVersion".into(), Value::from(1));
+        object.remove("timers");
+        object.remove("timerSets");
+        fs::write(&path, serde_json::to_vec_pretty(&root).unwrap()).unwrap();
+
+        let preview = Database::preview_import(&path).unwrap();
+
+        assert_eq!(preview.format_version, 1);
+        assert_eq!(preview.timer_count, 0);
+        assert_eq!(preview.timer_set_count, 0);
     }
 
     #[tokio::test]

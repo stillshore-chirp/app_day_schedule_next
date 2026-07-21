@@ -22,7 +22,7 @@
 - project、category、tag、priority、status、memo、estimate / actual、saved filter。
 - 日次 template、weekday template、Quick Block。
 - current / next / remaining / free time、Compact Window、always-on-top。
-- free alarm、schedule start/end notification、Focus / Pomodoro。
+- free alarm、schedule start/end notification、複数 timer、stopwatch、Focus / Pomodoro。
 - Google Calendar 1 account / multiple calendars、双方向差分同期、競合解決。
 - backup / restore、legacy Python app DB import、diagnostics。
 - macOS / Windows desktop distribution。
@@ -101,6 +101,13 @@
 - timezone change で instant を維持する entity と wall-clock intent を維持する entity を区別する。
 - all-day event は date range として扱う。
 
+### 6.4 Timer / Stopwatch
+
+- timer は1秒〜7日の設定時間、任意ラベル、独立した実行状態を持つ。最大500件とする。
+- timer set はラベルと設定時間だけを保存し、実行状態や残り時間を保存しない。適用は既存 timer を置換せず、停止状態で追加する。
+- stopwatch は端末ごとに1件の状態を持つ。
+- process 内の経過計測は monotonic clock、再起動後の最初の復旧だけは永続化した UTC timestamp を使う。wall clock の逆行で、起動中の経過時間を減らさない。
+
 ## 7. 重なり
 
 - 基本判定は positive overlap。接する `[a,b)` と `[b,c)` は重ならない。
@@ -158,6 +165,8 @@
 - complete exit と tray residency の能力差を明示する。
 - Focus state は `Idle / Working / Paused / Break / WaitingNext`。
 - elapsed time は monotonic clock を基本にし、wall clock change で壊れない。
+- timer completion は run ID ごとに永続化し、同じ run の再観測・再起動で delivery を重複生成しない。
+- timer / stopwatch の状態は SQLite に保持するが、Google Calendar 同期対象にはしない。
 
 ## 12. Backup / restore / legacy import
 

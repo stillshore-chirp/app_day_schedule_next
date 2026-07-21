@@ -72,7 +72,7 @@ domain -X-> tauri / sqlx / reqwest / keyring / filesystem / React
 - use case と transaction boundary。
 - repository / clock / remote calendar / keyring / notification interface を利用する。
 - local write + history + Outbox を調整する。
-- sync worker、backup workflow、restore、legacy import、Focus lifecycle を調整する。
+- sync worker、backup workflow、restore、legacy import、Focus / Timer / Stopwatch lifecycle を調整する。
 - retry policy と cancellation を明示する。
 - domain error と infrastructure error を user-safe application error へ変換する。
 
@@ -83,7 +83,7 @@ domain -X-> tauri / sqlx / reqwest / keyring / filesystem / React
 - `UtcInstant`, `IanaTimezone`, `LocalDate`, `LocalTime`, `MinuteOfDay`, `DurationMinutes`。
 - `ScheduleInterval`, `RecurrenceRule`, `OccurrenceId`。
 - `SyncBase`, `FieldConflict`, `MergeDecision`。
-- `NotificationDeliveryKey`, `FocusState`。
+- `NotificationDeliveryKey`, `FocusState`, `TimerState`, `StopwatchState`。
 
 規則:
 
@@ -91,7 +91,7 @@ domain -X-> tauri / sqlx / reqwest / keyring / filesystem / React
 - clock / randomness を直接読まない。
 - serialization library の都合を domain API に漏らさない。
 - invalid state を constructor / smart constructor で拒否する。
-- overlap、DST resolution request、merge、Focus transition を Unit / property test する。
+- overlap、DST resolution request、merge、Focus / Timer / Stopwatch transition を Unit / property test する。
 
 ## 8. Infrastructure
 
