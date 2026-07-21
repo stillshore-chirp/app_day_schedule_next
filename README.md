@@ -52,7 +52,7 @@ VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --feature
 pnpm test:e2e
 ```
 
-個人利用向けに、PR CI は harness / frontend と、native 影響時の macOS arm64 Rust test・通常 Tauri no-bundle build に絞っています。macOS x64 / Windows、ネイティブ E2E、unsigned installer は手動の `Native release validation` workflow で対象を選び、実際に利用またはrelease判断する時だけ実行します。詳細は [`docs/testing/index.md`](docs/testing/index.md) と [`docs/release-quality-gates.md`](docs/release-quality-gates.md) にあります。
+個人利用向けに、PR CI は harness / frontend と、native 影響時の macOS arm64 Rust test・通常 Tauri no-bundle build に絞っています。詳細は [`docs/testing/index.md`](docs/testing/index.md) にあります。
 
 ## データとセキュリティ
 
@@ -63,10 +63,6 @@ pnpm test:e2e
 
 アプリデータや OAuth credential を Issue、PR、fixture、スクリーンショットへ掲載しないでください。
 
-## 配布
-
-個人利用向けの unsigned installer を生成できます。macOS の署名・公証と Windows code signing、自動 updater は未導入です。第三者へ配布する前に、署名、実機 install / permission smoke、checksum / provenance を [`docs/engineering/desktop-platform-and-release.md`](docs/engineering/desktop-platform-and-release.md) に従って完了してください。
-
 ## 文書案内
 
 - 実行規約: [`AGENTS.md`](AGENTS.md)
@@ -74,7 +70,6 @@ pnpm test:e2e
 - アーキテクチャ: [`docs/architecture-boundaries.md`](docs/architecture-boundaries.md)
 - UI/UX ガバナンス: [`docs/ai-governance/00-index.md`](docs/ai-governance/00-index.md)
 - テスト: [`docs/testing/index.md`](docs/testing/index.md)
-- リリースゲート: [`docs/release-quality-gates.md`](docs/release-quality-gates.md)
 
 ## ライセンス
 
