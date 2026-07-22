@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     path::Path,
     sync::Arc,
     time::{Duration as MonotonicDuration, Instant},
@@ -14,8 +15,10 @@ use crate::{
     domain::{
         AppError, AppResult, DayTemplate, DayTemplateDraft, FocusCommand, FocusPhase, FocusState,
         FreeAlarm, FreeAlarmDraft, QuickBlock, QuickBlockDraft, RecurrenceEditScope, Schedule,
-        ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery, Settings, SyncSummary,
-        SyncSummaryState, TemplateApplyMode, TemplatePreview, validate_focus_transition,
+        ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery, Settings, StopwatchCommand,
+        StopwatchState, StopwatchStatus, SyncSummary, SyncSummaryState, TemplateApplyMode,
+        TemplatePreview, TimerCommand, TimerDraft, TimerSet, TimerState, TimerStatus,
+        validate_focus_transition, validate_stopwatch_transition, validate_timer_transition,
     },
     infrastructure::{
         BackupRecord, ChangeResult, ConflictChoice, Database, DeliveryResult,
@@ -23,7 +26,7 @@ use crate::{
         FocusHistoryReport, FocusRecord, GoogleCalendar, GoogleConnection, ImportMode,
         ImportPreview, ImportResult, LegacyImportPreview, LegacyImportResult, NotificationDelivery,
         NotificationLedgerItem, OAuthBeginResult, OAuthConfigResult, RestoreStageResult,
-        SyncConflictItem, SyncQueueItem,
+        StopwatchRecord, SyncConflictItem, SyncQueueItem, TimerRecord,
     },
 };
 
@@ -62,11 +65,28 @@ struct FocusRuntime {
     elapsed_at_anchor: u64,
 }
 
+#[derive(Debug, Clone)]
+struct TimerRuntime {
+    run_id: Uuid,
+    monotonic_anchor: MonotonicDuration,
+    elapsed_at_anchor: u64,
+}
+
+#[derive(Debug, Clone)]
+struct StopwatchRuntime {
+    version: u64,
+    monotonic_anchor: MonotonicDuration,
+    elapsed_at_anchor: u64,
+}
+
 #[derive(Clone)]
 pub struct AppService {
     database: Database,
     clock: Arc<dyn Clock>,
     focus_runtime: Arc<tokio::sync::Mutex<Option<FocusRuntime>>>,
+    timer_runtime: Arc<tokio::sync::Mutex<HashMap<Uuid, TimerRuntime>>>,
+    stopwatch_runtime: Arc<tokio::sync::Mutex<Option<StopwatchRuntime>>>,
+    timer_gate: Arc<tokio::sync::Mutex<()>>,
     sync_gate: Arc<tokio::sync::Mutex<()>>,
     operations: OperationRegistry,
     process_started_at: Instant,
@@ -100,6 +120,9 @@ impl AppService {
             database,
             clock: Arc::new(SystemClock::new()),
             focus_runtime: Arc::new(tokio::sync::Mutex::new(None)),
+            timer_runtime: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            stopwatch_runtime: Arc::new(tokio::sync::Mutex::new(None)),
+            timer_gate: Arc::new(tokio::sync::Mutex::new(())),
             sync_gate: Arc::new(tokio::sync::Mutex::new(())),
             operations: OperationRegistry::default(),
             process_started_at,
@@ -113,6 +136,9 @@ impl AppService {
             database,
             clock,
             focus_runtime: Arc::new(tokio::sync::Mutex::new(None)),
+            timer_runtime: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            stopwatch_runtime: Arc::new(tokio::sync::Mutex::new(None)),
+            timer_gate: Arc::new(tokio::sync::Mutex::new(())),
             sync_gate: Arc::new(tokio::sync::Mutex::new(())),
             operations: OperationRegistry::default(),
             process_started_at: Instant::now(),
@@ -136,7 +162,7 @@ impl AppService {
         let timezone = timezone_id.parse::<Tz>().unwrap_or(chrono_tz::UTC);
         let settings = self.database.settings().await?;
         Ok(Bootstrap {
-            schema_version: 10,
+            schema_version: 11,
             app_version: env!("CARGO_PKG_VERSION").into(),
             today: self
                 .clock
@@ -505,6 +531,277 @@ impl AppService {
         *self.focus_runtime.lock().await = None;
     }
 
+    pub async fn timers(&self) -> AppResult<Vec<TimerState>> {
+        let _guard = self.timer_gate.lock().await;
+        self.timer_states_locked().await
+    }
+
+    async fn timer_states_locked(&self) -> AppResult<Vec<TimerState>> {
+        let now = self.clock.now();
+        let records = self.database.timer_records().await?;
+        let mut states = Vec::with_capacity(records.len());
+        for record in records {
+            let elapsed = self.timer_elapsed(&record, now).await;
+            if record.status == TimerStatus::Running && elapsed >= record.duration_seconds {
+                let completed = self
+                    .database
+                    .complete_timer(&record, record.version, now)
+                    .await?;
+                self.timer_runtime.lock().await.remove(&record.id);
+                states.push(timer_state_from_record(
+                    &completed,
+                    completed.duration_seconds,
+                ));
+            } else {
+                states.push(timer_state_from_record(&record, elapsed));
+            }
+        }
+        Ok(states)
+    }
+
+    pub async fn create_timer(&self, draft: TimerDraft) -> AppResult<TimerState> {
+        let _guard = self.timer_gate.lock().await;
+        let record = self.database.create_timer(draft).await?;
+        self.record_event("info", "timer", "created", None).await;
+        Ok(timer_state_from_record(&record, 0))
+    }
+
+    pub async fn update_timer(
+        &self,
+        id: Uuid,
+        expected_version: u64,
+        draft: TimerDraft,
+    ) -> AppResult<TimerState> {
+        let _guard = self.timer_gate.lock().await;
+        let record = self
+            .database
+            .update_timer_config(id, expected_version, draft)
+            .await?;
+        self.timer_runtime.lock().await.remove(&id);
+        self.record_event("info", "timer", "updated", None).await;
+        Ok(timer_state_from_record(&record, 0))
+    }
+
+    pub async fn delete_timer(&self, id: Uuid, expected_version: u64) -> AppResult<()> {
+        let _guard = self.timer_gate.lock().await;
+        self.database.delete_timer(id, expected_version).await?;
+        self.timer_runtime.lock().await.remove(&id);
+        self.record_event("info", "timer", "deleted", None).await;
+        Ok(())
+    }
+
+    pub async fn timer_command(
+        &self,
+        id: Uuid,
+        expected_version: u64,
+        command: TimerCommand,
+    ) -> AppResult<TimerState> {
+        let _guard = self.timer_gate.lock().await;
+        let now = self.clock.now();
+        let mut record = self.database.timer_record(id).await?;
+        if record.version != expected_version {
+            return Err(AppError::Conflict {
+                message: "タイマーが別の操作で更新されました。".into(),
+                recovery: "最新の状態を確認してから操作し直してください。".into(),
+            });
+        }
+        validate_timer_transition(record.status, command)?;
+        match command {
+            TimerCommand::Start => {
+                record.status = TimerStatus::Running;
+                record.started_at = Some(now);
+                record.elapsed_before_start_seconds = 0;
+                record.run_id = Some(Uuid::new_v4());
+            }
+            TimerCommand::Pause => {
+                record.elapsed_before_start_seconds = self
+                    .timer_elapsed(&record, now)
+                    .await
+                    .min(record.duration_seconds);
+                record.status = TimerStatus::Paused;
+                record.started_at = None;
+            }
+            TimerCommand::Resume => {
+                if record.run_id.is_none() {
+                    return Err(AppError::database(
+                        "timer-resume-run",
+                        "paused timer has no run id",
+                    ));
+                }
+                record.status = TimerStatus::Running;
+                record.started_at = Some(now);
+            }
+            TimerCommand::Reset => {
+                record.status = TimerStatus::Idle;
+                record.started_at = None;
+                record.elapsed_before_start_seconds = 0;
+                record.run_id = None;
+            }
+        }
+        let saved = self
+            .database
+            .save_timer_record(&record, expected_version)
+            .await?;
+        self.timer_runtime.lock().await.remove(&id);
+        let elapsed = self.timer_elapsed(&saved, now).await;
+        self.record_event("info", "timer", command.as_str(), None)
+            .await;
+        Ok(timer_state_from_record(&saved, elapsed))
+    }
+
+    async fn timer_elapsed(&self, record: &TimerRecord, wall_now: DateTime<Utc>) -> u64 {
+        if record.status != TimerStatus::Running {
+            return record.elapsed_before_start_seconds;
+        }
+        let Some(run_id) = record.run_id else {
+            return record.elapsed_before_start_seconds;
+        };
+        let monotonic_now = self.clock.monotonic();
+        let mut runtimes = self.timer_runtime.lock().await;
+        if let Some(active) = runtimes.get(&record.id)
+            && active.run_id == run_id
+        {
+            return active.elapsed_at_anchor.saturating_add(
+                monotonic_now
+                    .saturating_sub(active.monotonic_anchor)
+                    .as_secs(),
+            );
+        }
+        let recovered_segment = record
+            .started_at
+            .map(|started| wall_now.signed_duration_since(started).num_seconds().max(0) as u64)
+            .unwrap_or(0);
+        let elapsed = record
+            .elapsed_before_start_seconds
+            .saturating_add(recovered_segment);
+        runtimes.insert(
+            record.id,
+            TimerRuntime {
+                run_id,
+                monotonic_anchor: monotonic_now,
+                elapsed_at_anchor: elapsed,
+            },
+        );
+        elapsed
+    }
+
+    pub async fn timer_sets(&self) -> AppResult<Vec<TimerSet>> {
+        self.database.list_timer_sets().await
+    }
+
+    pub async fn save_timer_set(&self, name: String) -> AppResult<TimerSet> {
+        let _guard = self.timer_gate.lock().await;
+        let set = self.database.save_current_timers_as_set(name).await?;
+        self.record_event("info", "timer-set", "created", None)
+            .await;
+        Ok(set)
+    }
+
+    pub async fn apply_timer_set(
+        &self,
+        id: Uuid,
+        expected_version: u64,
+    ) -> AppResult<Vec<TimerState>> {
+        let _guard = self.timer_gate.lock().await;
+        let records = self.database.apply_timer_set(id, expected_version).await?;
+        self.record_event("info", "timer-set", "applied", None)
+            .await;
+        Ok(records
+            .iter()
+            .map(|record| timer_state_from_record(record, 0))
+            .collect())
+    }
+
+    pub async fn delete_timer_set(&self, id: Uuid, expected_version: u64) -> AppResult<()> {
+        let _guard = self.timer_gate.lock().await;
+        self.database.delete_timer_set(id, expected_version).await?;
+        self.record_event("info", "timer-set", "deleted", None)
+            .await;
+        Ok(())
+    }
+
+    pub async fn stopwatch(&self) -> AppResult<StopwatchState> {
+        let _guard = self.timer_gate.lock().await;
+        let record = self.database.stopwatch_record().await?;
+        let elapsed = self.stopwatch_elapsed(&record, self.clock.now()).await;
+        Ok(stopwatch_state_from_record(&record, elapsed))
+    }
+
+    pub async fn stopwatch_command(
+        &self,
+        expected_version: u64,
+        command: StopwatchCommand,
+    ) -> AppResult<StopwatchState> {
+        let _guard = self.timer_gate.lock().await;
+        let now = self.clock.now();
+        let mut record = self.database.stopwatch_record().await?;
+        if record.version != expected_version {
+            return Err(AppError::Conflict {
+                message: "ストップウォッチが別の操作で更新されました。".into(),
+                recovery: "最新の状態を確認してから操作し直してください。".into(),
+            });
+        }
+        validate_stopwatch_transition(record.status, command)?;
+        match command {
+            StopwatchCommand::Start => {
+                record.status = StopwatchStatus::Running;
+                record.started_at = Some(now);
+                record.elapsed_before_start_seconds = 0;
+            }
+            StopwatchCommand::Pause => {
+                record.elapsed_before_start_seconds = self.stopwatch_elapsed(&record, now).await;
+                record.status = StopwatchStatus::Paused;
+                record.started_at = None;
+            }
+            StopwatchCommand::Resume => {
+                record.status = StopwatchStatus::Running;
+                record.started_at = Some(now);
+            }
+            StopwatchCommand::Reset => {
+                record.status = StopwatchStatus::Idle;
+                record.started_at = None;
+                record.elapsed_before_start_seconds = 0;
+            }
+        }
+        let saved = self
+            .database
+            .save_stopwatch_record(&record, expected_version)
+            .await?;
+        *self.stopwatch_runtime.lock().await = None;
+        let elapsed = self.stopwatch_elapsed(&saved, now).await;
+        Ok(stopwatch_state_from_record(&saved, elapsed))
+    }
+
+    async fn stopwatch_elapsed(&self, record: &StopwatchRecord, wall_now: DateTime<Utc>) -> u64 {
+        if record.status != StopwatchStatus::Running {
+            return record.elapsed_before_start_seconds;
+        }
+        let monotonic_now = self.clock.monotonic();
+        let mut runtime = self.stopwatch_runtime.lock().await;
+        if let Some(active) = runtime.as_ref()
+            && active.version == record.version
+        {
+            return active.elapsed_at_anchor.saturating_add(
+                monotonic_now
+                    .saturating_sub(active.monotonic_anchor)
+                    .as_secs(),
+            );
+        }
+        let recovered_segment = record
+            .started_at
+            .map(|started| wall_now.signed_duration_since(started).num_seconds().max(0) as u64)
+            .unwrap_or(0);
+        let elapsed = record
+            .elapsed_before_start_seconds
+            .saturating_add(recovered_segment);
+        *runtime = Some(StopwatchRuntime {
+            version: record.version,
+            monotonic_anchor: monotonic_now,
+            elapsed_at_anchor: elapsed,
+        });
+        elapsed
+    }
+
     pub async fn run_sync(&self, operation_id: Uuid) -> AppResult<SyncSummary> {
         let cancellation = self.operations.begin(operation_id).await?;
         let result = async {
@@ -585,7 +882,11 @@ impl AppService {
         fingerprint: &str,
         mode: ImportMode,
     ) -> AppResult<ImportResult> {
-        self.database.import_json(path, fingerprint, mode).await
+        let _guard = self.timer_gate.lock().await;
+        let result = self.database.import_json(path, fingerprint, mode).await?;
+        self.timer_runtime.lock().await.clear();
+        *self.stopwatch_runtime.lock().await = None;
+        Ok(result)
     }
 
     pub async fn preview_legacy_import(&self, path: &Path) -> AppResult<LegacyImportPreview> {
@@ -623,6 +924,7 @@ impl AppService {
     }
 
     pub async fn poll_notifications(&self) -> AppResult<Vec<NotificationDelivery>> {
+        self.timers().await?;
         self.database.poll_notifications(self.clock.now()).await
     }
 
@@ -676,8 +978,12 @@ impl AppService {
                     .into(),
             });
         }
+        let _guard = self.timer_gate.lock().await;
         self.database.delete_google_secrets().await?;
-        self.database.delete_all_user_data().await
+        let deleted = self.database.delete_all_user_data().await?;
+        self.timer_runtime.lock().await.clear();
+        *self.stopwatch_runtime.lock().await = None;
+        Ok(deleted)
     }
 
     pub async fn templates(&self) -> AppResult<Vec<DayTemplate>> {
@@ -823,6 +1129,27 @@ fn focus_state_from_record(
     }
 }
 
+fn timer_state_from_record(record: &TimerRecord, elapsed_seconds: u64) -> TimerState {
+    let elapsed_seconds = elapsed_seconds.min(record.duration_seconds);
+    TimerState {
+        id: record.id,
+        label: record.label.clone(),
+        duration_seconds: record.duration_seconds,
+        status: record.status,
+        elapsed_seconds,
+        remaining_seconds: record.duration_seconds.saturating_sub(elapsed_seconds),
+        version: record.version,
+    }
+}
+
+fn stopwatch_state_from_record(record: &StopwatchRecord, elapsed_seconds: u64) -> StopwatchState {
+    StopwatchState {
+        status: record.status,
+        elapsed_seconds,
+        version: record.version,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex as StdMutex;
@@ -896,5 +1223,81 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(history.work_seconds, 600);
+    }
+
+    #[tokio::test]
+    async fn multiple_timers_and_stopwatch_use_monotonic_time_after_anchor() {
+        let started = Utc.with_ymd_and_hms(2026, 7, 20, 3, 0, 0).unwrap();
+        let database = Database::open_memory().await.unwrap();
+        let clock = Arc::new(ManualClock::new(started));
+        let service = AppService::with_clock(database, clock.clone());
+        let first = service
+            .create_timer(TimerDraft {
+                label: "紅茶".into(),
+                duration_seconds: 120,
+            })
+            .await
+            .unwrap();
+        let second = service
+            .create_timer(TimerDraft {
+                label: "ストレッチ".into(),
+                duration_seconds: 300,
+            })
+            .await
+            .unwrap();
+        service
+            .timer_command(first.id, first.version, TimerCommand::Start)
+            .await
+            .unwrap();
+        service
+            .timer_command(second.id, second.version, TimerCommand::Start)
+            .await
+            .unwrap();
+        let stopwatch = service.stopwatch().await.unwrap();
+        service
+            .stopwatch_command(stopwatch.version, StopwatchCommand::Start)
+            .await
+            .unwrap();
+
+        clock.advance_monotonic(MonotonicDuration::from_secs(45));
+        clock.shift_wall(Duration::hours(-1));
+
+        let timers = service.timers().await.unwrap();
+        assert_eq!(timers[0].remaining_seconds, 75);
+        assert_eq!(timers[1].remaining_seconds, 255);
+        assert_eq!(service.stopwatch().await.unwrap().elapsed_seconds, 45);
+    }
+
+    #[tokio::test]
+    async fn timer_completion_is_persisted_once_after_restart_recovery() {
+        let started = Utc.with_ymd_and_hms(2026, 7, 20, 3, 0, 0).unwrap();
+        let database = Database::open_memory().await.unwrap();
+        let first_clock = Arc::new(ManualClock::new(started));
+        let first_service = AppService::with_clock(database.clone(), first_clock);
+        let timer = first_service
+            .create_timer(TimerDraft {
+                label: "確認".into(),
+                duration_seconds: 30,
+            })
+            .await
+            .unwrap();
+        first_service
+            .timer_command(timer.id, timer.version, TimerCommand::Start)
+            .await
+            .unwrap();
+
+        let restarted_clock = Arc::new(ManualClock::new(started + Duration::seconds(45)));
+        let restarted = AppService::with_clock(database.clone(), restarted_clock);
+        let completed = restarted.timers().await.unwrap();
+        assert_eq!(completed[0].status, TimerStatus::Completed);
+        assert_eq!(completed[0].remaining_seconds, 0);
+        restarted.timers().await.unwrap();
+
+        let completion_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM timer_run_completions")
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        assert_eq!(completion_count, 1);
     }
 }

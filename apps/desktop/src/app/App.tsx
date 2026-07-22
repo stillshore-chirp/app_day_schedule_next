@@ -10,6 +10,8 @@ import { TodayView } from "../features/schedule/TodayView";
 import { ListView, MonthView, WeekView } from "../features/views/CalendarViews";
 import { DiagnosticsView, FocusView, SettingsView } from "../features/views/OperationalViews";
 import { AlarmsView, TemplatesView } from "../features/views/LibraryViews";
+import { TimersView } from "../features/timers/TimersView";
+import { StopwatchView } from "../features/stopwatch/StopwatchView";
 import { useUiStore, type AppView } from "./ui-store";
 import { NotificationRuntime } from "./NotificationRuntime";
 import { SyncRuntime } from "./SyncRuntime";
@@ -21,6 +23,8 @@ const navItems: Array<{ view: AppView; label: string; symbol: string }> = [
   { view: "list", label: messages.navigation.list, symbol: "≡" },
   { view: "templates", label: messages.navigation.templates, symbol: "◇" },
   { view: "focus", label: messages.navigation.focus, symbol: "◎" },
+  { view: "timers", label: messages.navigation.timers, symbol: "◴" },
+  { view: "stopwatch", label: messages.navigation.stopwatch, symbol: "◉" },
   { view: "alarms", label: messages.navigation.alarms, symbol: "◷" },
   { view: "settings", label: messages.navigation.settings, symbol: "⚙" },
   { view: "diagnostics", label: messages.navigation.diagnostics, symbol: "▤" },
@@ -253,6 +257,8 @@ export function App({ client }: { client: AppClient }) {
         {activeView === "month" ? <MonthView client={client} /> : null}
         {activeView === "list" ? <ListView client={client} /> : null}
         {activeView === "focus" ? <FocusView client={client} bootstrap={bootstrap} /> : null}
+        {activeView === "timers" ? <TimersView client={client} /> : null}
+        {activeView === "stopwatch" ? <StopwatchView client={client} /> : null}
         {activeView === "settings" ? <SettingsView client={client} bootstrap={bootstrap} /> : null}
         {activeView === "diagnostics" ? <DiagnosticsView client={client} /> : null}
         {activeView === "templates" ? (

@@ -162,6 +162,36 @@ export const focusScheduleSummarySchema = z.object({
   workSeconds: z.number().int().nonnegative(),
 });
 
+export const timerDraftSchema = z.object({
+  label: z.string().trim().max(100),
+  durationSeconds: z.number().int().min(1).max(604_800),
+});
+
+export const timerSchema = timerDraftSchema.extend({
+  id: z.uuid(),
+  status: z.enum(["idle", "running", "paused", "completed"]),
+  elapsedSeconds: z.number().int().nonnegative(),
+  remainingSeconds: z.number().int().nonnegative(),
+  version: z.number().int().nonnegative(),
+});
+
+export const timerSetItemSchema = timerDraftSchema.extend({
+  sortOrder: z.number().int(),
+});
+
+export const timerSetSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(100),
+  version: z.number().int().nonnegative(),
+  items: z.array(timerSetItemSchema).min(1).max(500),
+});
+
+export const stopwatchSchema = z.object({
+  status: z.enum(["idle", "running", "paused"]),
+  elapsedSeconds: z.number().int().nonnegative(),
+  version: z.number().int().nonnegative(),
+});
+
 export const bootstrapSchema = z.object({
   schemaVersion: z.number().int().positive(),
   appVersion: z.string().min(1),
@@ -198,6 +228,12 @@ export type Bootstrap = z.infer<typeof bootstrapSchema>;
 export type FocusState = z.infer<typeof focusStateSchema>;
 export type FocusHistoryReport = z.infer<typeof focusHistoryReportSchema>;
 export type FocusScheduleSummary = z.infer<typeof focusScheduleSummarySchema>;
+export type TimerDraft = z.infer<typeof timerDraftSchema>;
+export type Timer = z.infer<typeof timerSchema>;
+export type TimerSet = z.infer<typeof timerSetSchema>;
+export type Stopwatch = z.infer<typeof stopwatchSchema>;
+export type TimerCommand = "start" | "pause" | "resume" | "reset";
+export type StopwatchCommand = "start" | "pause" | "resume" | "reset";
 export type SyncSummary = z.infer<typeof syncSummarySchema>;
 export type UserSafeError = z.infer<typeof userSafeErrorSchema>;
 
@@ -278,6 +314,8 @@ export const exportResultSchema = z.object({
   templateCount: z.number().int().nonnegative(),
   quickBlockCount: z.number().int().nonnegative(),
   alarmCount: z.number().int().nonnegative(),
+  timerCount: z.number().int().nonnegative(),
+  timerSetCount: z.number().int().nonnegative(),
 });
 
 export const importPreviewSchema = z.object({
@@ -289,6 +327,8 @@ export const importPreviewSchema = z.object({
   templateCount: z.number().int().nonnegative(),
   quickBlockCount: z.number().int().nonnegative(),
   alarmCount: z.number().int().nonnegative(),
+  timerCount: z.number().int().nonnegative(),
+  timerSetCount: z.number().int().nonnegative(),
   warnings: z.array(z.string().min(1)).max(20),
 });
 
@@ -297,6 +337,8 @@ export const importResultSchema = z.object({
   importedTemplateCount: z.number().int().nonnegative(),
   importedQuickBlockCount: z.number().int().nonnegative(),
   importedAlarmCount: z.number().int().nonnegative(),
+  importedTimerCount: z.number().int().nonnegative(),
+  importedTimerSetCount: z.number().int().nonnegative(),
   preservedExternalScheduleCount: z.number().int().nonnegative(),
 });
 

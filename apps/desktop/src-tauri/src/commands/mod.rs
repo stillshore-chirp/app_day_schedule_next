@@ -12,7 +12,8 @@ use crate::{
         DayTemplate, DayTemplateDraft, FocusCommand, FocusState, FreeAlarm, FreeAlarmDraft,
         LocalTimeResolution, Priority, QuickBlock, QuickBlockDraft, RecurrenceEditScope,
         RecurrencePreview, Schedule, ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery,
-        ScheduleStatus, Settings, SyncStatus, SyncSummary, TemplateApplyMode, TemplatePreview,
+        ScheduleStatus, Settings, StopwatchCommand, StopwatchState, SyncStatus, SyncSummary,
+        TemplateApplyMode, TemplatePreview, TimerCommand, TimerDraft, TimerSet, TimerState,
         UserSafeError,
     },
     infrastructure::{
@@ -130,6 +131,42 @@ pub struct FocusRequest {
 pub struct FocusScheduleSummary {
     schedule_item_id: Uuid,
     work_seconds: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimerUpdateRequest {
+    id: Uuid,
+    expected_version: u64,
+    draft: TimerDraft,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimerCommandRequest {
+    id: Uuid,
+    expected_version: u64,
+    command: TimerCommand,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionRequest {
+    id: Uuid,
+    expected_version: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimerSetCreateRequest {
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StopwatchCommandRequest {
+    expected_version: u64,
+    command: StopwatchCommand,
 }
 
 #[derive(Debug, Deserialize)]
@@ -415,6 +452,106 @@ pub async fn focus_schedule_summary(
         schedule_item_id,
         work_seconds,
     })
+}
+
+#[tauri::command]
+pub async fn timer_list(service: State<'_, AppService>) -> CommandResult<Vec<TimerState>> {
+    service.timers().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn timer_create(
+    service: State<'_, AppService>,
+    draft: TimerDraft,
+) -> CommandResult<TimerState> {
+    service.create_timer(draft).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn timer_update(
+    service: State<'_, AppService>,
+    request: TimerUpdateRequest,
+) -> CommandResult<TimerState> {
+    service
+        .update_timer(request.id, request.expected_version, request.draft)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn timer_delete(
+    service: State<'_, AppService>,
+    request: VersionRequest,
+) -> CommandResult<()> {
+    service
+        .delete_timer(request.id, request.expected_version)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn timer_command(
+    service: State<'_, AppService>,
+    request: TimerCommandRequest,
+) -> CommandResult<TimerState> {
+    service
+        .timer_command(request.id, request.expected_version, request.command)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn timer_set_list(service: State<'_, AppService>) -> CommandResult<Vec<TimerSet>> {
+    service.timer_sets().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn timer_set_create(
+    service: State<'_, AppService>,
+    request: TimerSetCreateRequest,
+) -> CommandResult<TimerSet> {
+    service
+        .save_timer_set(request.name)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn timer_set_apply(
+    service: State<'_, AppService>,
+    request: VersionRequest,
+) -> CommandResult<Vec<TimerState>> {
+    service
+        .apply_timer_set(request.id, request.expected_version)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn timer_set_delete(
+    service: State<'_, AppService>,
+    request: VersionRequest,
+) -> CommandResult<()> {
+    service
+        .delete_timer_set(request.id, request.expected_version)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn stopwatch_state_get(service: State<'_, AppService>) -> CommandResult<StopwatchState> {
+    service.stopwatch().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn stopwatch_command(
+    service: State<'_, AppService>,
+    request: StopwatchCommandRequest,
+) -> CommandResult<StopwatchState> {
+    service
+        .stopwatch_command(request.expected_version, request.command)
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]

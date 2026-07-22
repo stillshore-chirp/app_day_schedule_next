@@ -14,12 +14,13 @@
 - one in-memory timer に依存せず、persistent ledger と reconciliation を使う。
 - callback は idempotent。
 - 自由アラームの wall-clock 時刻が DST gap / ambiguity に当たる場合は黙って補正も配信もせず、安定した delivery key で `skipped` と理由を台帳へ1回だけ記録する。
+- timer は各 start で新しい run ID を発行し、完了を永続 event として確定してから `entity_type=timer` / `phase=complete` の delivery を生成する。同じ run ID の再観測では追加生成しない。
 
 ## 3. Sleep / resume / clock jump
 
 - resume 時に last observed wall time と current time を比較する。
 - grace window 内の missed item だけを候補にする。
-- max replay count を設ける。
+- max replay count を設け、上限を超えた occurrence も消去せず `skipped` / `replay_limit` として台帳へ1回だけ記録する。
 - long sleep 後は summary または skip policy を適用し、一斉発火しない。
 - clock backward で同一 delivery を再送しない。
 
@@ -54,6 +55,7 @@ transition は persisted timestamps、accumulated elapsed、cycle count、linked
 - break auto-start / next work auto-start は設定と説明を持つ。
 - notification sound / system notification を個別に設定できる設計を検討する。
 - screen reader に毎秒 countdown を読み上げない。
+- 複数 timer のラベル、残り時間、状態、操作対象をカードごとに明示する。timer set の適用が既存 timer を保持して追加することを操作前に説明する。
 
 ## 8. Tests
 
@@ -63,3 +65,5 @@ transition は persisted timestamps、accumulated elapsed、cycle count、linked
 - wall clock forward / backward、timezone change。
 - long sleep、grace boundary、max replay。
 - linked schedule delete / move during Focus。
+- 複数 timer の同時完了、同一 run の repeated poll / restart、timer 削除、通知拒否、bounded replay。
+- stopwatch と timer の monotonic 経過、process restart、wall clock forward / backward。

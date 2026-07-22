@@ -2529,6 +2529,340 @@ tbody tr:focus {
   white-space: pre-wrap;
 }
 
+.timer-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(300px, 0.8fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.timer-side-column,
+.timer-list,
+.timer-panel,
+.timer-set-list {
+  display: grid;
+  gap: 14px;
+}
+
+.timer-panel,
+.timer-card,
+.timer-lifecycle-note {
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 6px 22px rgb(39 52 77 / 7%);
+}
+
+.timer-panel {
+  padding: 18px;
+}
+
+.timer-panel--primary {
+  min-width: 0;
+}
+
+.timer-panel h2,
+.timer-panel p,
+.timer-card h3,
+.timer-card p,
+.timer-lifecycle-note p {
+  margin: 0;
+}
+
+.timer-panel > p,
+.timer-panel__heading p,
+.timer-lifecycle-note p,
+.timer-card__editor > small,
+.timer-set-note,
+.timer-set-list small,
+.timer-set-list p {
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.timer-create-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(320px, 1.4fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.timer-create-form > label,
+.timer-set-form label,
+.timer-card__editor > label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.duration-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(70px, 1fr));
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.duration-inputs legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.duration-inputs label {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.duration-inputs input {
+  min-width: 58px;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.duration-inputs .field-error {
+  grid-column: 1 / -1;
+}
+
+.timer-empty {
+  display: grid;
+  gap: 4px;
+  padding: 22px;
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+}
+
+.timer-empty strong {
+  color: var(--text);
+}
+
+.timer-empty--compact {
+  padding: 14px;
+}
+
+.timer-list {
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+}
+
+.timer-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-inline-start: 5px solid var(--border-strong);
+}
+
+.timer-card[data-status="running"] {
+  border-inline-start-color: var(--primary);
+}
+
+.timer-card[data-status="paused"] {
+  border-inline-start-color: var(--warning);
+}
+
+.timer-card[data-status="completed"] {
+  border-inline-start-color: var(--success);
+  background: color-mix(in srgb, var(--success-soft) 35%, var(--surface));
+}
+
+.timer-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.timer-card h3 {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.timer-card output,
+.stopwatch-card output {
+  color: var(--text);
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+
+.timer-card progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--primary);
+}
+
+.timer-card__editor {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(230px, 1.4fr);
+  align-items: end;
+  gap: 10px;
+}
+
+.timer-card__editor > small {
+  grid-column: 1 / -1;
+}
+
+.timer-status {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 24px;
+  align-items: center;
+  padding: 2px 8px;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.timer-status[data-status="running"] {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.timer-status[data-status="paused"] {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border-color: var(--warning);
+}
+
+.timer-status[data-status="completed"] {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success);
+}
+
+.timer-card__actions {
+  flex-wrap: wrap;
+}
+
+.button--danger-text {
+  color: var(--danger);
+  background: transparent;
+  border-color: transparent;
+}
+
+.button--danger-text:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger);
+}
+
+.timer-card .inline-confirm,
+.timer-set-list .inline-confirm {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+}
+
+.stopwatch-card output {
+  font-size: clamp(2.2rem, 6vw, 3.5rem);
+}
+
+.stopwatch-view__panel {
+  max-width: 720px;
+}
+
+.timer-set-form {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-soft);
+  border-radius: 10px;
+}
+
+.timer-set-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.timer-set-list > li {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.timer-set-list > li > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.timer-set-list p {
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+}
+
+.timer-lifecycle-note {
+  padding: 14px;
+  background: var(--warning-soft);
+  border-color: var(--warning);
+}
+
+@media (max-width: 1180px) {
+  .timer-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .timer-side-column {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .timer-lifecycle-note {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .timer-create-form,
+  .timer-card__editor,
+  .timer-side-column {
+    grid-template-columns: 1fr;
+  }
+
+  .timer-lifecycle-note {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timer-card progress {
+    transition: none;
+  }
+}
+
 @media (max-width: 760px) {
   .conflict-field {
     grid-template-columns: 1fr;

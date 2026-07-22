@@ -79,3 +79,10 @@ Rules:
 - JSON export は target と同じ directory の `.part` へ書き、cancel token を collection 間、encode 後、publish 前に検査する。
 - 取消または write / rename failure では `.part` を削除する。
 - target rename 完了後は成功として扱い、完成済み export を暗黙削除しない。
+
+## 9. Timer data compatibility
+
+- schema version 11 は `timers`、`timer_sets`、`timer_set_items`、singleton `stopwatch_state`、run 単位の `timer_run_completions` を追加する。
+- JSON export format version 2 は timer のラベル・設定時間と timer set を含める。実行状態、残り時間、stopwatch state、completion / notification ledger は含めない。
+- version 1 JSON は timer field がないものとして引き続き取り込む。version 2 import は timer を停止状態で追加し、replace 時は timer / set / stopwatch state も同一 transaction で置換・初期化する。
+- 同名 timer set の追加 import は100文字制約内の連番名へ解決する。既存 timer と合わせて500件を超える import は transaction 全体を拒否する。

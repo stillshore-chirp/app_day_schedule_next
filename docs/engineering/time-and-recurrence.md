@@ -52,7 +52,15 @@ UI input を timezone とともに resolve し、UTC instant を保存します�
 - same input / same tzdata で same output。
 - test は fixed instant、timezone、locale を使用する。
 
-## 8. Boundary tests
+## 8. Timer / Stopwatch
+
+- timer の設定値は `duration_seconds: 1..=604800` と100文字以内の任意ラベル。複数 timer は独立した `Idle / Running / Paused / Completed` 状態と optimistic version を持つ。
+- timer set は timer のラベルと設定時間を順序付きで保存する。適用は単一 transaction で停止状態の timer を追記し、既存 timer と現在の計測を変更しない。
+- stopwatch は端末内で1件の `Idle / Running / Paused` 状態を持つ。
+- process 内では monotonic anchor から elapsed を求める。再起動後の初回観測では保存済み UTC start と wall clock の非負差を復旧値にし、その後の wall clock jump を elapsed へ反映しない。
+- pause / resume / reset / completion は SQLite へ version 付きで確定する。timer completion は run UUID ごとに1回だけ記録する。
+
+## 9. Boundary tests
 
 - adjacent、1分 overlap、4分、5分、multiple components。
 - 23:59、00:00、24h、cross-midnight。
@@ -61,3 +69,5 @@ UI input を timezone とともに resolve し、UTC instant を保存します�
 - system timezone change。
 - all-day multi-day。
 - recurrence master / exception / cancellation / until。
+- 複数 timer の並行進行、1秒 / 7日境界、pause / resume、restart recovery、wall clock forward / backward。
+- stopwatch の repeated pause / resume、restart recovery、wall clock backward。

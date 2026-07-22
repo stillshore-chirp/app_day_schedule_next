@@ -28,6 +28,13 @@ describe("Day Schedule Next native smoke", () => {
     );
   };
 
+  const scrollActiveViewToTop = async () => {
+    await browser.execute(() => {
+      const view = document.querySelector("main.secondary-view");
+      if (view instanceof HTMLElement) view.scrollTop = 0;
+    });
+  };
+
   it("boots the real Tauri application and reaches the native IPC boundary", async () => {
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
@@ -36,7 +43,7 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 10, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 11, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
@@ -148,6 +155,79 @@ describe("Day Schedule Next native smoke", () => {
     expect(persisted.alarms).toEqual(
       expect.arrayContaining([expect.objectContaining({ label: alarmName })]),
     );
+  });
+
+  it("persists multiple timers, a timer set, and the stopwatch through native IPC", async () => {
+    await setLogicalWindowSize(1180, 820);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "タイマー")]').click();
+    await $('//main//h1[normalize-space(.)="タイマー"]').waitForDisplayed();
+
+    const newLabel = $('//input[@placeholder="例: 紅茶、ストレッチ"]');
+    await newLabel.setValue("E2E紅茶");
+    await $('//button[normalize-space(.)="タイマーを追加"]').click();
+    await $('//article[.//h3[normalize-space(.)="E2E紅茶"]]').waitForDisplayed();
+    await newLabel.setValue("E2Eストレッチ");
+    await $('//button[normalize-space(.)="タイマーを追加"]').click();
+    await $('//article[.//h3[normalize-space(.)="E2Eストレッチ"]]').waitForDisplayed();
+
+    await $(
+      '//article[.//h3[normalize-space(.)="E2E紅茶"]]//button[normalize-space(.)="開始"]',
+    ).click();
+    await $(
+      '//article[.//h3[normalize-space(.)="E2E紅茶"]]//button[normalize-space(.)="一時停止"]',
+    ).waitForDisplayed();
+    await $(
+      '//article[.//h3[normalize-space(.)="E2E紅茶"]]//button[normalize-space(.)="一時停止"]',
+    ).click();
+
+    await $('//input[@placeholder="例: 朝の準備"]').setValue("E2E休憩セット");
+    await $('//button[normalize-space(.)="現在の構成を保存"]').click();
+    await $('//*[normalize-space(.)="E2E休憩セット"]').waitForDisplayed();
+    await scrollActiveViewToTop();
+    await browser.saveScreenshot("./test-results/native-timers.png");
+
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "ストップウォッチ")]').click();
+    await $('//main//h1[normalize-space(.)="ストップウォッチ"]').waitForDisplayed();
+    await $('//button[normalize-space(.)="計測を開始"]').click();
+    await $(
+      '//section[@aria-labelledby="stopwatch-title"]//button[normalize-space(.)="一時停止"]',
+    ).waitForDisplayed();
+    await browser.pause(1_100);
+    await $(
+      '//section[@aria-labelledby="stopwatch-title"]//button[normalize-space(.)="一時停止"]',
+    ).click();
+    await browser.saveScreenshot("./test-results/native-stopwatch.png");
+
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "タイマー")]').click();
+    await $('//article[.//h3[normalize-space(.)="E2E紅茶"]]').waitForDisplayed();
+    const persisted = await browser.tauri.execute(async ({ core }) => ({
+      timers: await core.invoke("timer_list"),
+      sets: await core.invoke("timer_set_list"),
+      stopwatch: await core.invoke("stopwatch_state_get"),
+    }));
+    expect(persisted.timers).toHaveLength(2);
+    expect(persisted.timers).toEqual(
+      expect.arrayContaining([expect.objectContaining({ label: "E2E紅茶", status: "paused" })]),
+    );
+    expect(persisted.sets).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "E2E休憩セット" })]),
+    );
+    expect(persisted.stopwatch).toMatchObject({ status: "paused" });
+
+    await setLogicalWindowSize(720, 720);
+    await scrollActiveViewToTop();
+    await browser.saveScreenshot("./test-results/native-timers-narrow.png");
+    await browser.execute(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    await scrollActiveViewToTop();
+    await $('//main//h1[normalize-space(.)="タイマー"]').waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-timers-text-200.png");
+    await browser.execute(() => {
+      document.documentElement.style.removeProperty("font-size");
+    });
   });
 
   it("persists settings and exercises the native pointer-drag schedule path", async () => {

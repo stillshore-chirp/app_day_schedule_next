@@ -266,11 +266,19 @@ impl Database {
             ("diagnostics", "DELETE FROM diagnostic_events"),
             ("focus-history", "DELETE FROM focus_history"),
             ("focus-sessions", "DELETE FROM focus_sessions"),
+            ("timer-completions", "DELETE FROM timer_run_completions"),
             (
                 "notification-deliveries",
                 "DELETE FROM notification_deliveries",
             ),
             ("notification-rules", "DELETE FROM notification_rules"),
+            ("timers", "DELETE FROM timers"),
+            ("timer-set-items", "DELETE FROM timer_set_items"),
+            ("timer-sets", "DELETE FROM timer_sets"),
+            (
+                "stopwatch",
+                "UPDATE stopwatch_state SET status = 'idle', started_at_utc = NULL, elapsed_before_start_seconds = 0, version = version + 1, updated_at_utc = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE singleton_id = 1",
+            ),
             ("sync-conflicts", "DELETE FROM sync_conflicts"),
             ("sync-mappings", "DELETE FROM sync_mappings"),
             ("sync-outbox", "DELETE FROM sync_outbox"),
@@ -1260,7 +1268,7 @@ impl Database {
         self.integrity_check().await?;
         Ok(DiagnosticsSnapshot {
             app_version: app_version.into(),
-            schema_version: 10,
+            schema_version: 11,
             database_state: "ready",
             schedule_count: schedule_count.max(0) as u64,
             deleted_count: deleted_count.max(0) as u64,

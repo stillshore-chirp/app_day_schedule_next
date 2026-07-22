@@ -7,6 +7,8 @@ export type AppView =
   | "list"
   | "templates"
   | "focus"
+  | "timers"
+  | "stopwatch"
   | "alarms"
   | "settings"
   | "diagnostics";
@@ -18,6 +20,8 @@ const appViews: AppView[] = [
   "list",
   "templates",
   "focus",
+  "timers",
+  "stopwatch",
   "alarms",
   "settings",
   "diagnostics",
