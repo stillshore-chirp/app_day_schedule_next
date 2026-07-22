@@ -31,6 +31,24 @@
   --danger-soft: #fff0ef;
   --focus: #136dec;
   --shadow: 0 12px 36px rgb(39 52 77 / 12%);
+  --on-accent: #ffffff;
+  --brand-start: #345ed0;
+  --brand-end: #183a92;
+  --brand-shadow: rgb(49 91 199 / 28%);
+  --primary-action: #315bc7;
+  --primary-action-hover: #2448a8;
+  --danger-action: #b42318;
+  --state-chip-text: #0c4b28;
+  --state-chip-background: #e3f8ea;
+  --state-chip-border: #6eb68a;
+  --state-chip-inverse-text: #e8efff;
+  --state-chip-inverse-background: #29416f;
+  --state-chip-inverse-border: #6f8bc2;
+  --dock-text: #f3f6fb;
+  --dock-surface: #111a27;
+  --dock-muted: #aab6c8;
+  --dock-progress: #3c4859;
+  --dock-progress-fill: #7ea1ff;
 }
 
 :root[data-theme="dark"] {
@@ -55,6 +73,47 @@
   --danger-soft: #46201e;
   --focus: #8bb7ff;
   --shadow: 0 16px 40px rgb(0 0 0 / 28%);
+}
+
+:root[data-theme="mild"] {
+  color-scheme: light;
+  --canvas: #cfd6d1;
+  --surface: #e3e6df;
+  --surface-raised: #eaebe4;
+  --surface-soft: #d2d9d3;
+  --surface-strong: #34423d;
+  --border: #a7b4ac;
+  --border-strong: #687970;
+  --text: #29352f;
+  --text-muted: #4b5d54;
+  --primary: #395d55;
+  --primary-hover: #2f4d47;
+  --primary-soft: #c6d5ce;
+  --success: #416b51;
+  --success-soft: #cad9cc;
+  --warning: #76591f;
+  --warning-soft: #ddd2b6;
+  --danger: #8a4a46;
+  --danger-soft: #dfcbc8;
+  --focus: #245b73;
+  --shadow: 0 12px 32px rgb(45 61 53 / 15%);
+  --brand-start: #55766d;
+  --brand-end: #3e5d56;
+  --brand-shadow: rgb(62 93 86 / 24%);
+  --primary-action: #395d55;
+  --primary-action-hover: #2f4d47;
+  --danger-action: #8a4a46;
+  --state-chip-text: #315440;
+  --state-chip-background: #cbd9ce;
+  --state-chip-border: #60796a;
+  --state-chip-inverse-text: #e8efea;
+  --state-chip-inverse-background: #4b625a;
+  --state-chip-inverse-border: #9fb4aa;
+  --dock-text: #eef0eb;
+  --dock-surface: #34423d;
+  --dock-muted: #c4cdc7;
+  --dock-progress: #596a63;
+  --dock-progress-fill: #9bb9ae;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -109,11 +168,20 @@ textarea {
   font: inherit;
 }
 
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--primary);
+}
+
 h1,
 h2,
 h3,
 h4,
-legend,
+legend {
+  color: var(--text);
+}
+
 output,
 strong {
   color: inherit;
@@ -202,12 +270,12 @@ button:disabled {
   width: 38px;
   height: 38px;
   place-items: center;
-  color: #fff;
-  background: linear-gradient(145deg, #345ed0, #183a92);
+  color: var(--on-accent);
+  background: linear-gradient(145deg, var(--brand-start), var(--brand-end));
   border-radius: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 5px 14px rgb(49 91 199 / 28%);
+  box-shadow: 0 5px 14px var(--brand-shadow);
 }
 
 .date-navigation {
@@ -219,6 +287,7 @@ button:disabled {
   min-width: 230px;
   min-height: 38px;
   padding: 6px 12px;
+  color: var(--text);
   background: transparent;
   border: 0;
   border-radius: 8px;
@@ -788,7 +857,7 @@ button:disabled {
   right: calc(100% + 8px);
   top: -11px;
   padding: 3px 5px;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--danger);
   border-radius: 5px;
   font-size: 0.68rem;
@@ -800,18 +869,18 @@ button:disabled {
   min-height: 20px;
   align-items: center;
   padding: 2px 6px;
-  color: #0c4b28;
-  background: #e3f8ea;
-  border: 1px solid #6eb68a;
+  color: var(--state-chip-text);
+  background: var(--state-chip-background);
+  border: 1px solid var(--state-chip-border);
   border-radius: 99px;
   font-size: 0.68rem;
   font-weight: 700;
 }
 
 .state-chip--inverse {
-  color: #e8efff;
-  background: #29416f;
-  border-color: #6f8bc2;
+  color: var(--state-chip-inverse-text);
+  background: var(--state-chip-inverse-background);
+  border-color: var(--state-chip-inverse-border);
 }
 
 .inspector {
@@ -969,15 +1038,15 @@ textarea[aria-invalid="true"] {
 }
 
 .button--primary {
-  color: #fff;
-  background: #315bc7;
-  border-color: #315bc7;
+  color: var(--on-accent);
+  background: var(--primary-action);
+  border-color: var(--primary-action);
 }
 
 .button--primary:hover {
-  color: #fff;
-  background: #2448a8;
-  border-color: #2448a8;
+  color: var(--on-accent);
+  background: var(--primary-action-hover);
+  border-color: var(--primary-action-hover);
 }
 
 .button--subtle {
@@ -987,9 +1056,9 @@ textarea[aria-invalid="true"] {
 }
 
 .button--danger {
-  color: #fff;
-  background: #b42318;
-  border-color: #b42318;
+  color: var(--on-accent);
+  background: var(--danger-action);
+  border-color: var(--danger-action);
 }
 
 .button--danger-outline {
@@ -1049,6 +1118,11 @@ textarea[aria-invalid="true"] {
   gap: 20px;
   padding: 13px 15px;
   margin-bottom: 14px;
+  color: var(--text);
+}
+
+.status-message strong,
+.permission-state {
   color: var(--text);
 }
 
@@ -1112,8 +1186,8 @@ textarea[aria-invalid="true"] {
   gap: 22px;
   min-height: 76px;
   padding: 12px 22px;
-  color: #f3f6fb;
-  background: #111a27;
+  color: var(--dock-text);
+  background: var(--dock-surface);
   z-index: 9;
 }
 
@@ -1135,21 +1209,21 @@ textarea[aria-invalid="true"] {
 .now-dock__current > span:not(.eyebrow, .state-chip),
 .now-dock__next > span,
 .now-dock__focus > span {
-  color: #aab6c8;
+  color: var(--dock-muted);
   font-size: 0.75rem;
 }
 
 .now-dock__progress {
   height: 8px;
   overflow: hidden;
-  background: #3c4859;
+  background: var(--dock-progress);
   border-radius: 99px;
 }
 
 .now-dock__progress i {
   display: block;
   height: 100%;
-  background: #7ea1ff;
+  background: var(--dock-progress-fill);
   border-radius: inherit;
 }
 
@@ -1595,6 +1669,10 @@ tbody tr:focus {
 .data-transfer > p,
 .import-preview h3 {
   margin: 0;
+}
+
+.settings-view summary {
+  color: var(--text);
 }
 
 .data-transfer > p,
@@ -2314,6 +2392,7 @@ tbody tr:focus {
 .compact-next h2,
 .compact-agenda h2 {
   margin: 0;
+  color: var(--text);
 }
 
 .compact-header h1 {

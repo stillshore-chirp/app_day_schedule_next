@@ -109,7 +109,7 @@ Dependency audit workflow は依存ファイル変更PR、月1回、手動実行
 | Notification | unknown、granted、denied、sound-only、ledger result |
 | Focus | idle、working、paused、break、waiting next、history |
 | Data | export、preview、changed file、backup、restore stage、delete confirmation |
-| Layout | 720px、200% text、light / dark、500 items |
+| Layout | 720px、200% text、light / mild / dark、500 items |
 
 UI PR は対象状態ごとの変更前／変更後 screenshot を添付します。新規 scaffold では変更前画面が存在しないため、その事実と初回 native screenshot を証跡にします。
 

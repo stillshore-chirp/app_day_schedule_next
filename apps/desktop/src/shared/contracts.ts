@@ -94,7 +94,7 @@ export const scheduleDraftSchema = z
   .superRefine(refineScheduleInterval);
 
 export const settingsSchema = z.object({
-  theme: z.enum(["system", "light", "dark"]),
+  theme: z.enum(["system", "light", "mild", "dark"]),
   locale: z.enum(["ja", "en"]),
   snapMinutes: z.union([z.literal(1), z.literal(5), z.literal(10), z.literal(15), z.literal(30)]),
   closeBehavior: z.enum(["tray", "quit"]),

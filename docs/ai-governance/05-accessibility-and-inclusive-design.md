@@ -87,4 +87,4 @@ WCAG 2.2 の dragging movements を意識し、schedule move / resize は direct
 - focus screenshots / recording。
 - affected screen reader の smoke（実施可否を明示）。
 - contrast / target review。
-- 200% text、high DPI、dark / light。
+- 200% text、high DPI、light / mild / dark。

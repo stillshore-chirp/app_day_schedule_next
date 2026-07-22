@@ -12,4 +12,4 @@
 - [ ] Density supports expert use without hiding targets / focus.
 - [ ] Long Japanese title / time / duration remains readable.
 - [ ] Overlap / current line / Compact Window do not hide selected item.
-- [ ] Narrow / 200% text / high DPI / dark-light hierarchy holds.
+- [ ] Narrow / 200% text / high DPI / light-mild-dark hierarchy holds.
