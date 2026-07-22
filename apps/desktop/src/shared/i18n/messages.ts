@@ -22,6 +22,7 @@ export const jaMessages = {
   "actions.returnToday": "今日へ戻る",
   "actions.openCompact": "コンパクト表示を開く",
   "settings.actions.resetDefaults": "既定値へ戻す",
+  "settings.theme.mild": "マイルド",
   "settings.states.defaultsLoaded": "既定値を入力しました。内容を確認して保存してください。",
   "settings.states.defaultsFailed": "既定値を読み込めませんでした。現在の入力は保持されています。",
   "settings.help.resetDefaults":

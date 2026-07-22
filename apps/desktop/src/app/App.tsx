@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { addDays } from "date-fns";
@@ -73,7 +73,7 @@ export function App({ client }: { client: AppClient }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [openCreate, selectedDate, setActiveView, setSelectedDate]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const theme = bootstrapQuery.data?.settings.theme ?? "system";
     document.documentElement.dataset.theme = theme;
   }, [bootstrapQuery.data?.settings.theme]);
@@ -259,7 +259,9 @@ export function App({ client }: { client: AppClient }) {
         {activeView === "focus" ? <FocusView client={client} bootstrap={bootstrap} /> : null}
         {activeView === "timers" ? <TimersView client={client} /> : null}
         {activeView === "stopwatch" ? <StopwatchView client={client} /> : null}
-        {activeView === "settings" ? <SettingsView client={client} bootstrap={bootstrap} /> : null}
+        {activeView === "settings" ? (
+          <SettingsView client={client} bootstrap={bootstrap} onSettingsSaved={refreshBootstrap} />
+        ) : null}
         {activeView === "diagnostics" ? <DiagnosticsView client={client} /> : null}
         {activeView === "templates" ? (
           <TemplatesView

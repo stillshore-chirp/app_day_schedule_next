@@ -32,7 +32,7 @@ UI 変更 PR では対象状態ごとの before / after screenshot を添付し�
 - permission unknown / denied / granted。
 - Focus idle / working / paused / break。
 - backup none / creating / failed / restore preview。
-- main / Compact / narrow / 200% text / dark / light。
+- main / Compact / narrow / 200% text / light / mild / dark。
 
 ## 4. Evidence requirements
 

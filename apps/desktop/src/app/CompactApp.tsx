@@ -1,5 +1,5 @@
 import { appLocale, translate } from "../shared/i18n/messages";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FocusState, Schedule } from "../shared/contracts";
 import type { AppClient } from "../shared/ipc/client";
@@ -38,6 +38,11 @@ export function CompactApp({ client }: { client: AppClient }) {
       setBusy(false);
     }
   };
+
+  useLayoutEffect(() => {
+    const theme = bootstrap.data?.settings.theme ?? "system";
+    document.documentElement.dataset.theme = theme;
+  }, [bootstrap.data?.settings.theme]);
 
   if (bootstrap.isLoading || schedules.isLoading) {
     return (

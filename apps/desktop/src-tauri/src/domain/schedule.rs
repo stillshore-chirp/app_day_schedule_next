@@ -405,6 +405,7 @@ pub struct Settings {
 pub enum Theme {
     System,
     Light,
+    Mild,
     Dark,
 }
 
@@ -539,5 +540,14 @@ mod tests {
         value.all_day_end_date_exclusive =
             Some(chrono::NaiveDate::from_ymd_opt(2026, 3, 30).unwrap());
         assert!(value.validate().is_ok());
+    }
+
+    #[test]
+    fn serializes_the_mild_theme_for_the_frontend_contract() {
+        assert_eq!(serde_json::to_string(&Theme::Mild).unwrap(), "\"mild\"");
+        assert_eq!(
+            serde_json::from_str::<Theme>("\"mild\"").unwrap(),
+            Theme::Mild
+        );
     }
 }

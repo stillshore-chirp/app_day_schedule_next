@@ -239,7 +239,15 @@ function focusEventLabel(event: FocusHistoryReport["entries"][number]["event"]):
   }[event];
 }
 
-export function SettingsView({ client, bootstrap }: { client: AppClient; bootstrap: Bootstrap }) {
+export function SettingsView({
+  client,
+  bootstrap,
+  onSettingsSaved,
+}: {
+  client: AppClient;
+  bootstrap: Bootstrap;
+  onSettingsSaved: () => void;
+}) {
   const [settings, setSettings] = useState<Settings>(bootstrap.settings);
   const [saved, setSaved] = useState(false);
   const [resetState, setResetState] = useState<"loaded" | "failed" | null>(null);
@@ -276,9 +284,11 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
   const save = async () => {
     setBusy(true);
     try {
-      setSettings(await client.updateSettings(settings));
+      const savedSettings = await client.updateSettings(settings);
+      setSettings(savedSettings);
       setSaved(true);
       setResetState(null);
+      onSettingsSaved();
     } finally {
       setBusy(false);
     }
@@ -326,6 +336,7 @@ export function SettingsView({ client, bootstrap }: { client: AppClient; bootstr
             >
               <option value="system">{translate("features.views.OperationalViews.045")}</option>
               <option value="light">{translate("features.views.OperationalViews.046")}</option>
+              <option value="mild">{translate("settings.theme.mild")}</option>
               <option value="dark">{translate("features.views.OperationalViews.047")}</option>
             </select>
           </label>

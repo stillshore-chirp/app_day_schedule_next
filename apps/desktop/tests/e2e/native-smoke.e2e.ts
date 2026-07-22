@@ -230,6 +230,78 @@ describe("Day Schedule Next native smoke", () => {
     });
   });
 
+  it("persists and renders the mild theme across main and compact windows", async () => {
+    await setLogicalWindowSize(1180, 820);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
+    const theme = $('//label[contains(., "テーマ")]/select');
+    await browser.execute(() => {
+      const label = Array.from(document.querySelectorAll("label")).find((candidate) =>
+        candidate.textContent?.includes("テーマ"),
+      );
+      const select = label?.querySelector("select");
+      if (!select) throw new Error("theme select was not found");
+      select.value = "mild";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect(theme).toHaveValue("mild");
+    await $('//button[normalize-space(.)="設定を保存"]').click();
+    await $(
+      '//*[self::div or self::section][contains(., "設定をこの端末に保存しました")]',
+    ).waitForDisplayed();
+    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "mild", {
+      timeoutMsg: "mild theme was not applied after saving settings",
+    });
+    await scrollActiveViewToTop();
+    await browser.saveScreenshot("./test-results/native-mild-settings.png");
+    const savedSettings = (await browser.tauri.execute(({ core }) =>
+      core.invoke("bootstrap_get"),
+    )) as { settings: { theme: string } };
+    expect(savedSettings.settings.theme).toBe("mild");
+
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "mild", {
+      timeoutMsg: "mild theme was not restored after reloading the application",
+    });
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+    await browser.saveScreenshot("./test-results/native-mild-today.png");
+
+    const originalHandle = await browser.getWindowHandle();
+    await $('//button[contains(., "コンパクト表示")]').click();
+    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1);
+    const compactHandle = (await browser.getWindowHandles()).find(
+      (handle) => handle !== originalHandle,
+    );
+    if (!compactHandle) throw new Error("compact window was not created");
+    await browser.tauri.switchWindow("compact");
+    await browser.switchToWindow(compactHandle);
+    await $(".compact-shell").waitForDisplayed();
+    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "mild", {
+      timeoutMsg: "mild theme was not applied to the compact window",
+    });
+    await browser.saveScreenshot("./test-results/native-mild-compact.png");
+    await browser.tauri.switchWindow("main");
+    await browser.switchToWindow(originalHandle);
+    await $(".app-shell").waitForDisplayed();
+
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
+    const restoredTheme = $('//label[contains(., "テーマ")]/select');
+    await browser.execute(() => {
+      const label = Array.from(document.querySelectorAll("label")).find((candidate) =>
+        candidate.textContent?.includes("テーマ"),
+      );
+      const select = label?.querySelector("select");
+      if (!select) throw new Error("theme select was not found");
+      select.value = "system";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect(restoredTheme).toHaveValue("system");
+    await $('//button[normalize-space(.)="設定を保存"]').click();
+    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "system", {
+      timeoutMsg: "system theme was not restored after mild-theme evidence capture",
+    });
+  });
+
   it("persists settings and exercises the native pointer-drag schedule path", async () => {
     await setLogicalWindowSize(1180, 820);
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   scheduleDraftSchema,
+  settingsSchema,
   stopwatchSchema,
   timerDraftSchema,
   timerSetSchema,
@@ -65,5 +66,31 @@ describe("timer contracts", () => {
     expect(
       stopwatchSchema.safeParse({ status: "running", elapsedSeconds: 12, version: 1 }).success,
     ).toBe(true);
+  });
+});
+
+describe("settingsSchema", () => {
+  it("accepts the mild theme and rejects unknown theme names", () => {
+    const settings = {
+      theme: "mild",
+      locale: "ja",
+      snapMinutes: 5,
+      closeBehavior: "tray",
+      notificationGraceMinutes: 10,
+      notificationMaxReplay: 3,
+      focusWorkMinutes: 25,
+      focusBreakMinutes: 5,
+      scheduleNotificationsEnabled: true,
+      osNotificationsEnabled: true,
+      soundNotificationsEnabled: false,
+      focusLongBreakMinutes: 15,
+      focusLongBreakEvery: 4,
+      focusAutoStart: false,
+      focusNotificationsEnabled: true,
+      lastTemplateId: null,
+    };
+
+    expect(settingsSchema.safeParse(settings).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...settings, theme: "sepia" }).success).toBe(false);
   });
 });
