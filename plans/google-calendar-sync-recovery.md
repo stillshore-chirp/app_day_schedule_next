@@ -5,7 +5,7 @@
 - Issue: #14
 - Branch: `codex/google-oauth-connect`
 - Owner: Codex
-- Status: in-progress
+- Status: completed
 - Updated: 2026-07-26
 
 ## 目標
@@ -113,9 +113,9 @@
 
 ## 再開情報
 
-- Current state: 公式契約、v12 migration、initial / incremental / partial failure、recurrence、UI回復状態を実装。mock / native / personal count-only gateを通過。
-- Last completed slice: personal debug DMGでtoken / mapping / active mapped itemの非0とList表示を確認。
-- Next smallest action: PR #15の最新headでplatform CI、dependency audit、code reviewを完了する。
+- Current state: 公式契約、v12 migration、initial / incremental / partial failure、recurrence、UI回復状態を実装。mock / personal count-only、全platform native / installer gateを通過。
+- Last completed slice: run `30195380348`でmacOS arm64 / x64 / Windows x64のnative E2E、visual regression、unsigned installer artifactを確認。
+- Next smallest action: PR #15のmaintainer merge判断。
 - Blocking fact: なし。
 - Resume command: `cargo test --workspace --all-features infrastructure::google::tests`
 
@@ -137,9 +137,12 @@ node scripts/verify-agent-harness.mjs
 | synthetic native E2E | Pass | 13 |
 | Issue #14 visual baseline review | Pass | normalは独立CI actualがbyte一致。200%は最新CI actualで文字拡大とsynthetic状態を目視確認し、誤って100%だったbaselineを置換 |
 | personal debug DMG / count-only sync / List UI | Pass | token / mapping / active mapped item非0、List非empty |
+| PR CI / dependency audit | Pass | run `30195358312` / `30195358339` |
+| all-platform native / installer | Pass | run `30195380348`、3 platform各13 E2E、全7 visual snapshot、3 installer artifact |
+| PR review state | Pass | CI成功後のconversation / review submission / review threadはいずれも0件 |
 
 ## 未実行と残リスク
 
-- 更新baselineとE2E isolation修正を含む最新headのmacOS arm64 / x64 / Windows x64 CI、installer build、reviewは未完了。
-- 既存5 snapshotのlocal全体比較は、旧baselineと現端末の画素寸法差により未完了。Issue #14 normalは独立CI actualの一致、200%は最新CI actualの文字拡大とsynthetic状態を目視確認済みで、全体比較は更新後headのmacOS arm64同一環境で確認する。
+- 実Google OAuth / keyringの対話確認はmacOS arm64のみ。macOS x64 / Windowsの実account接続は未確認だが、各target OSでsynthetic native E2Eと通常installer buildを通した。
+- 生成したunsigned installerからのinstall / launch / OS permission操作は未確認。個人利用のdebug artifactであり、署名・notarizationは本Issueの対象外。
 - 実機の一部calendarは未対応形式を含むため、そのcalendar単位で`validation`停止した。previous token / local dataを保持し、他calendarの同期とList表示は完了した。

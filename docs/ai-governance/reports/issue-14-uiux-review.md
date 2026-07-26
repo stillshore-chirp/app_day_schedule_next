@@ -3,9 +3,9 @@
 ## 1. Summary
 
 - Issue / PR: Issue #14 / PR #15
-- Commit: PR latest head
+- Implementation commit: `2e1d2bc`
 - Affected state: Settings > Google カレンダー、app header / Compact sync summary
-- Decision: Pending — synthetic native / 200% textとmacOS personal count-only確認はPass。更新baselineを含む最終headの全platform CIとPR reviewの記録前は最終Passにしない
+- Decision: Pass — synthetic native / 200% text、macOS personal count-only、全platform CI / installer build、PR review stateを確認
 - P0 / P1 / P2: 0 / 0 / 0（実装・fixture済み範囲）
 
 ## 2. User value and novice simulation
@@ -63,8 +63,10 @@
 - Frontend: Google settings component 6 tests、typed contract、a11y 7 tests
 - Native: 13 tests、[通常のcalendar recovery state](../../evidence/issue-14/native-google-calendar-recovery.png)、[200% text](../../evidence/issue-14/native-google-calendar-recovery-text-200.png)
 - Before: [OAuth接続導線だけの状態](../../evidence/issue-13/native-google-connect-after.png)。Afterはcalendar単位の権限・回復状態を同じ設定panelへ追加
-- Visual regression: 通常snapshotは独立した2回のmacOS arm64 CI actualがbyte一致。200% snapshotは最新CI actualで対象panelの文字拡大とsynthetic状態を目視確認し、誤って100%だったbaselineを置換した。既存5 snapshotを含む最終比較は、更新後headの同一CI環境で再確認する
+- Visual regression: run `30195380348`で全7 snapshotが4%以内。Today 0.306%、Week 0.464%、Template 0.239%、Compact 1.719%、Conflict 0.443%、Google recovery通常 / 200%は各0.000%
 - E2E isolation: fixture themeを各証跡前にlightへ固定し、Compact windowを閉じてmain windowへ復帰する。通知履歴specではReactの5秒pollをE2E buildだけ停止し、specを唯一のclaim元にしてclock競合を排除する
 - macOS personal: personal build / debug DMGでtoken、mapping、active mapped itemが非0。Listはempty stateではなく、同期済みcalendarとvalidation calendarを設定画面で区別。個人予定本文と識別子は取得・保存していない
-- Pending: 更新後headのmacOS arm64 / x64 / Windows x64 CI、全snapshot比較、installer build、code review
+- Platform: run `30195380348`でmacOS arm64 / x64 / Windows x64の各13 native E2E、通常unsigned installer build、artifact uploadが成功
+- PR review: 必須CI成功後にconversation comment、review submission、review threadをGitHub API / GraphQLで確認し、いずれも0件
+- Remaining manual boundary: 実Google OAuth / keyringの対話確認はmacOS arm64のみ。macOS x64 / Windowsの実account接続と、生成installerからのinstall / launch / OS permission操作は未確認
 - Publication: synthetic fixtureのみ。個人の予定、account、calendar / event ID、token、pathは含めない。
