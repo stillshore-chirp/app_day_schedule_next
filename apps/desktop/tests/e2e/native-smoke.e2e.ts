@@ -38,7 +38,7 @@ describe("Day Schedule Next native smoke", () => {
   const closeCompactWindowAndReturnToMain = async () => {
     await browser.tauri.switchWindow("main");
     await browser.tauri.execute(({ core }) => core.invoke("e2e_compact_window_close"));
-    await browser.waitUntil(async () => !(await browser.tauri.listWindows()).includes("compact"), {
+    await browser.waitUntil(async () => (await browser.getWindowHandles()).length === 1, {
       timeoutMsg: "compact window was not closed",
     });
     await $(".app-shell").waitForDisplayed();
@@ -373,7 +373,7 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-mild-today.png");
 
     await $('//button[contains(., "コンパクト表示")]').click();
-    await browser.waitUntil(async () => (await browser.tauri.listWindows()).includes("compact"), {
+    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1, {
       timeoutMsg: "compact window was not created",
     });
     await browser.tauri.switchWindow("compact");
@@ -553,7 +553,7 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-conflict.png");
 
     await $('//button[contains(., "コンパクト表示")]').click();
-    await browser.waitUntil(async () => (await browser.tauri.listWindows()).includes("compact"), {
+    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1, {
       timeoutMsg: "compact window was not created",
     });
     await browser.tauri.switchWindow("compact");
