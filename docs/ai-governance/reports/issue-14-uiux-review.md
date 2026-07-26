@@ -66,12 +66,12 @@
 - Rust: recurrence set / ordinal BYDAY / DST gap・overlap / RDATE-only / pull-token transaction / v13 50,000-row migration fixture
 - Frontend: typed recurrence line contract、複雑なGoogle系列のread-only説明component test
 - Native: calendar recoveryの変更前baselineは[通常](../../evidence/issue-14/native-google-calendar-recovery.png)、[200% text](../../evidence/issue-14/native-google-calendar-recovery-text-200.png)。複雑な系列panelは変更後の[通常](../../evidence/issue-14/native-google-complex-recurrence.png)と[200% text](../../evidence/issue-14/native-google-complex-recurrence-text-200.png)で、警告copy、縦scroll、開始・終了の1列表示を目視確認
-- Native execution: E2E fixtureをOS付属`sqlite3` CLIからE2E feature限定のSQLx commandへ置換後、全3 spec / 14 testとGoogle関連2 testの独立実行がPass。初回all-platform run `30200575695`のmacOSはrunner側CLIにFTS5がなくfixture注入前に失敗し、WindowsはCompact window復帰時にWebDriver sessionを失ったため、製品assertionとは分離して修正・再検証する
+- Native execution: E2E fixtureをOS付属`sqlite3` CLIからE2E feature限定のSQLx commandへ置換し、Compact windowはTauri serviceのactive-window状態を変更せずWebDriver handleだけで往復する。全3 spec / 14 testとGoogle関連2 testの独立実行がPass。初回all-platform run `30200575695`のmacOSはrunner側CLIにFTS5がなくfixture注入前に失敗し、WindowsはCompact window復帰時にWebDriver sessionを失ったため、製品assertionとは分離して修正した
 - Before: [OAuth接続導線だけの状態](../../evidence/issue-13/native-google-connect-after.png)。Afterはcalendar単位の権限・回復状態を同じ設定panelへ追加
 - Visual regression: run `30195380348`で全7 snapshotが4%以内。Today 0.306%、Week 0.464%、Template 0.239%、Compact 1.719%、Conflict 0.443%、Google recovery通常 / 200%は各0.000%
 - E2E isolation: fixture themeを各証跡前にlightへ固定し、Compact windowを閉じてmain windowへ復帰する。通知履歴specではReactの5秒pollをE2E buildだけ停止し、specを唯一のclaim元にしてclock競合を排除する
 - macOS personal: 前回のcount-only確認では一部eventを取り込んだが、標準recurrenceでcalendarがvalidation停止したためFail。最新buildでは通常profileの接続件数が0で、古い検証コピーもOS秘密ストア段階で再試行となったため、Google再接続後の再確認が必要
-- Platform: 前headのrun `30195380348`は成功。recurrence set変更後headのCI / installerは未確認
+- Platform: recurrence fixture portability変更後のrequired run `30201348234`とdependency audit `30201348235`は成功。manual all-platform run `30201398101`はmacOS arm64 / WindowsがE2EとinstallerまでPassし、macOS x64だけがCompact window後のTauri service direct-eval timeoutで製品assertion到達前に失敗した。WebDriver handleだけを使う修正はlocal full runでPassし、最新headのall-platform再実行を待つ
 - PR review: recurrence set変更後headのCI成功後に再確認する
 - Remaining manual boundary: 実Google OAuth / keyringの対話確認はmacOS arm64のみ。macOS x64 / Windowsの実account接続と、生成installerからのinstall / launch / OS permission操作は未確認
 - Publication: synthetic fixtureのみ。個人の予定、account、calendar / event ID、token、pathは含めない。

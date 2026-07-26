@@ -370,7 +370,6 @@ describe("Day Schedule Next native smoke", () => {
       (handle) => handle !== originalHandle,
     );
     if (!compactHandle) throw new Error("compact window was not created");
-    await browser.tauri.switchWindow("compact");
     await browser.switchToWindow(compactHandle);
     await $(".compact-shell").waitForDisplayed();
     await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "mild", {
@@ -379,7 +378,6 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-mild-compact.png");
     await browser.closeWindow();
     await browser.switchToWindow(originalHandle);
-    await browser.tauri.switchWindow("main");
     await $(".app-shell").waitForDisplayed();
 
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
