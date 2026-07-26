@@ -544,38 +544,42 @@ describe("Day Schedule Next native smoke", () => {
       today: string;
       timezoneId: string;
     };
-    await browser.tauri.execute(async ({ core }, input) => {
+    const performanceFixtures = (await browser.tauri.execute(async ({ core }, input) => {
       const dayStart = new Date(`${input.today}T00:00:00`);
+      const created: Array<{ id: string; version: number }> = [];
       for (let index = 0; index < 500; index += 1) {
         const start = new Date(dayStart);
         start.setMinutes(Math.floor((index * 1440) / 500));
         const end = new Date(start.getTime() + 2 * 60_000);
-        await core.invoke("schedule_create", {
-          draft: {
-            title: `E2E性能予定-${String(index).padStart(3, "0")}`,
-            description: "",
-            location: "",
-            startUtc: start.toISOString(),
-            endUtc: end.toISOString(),
-            timezoneId: input.timezoneId,
-            allDay: false,
-            allDayStartDate: null,
-            allDayEndDateExclusive: null,
-            status: "scheduled",
-            project: "E2E性能",
-            category: "synthetic",
-            tags: [],
-            color: "#6F96F4",
-            priority: "normal",
-            recurrenceRule: null,
-            recurrenceSupplementalLines: [],
-            recurrenceExdates: [],
-            startNotificationMinutes: null,
-            endNotificationMinutes: null,
-          },
-        });
+        created.push(
+          (await core.invoke("schedule_create", {
+            draft: {
+              title: `E2E性能予定-${String(index).padStart(3, "0")}`,
+              description: "",
+              location: "",
+              startUtc: start.toISOString(),
+              endUtc: end.toISOString(),
+              timezoneId: input.timezoneId,
+              allDay: false,
+              allDayStartDate: null,
+              allDayEndDateExclusive: null,
+              status: "scheduled",
+              project: "E2E性能",
+              category: "synthetic",
+              tags: [],
+              color: "#6F96F4",
+              priority: "normal",
+              recurrenceRule: null,
+              recurrenceSupplementalLines: [],
+              recurrenceExdates: [],
+              startNotificationMinutes: null,
+              endNotificationMinutes: null,
+            },
+          })) as { id: string; version: number },
+        );
       }
-    }, bootstrap);
+      return created;
+    }, bootstrap)) as Array<{ id: string; version: number }>;
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
     await browser.tauri.execute(({ core }) => core.invoke("main_window_show"));
@@ -681,6 +685,11 @@ describe("Day Schedule Next native smoke", () => {
     expect(profile.renderedScheduleNodes).toBeLessThan(200);
     expect(profile.scroll?.p95Ms).toBeLessThanOrEqual(16.7);
     expect(profile.drag?.p95Ms).toBeLessThanOrEqual(16.7);
+    const deletedFixtureCount = await browser.tauri.execute(
+      ({ core }, fixtureIds) => core.invoke("e2e_schedule_fixtures_delete", { ids: fixtureIds }),
+      performanceFixtures.map((fixture) => fixture.id),
+    );
+    expect(deletedFixtureCount).toBe(500);
   });
 
   it("shows a protected Google recurrence without implying that sync stopped", async () => {
@@ -830,12 +839,72 @@ describe("Day Schedule Next native smoke", () => {
   it("opens and captures the compact window after all main-window assertions", async () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1180, 820);
+    await browser.tauri.execute(async ({ core }, expectedTitle) => {
+      const page = (await core.invoke("schedule_list", {
+        query: {
+          startUtc: "2020-01-01T00:00:00.000Z",
+          endUtc: "2035-01-01T00:00:00.000Z",
+          search: expectedTitle,
+          limit: 10,
+        },
+      })) as {
+        items: Array<
+          Record<string, unknown> & {
+            id: string;
+            title: string;
+            version: number;
+          }
+        >;
+      };
+      const schedule = page.items.find((item) => item.title === expectedTitle);
+      if (!schedule) throw new Error("compact fixture schedule was not found");
+      const { id, version } = schedule;
+      const draft: Record<string, unknown> = { ...schedule };
+      delete draft.id;
+      delete draft.version;
+      delete draft.syncStatus;
+      delete draft.deletedAt;
+      const start = new Date(Date.now() + 5 * 60_000);
+      start.setSeconds(0, 0);
+      const end = new Date(start.getTime() + 30 * 60_000);
+      await core.invoke("schedule_update", {
+        update: {
+          id,
+          expectedVersion: version,
+          draft: {
+            ...draft,
+            startUtc: start.toISOString(),
+            endUtc: end.toISOString(),
+          },
+          recurrenceScope: "series",
+        },
+      });
+    }, title);
     await $('//button[contains(., "コンパクト表示")]').click();
     await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1, {
       timeoutMsg: "compact window was not created",
     });
     await browser.tauri.switchWindow("compact");
     await $(".compact-header h1").waitForDisplayed();
+    const compactScheduleRendered = await browser.executeAsync(
+      (expectedTitle: string, done: (rendered: boolean) => void) => {
+        const startedAt = performance.now();
+        const waitForSchedule = () => {
+          if (document.body.innerText.includes(expectedTitle)) {
+            done(true);
+            return;
+          }
+          if (performance.now() - startedAt >= 15_000) {
+            done(false);
+            return;
+          }
+          requestAnimationFrame(waitForSchedule);
+        };
+        waitForSchedule();
+      },
+      title,
+    );
+    expect(compactScheduleRendered).toBe(true);
     await browser.saveScreenshot("./test-results/native-compact.png");
   });
 });

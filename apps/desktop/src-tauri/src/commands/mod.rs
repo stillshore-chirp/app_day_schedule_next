@@ -364,6 +364,18 @@ pub async fn e2e_schedule_read_only_create(
 
 #[cfg(feature = "e2e")]
 #[tauri::command]
+pub async fn e2e_schedule_fixtures_delete(
+    service: State<'_, AppService>,
+    ids: Vec<Uuid>,
+) -> CommandResult<u64> {
+    service
+        .delete_schedule_fixtures(ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[cfg(feature = "e2e")]
+#[tauri::command]
 pub async fn e2e_google_calendar_recovery_seed(
     service: State<'_, AppService>,
 ) -> CommandResult<()> {

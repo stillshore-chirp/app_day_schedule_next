@@ -591,6 +591,35 @@ impl Database {
     }
 
     #[cfg(feature = "e2e")]
+    pub async fn delete_schedule_fixtures(&self, ids: Vec<Uuid>) -> AppResult<u64> {
+        if ids.len() > 500 {
+            return Err(AppError::Validation {
+                message: "E2E fixture cleanupは500件以下にしてください".into(),
+                recovery: "fixture IDを500件以下へ分割してください".into(),
+            });
+        }
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| AppError::database("e2e-schedule-cleanup-begin", error))?;
+        let mut deleted = 0_u64;
+        for id in ids {
+            deleted += sqlx::query("DELETE FROM schedule_items WHERE id = ?")
+                .bind(id.to_string())
+                .execute(&mut *transaction)
+                .await
+                .map_err(|error| AppError::database("e2e-schedule-cleanup-delete", error))?
+                .rows_affected();
+        }
+        transaction
+            .commit()
+            .await
+            .map_err(|error| AppError::database("e2e-schedule-cleanup-commit", error))?;
+        Ok(deleted)
+    }
+
+    #[cfg(feature = "e2e")]
     pub async fn seed_google_calendar_recovery_fixture(&self) -> AppResult<()> {
         let mut transaction = self
             .pool

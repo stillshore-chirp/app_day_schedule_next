@@ -35,7 +35,7 @@ describe("Day Schedule Next notification history", () => {
             };
           }
         ).__TAURI__.core;
-        await core.invoke("schedule_create", {
+        const schedule = await core.invoke<{ id: string; version: number }>("schedule_create", {
           draft: {
             title: "E2E通知履歴",
             description: "synthetic fixture",
@@ -77,7 +77,7 @@ describe("Day Schedule Next notification history", () => {
             errorCategory: string | null;
           }>
         >("notification_history_list");
-        return { candidate, history };
+        return { candidate, history, schedule };
       },
       { startUtc: start.toISOString(), endUtc: end.toISOString() },
     );
@@ -127,5 +127,15 @@ describe("Day Schedule Next notification history", () => {
     });
     await browser.pause(200);
     await browser.saveScreenshot("./test-results/native-notification-history-after.png");
+    await browser.tauri.execute(
+      ({ core }, schedule) =>
+        core.invoke("schedule_delete", {
+          request: {
+            id: schedule.id,
+            expectedVersion: schedule.version,
+          },
+        }),
+      delivery.schedule,
+    );
   });
 });

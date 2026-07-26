@@ -202,6 +202,11 @@ impl AppService {
     }
 
     #[cfg(feature = "e2e")]
+    pub async fn delete_schedule_fixtures(&self, ids: Vec<Uuid>) -> AppResult<u64> {
+        self.database.delete_schedule_fixtures(ids).await
+    }
+
+    #[cfg(feature = "e2e")]
     pub async fn seed_google_calendar_recovery_fixture(&self) -> AppResult<()> {
         self.database.seed_google_calendar_recovery_fixture().await
     }

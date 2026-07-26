@@ -103,6 +103,8 @@ pub fn run() {
             #[cfg(feature = "e2e")]
             commands::e2e_schedule_read_only_create,
             #[cfg(feature = "e2e")]
+            commands::e2e_schedule_fixtures_delete,
+            #[cfg(feature = "e2e")]
             commands::e2e_google_calendar_recovery_seed,
             commands::schedule_update,
             commands::schedule_bulk_classify,
