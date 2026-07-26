@@ -12,7 +12,7 @@ Linux は対象外です。macOS / Windows は同じ domain、application、Reac
 
 ## 2. build contract
 
-- Node.js 22、pnpm 10.13.1、frozen `pnpm-lock.yaml`
+- Node.js 22、pnpm 11.17.0、frozen `pnpm-lock.yaml`
 - Rust 1.89.0、edition 2024、`Cargo.lock`
 - app / bundle version: `0.1.0`
 - stable app identifier: `com.stillshorechirp.dayschedulenext`

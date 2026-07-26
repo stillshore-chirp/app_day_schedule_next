@@ -18,7 +18,7 @@ Day Schedule Next は、一日の予定を分単位で設計・実行し、現�
 ## 開発環境
 
 - Node.js 22 以上
-- pnpm 10.13.1（Corepack）
+- pnpm 11.17.0（Corepack）
 - Rust 1.89.0
 - macOS: Xcode Command Line Tools
 - Windows: Microsoft C++ Build Tools と WebView2 Runtime

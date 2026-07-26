@@ -2,11 +2,11 @@
 
 ## 1. Summary
 
-- Issue / PR: Issue #13 / PR pending
-- Commit: pending
+- Issue / PR: Issue #13 / PR #15
+- Commit: PR latest head
 - Affected screen / window / state: Settings > Google カレンダー、未設定、接続前、接続中、認証失効、接続失敗、接続済み
 - OS: macOS / Windows
-- Decision: Pending — 実Google consentとWindows native validationを完了するまでPassにしない
+- Decision: Pending — macOS実Google consent / 同期はPass。最新headのplatform CIとcode reviewを完了するまで最終Passにしない
 - P0 / P1 / P2 counts: 0 / 0 / 0（実装済み範囲）
 
 ## 2. User value
@@ -29,8 +29,8 @@
 ## 4. State matrix
 
 - Template: [`issue-13-state-matrix.md`](issue-13-state-matrix.md)
-- States actually inspected: configured、not configured、connecting、auth required、OAuth failure、developer override collapsed、native narrow settings
-- Missing states: 実Google consent成功後のcalendar一覧、Windows WebView2 / Credential Manager
+- States actually inspected: configured、not configured、connecting、auth required、OAuth failure、developer override collapsed、native narrow settings、実Google consent成功、calendar一覧、部分同期成功
+- Missing states: Windows WebView2 / Credential Manager
 
 ## 5. Accessibility
 
@@ -43,7 +43,7 @@
 - Target size: 既存button tokenを利用
 - 200% text / high DPI: macOS native WebViewでGoogle panelを200% textにし、primary actionとdetailsの縦flowを確認
 - Status announcements: `StatusMessage`でtitleとrecoveryを同じ状態に表示
-- Automated check: axe WCAG 2 A / AA / 2.1 AA / 2.2 AAでserious / critical 0
+- Automated check: axe WCAG 2 A / AA / 2.1 AA / 2.2 AAで7 tests、serious / critical 0
 - Manual check: macOS WKWebViewのnative screenshotでprimary actionとdetailsを確認
 
 ## 6. Visual hierarchy
@@ -92,7 +92,7 @@
 
 - Completion blockers searched: JSON依存の残存、client secret bundle、frontend Google HTTP、過剰Tauri capability、再接続時cascade、OAuth failure後のin-progress flag、secret / personal data証跡
 - Findings: 既存reauthがaccount delete / insertを行いcalendar / mappingをcascade deleteするP0を検出。same account updateへ変更し回帰テストを追加。OAuth準備失敗やsystem browser起動失敗でin-progress flagや古いcallbackが残る経路も、attempt generationの無効化で修正
-- Missing evidence: 実Google token exchange / Keychain / calendar list、Windows WebView2 / Credential Manager
+- Missing evidence: Windows WebView2 / Credential Manager
 
 ## 12. Findings
 
@@ -107,7 +107,7 @@
 - Before screenshots: [`native-google-json-before.png`](../../evidence/issue-13/native-google-json-before.png)
 - After screenshots: [`native-google-connect-after.png`](../../evidence/issue-13/native-google-connect-after.png)、[`native-google-connect-text-200.png`](../../evidence/issue-13/native-google-connect-text-200.png)
 - Trace / video: native WebDriver run、synthetic isolated profile
-- Tests: Google state component 3、a11y Google settings、Rust build config 2、reauth preservation 1、full Rust integration
+- Tests: Google state component 6、a11y 7、Rust build config 2、reauth preservation 1、full Rust integration
 - Native manual checks: macOS WKWebViewでconfigured state、primary button、developer action collapsed、real IPC stateを確認
 - Redaction check: synthetic client IDのみ。account、calendar ID、event本文、token、local DBを追跡しない
 
@@ -115,18 +115,18 @@
 
 | Check | Result | Evidence |
 |---|---|---|
-| UI configured / missing / auth required | Pass | 3 component tests |
-| Automated accessibility | Pass | axe 6 tests total、serious / critical 0 |
-| Frontend regression | Pass | 65 tests |
-| Rust regression | Pass | 75 tests（local TCP mockは通常環境で実行） |
+| UI configured / missing / auth required | Pass | 6 component tests |
+| Automated accessibility | Pass | axe 7 tests total、serious / critical 0 |
+| Frontend regression | Pass | 68 tests |
+| Rust regression | Pass | 94 tests + provisioning binary 1（local TCP mockは通常環境で実行） |
 | clippy all targets / features | Pass | warnings denied |
 | macOS debug app / DMG | Pass | synthetic client ID build |
-| macOS native E2E | Pass | 3 specs、12 tests、Google real IPC stateを含む |
+| macOS native E2E | Pass | 3 specs、13 tests、Google real IPC stateを含む |
+| 実Google consent / Keychain / calendar同期 | Pass | private count-only evidence。token / mapping / active mapped itemが非0、List非empty |
 | Security text / boundaries / docs | Pass | repository scripts |
 
 ## 15. Unexecuted validation
 
 | Check | Reason | Remaining risk | Next action |
 |---|---|---|---|
-| 実Google consent / token exchange / calendar list | Google Cloud Consoleのclient作成を利用者へ依頼中 | 実clientでredirect / consent / Keychain保存が未確認 | local `.env.local`設定後に個人buildで実行 |
 | Windows native build / E2E / Credential Manager | ローカル環境はmacOS | platform固有のbrowser / secret store差分 | Native release validationを`platform=all`で実行 |

@@ -115,7 +115,7 @@
 
 - Current state: 公式契約、v12 migration、initial / incremental / partial failure、recurrence、UI回復状態を実装。mock / native / personal count-only gateを通過。
 - Last completed slice: personal debug DMGでtoken / mapping / active mapped itemの非0とList表示を確認。
-- Next smallest action: 公開前scan、commit、push、PR、platform CI、reviewを完了する。
+- Next smallest action: PR #15の最新headでplatform CI、dependency audit、code reviewを完了する。
 - Blocking fact: なし。
 - Resume command: `cargo test --workspace --all-features infrastructure::google::tests`
 
@@ -140,6 +140,6 @@ node scripts/verify-agent-harness.mjs
 
 ## 未実行と残リスク
 
-- Windows build、CI / review は未実行。
+- Windows build、最新headのCI / review は未完了。
 - 既存5 snapshotのlocal全体比較は、旧baselineと現端末の画素寸法差により未完了。Issue #14の2 snapshotは個別比較済みで、全体比較はCIのmacOS arm64同一環境で確認する。
 - 実機の一部calendarは未対応形式を含むため、そのcalendar単位で`validation`停止した。previous token / local dataを保持し、他calendarの同期とList表示は完了した。

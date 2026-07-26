@@ -16,6 +16,7 @@
 corepack enable
 pnpm install --frozen-lockfile
 npm run verify:bootstrap
+pnpm verify:patched-dependencies
 pnpm format:check
 pnpm lint
 pnpm typecheck
@@ -29,7 +30,7 @@ pnpm tauri:build:debug
 git diff --check
 ```
 
-`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎます。
+`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎます。`pnpm verify:patched-dependencies` は、脆弱な `brace-expansion` 1.x / 2.x を修正版 5.0.8 へ統一するpatchが、利用中の全 `minimatch` majorでCommonJS / ESMのbrace展開互換性を保つことを確認します。
 
 ## 3. Frontend unit / accessibility
 

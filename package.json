@@ -10,6 +10,7 @@
     "verify:boundaries": "node scripts/check-repository-boundaries.mjs",
     "verify:i18n": "node scripts/verify-i18n-keys.mjs",
     "verify:workflows": "node scripts/verify-workflow-policy.mjs",
+    "verify:patched-dependencies": "node scripts/verify-patched-dependencies.mjs",
     "verify:bootstrap": "npm run verify:harness && npm run verify:docs && npm run verify:security-text && npm run verify:boundaries && npm run verify:i18n && npm run verify:workflows",
     "format:check": "pnpm --dir apps/desktop format:check",
     "lint": "pnpm --dir apps/desktop lint",
@@ -19,10 +20,10 @@
     "test:e2e": "pnpm --dir apps/desktop test:e2e",
     "build": "pnpm --dir apps/desktop build",
     "tauri:build:debug": "pnpm --dir apps/desktop tauri build --debug",
-    "verify": "npm run verify:bootstrap && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace --all-features"
+    "verify": "npm run verify:bootstrap && pnpm verify:patched-dependencies && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace --all-features"
   },
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@10.13.1"
+  "packageManager": "pnpm@11.17.0"
 }

@@ -2,8 +2,8 @@
 
 ## 1. Summary
 
-- Issue / PR: Issue #14 / PR pending
-- Commit: pending
+- Issue / PR: Issue #14 / PR #15
+- Commit: PR latest head
 - Affected state: Settings > Google カレンダー、app header / Compact sync summary
 - Decision: Pending — synthetic native / 200% textとmacOS personal count-only確認はPass。Windows CI/buildとPR reviewの記録前は最終Passにしない
 - P0 / P1 / P2: 0 / 0 / 0（実装・fixture済み範囲）
