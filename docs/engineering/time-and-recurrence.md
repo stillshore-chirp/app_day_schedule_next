@@ -32,11 +32,15 @@ UI input を timezone とともに resolve し、UTC instant を保存します�
 
 ## 5. Recurrence
 
-- RFC 5545 rule を保存し、occurrence を必要範囲で展開する。
+- RFC 5545 recurrence setを保存し、occurrenceを必要範囲で展開する。DTSTARTは常に集合へ含め、`RRULE` / `RDATE`のunionから`EXDATE` / legacy `EXRULE`をsubtractする。
+- primary `RRULE`に加え、追加`RRULE`、parameter付き`RDATE`、legacy `EXRULE`を補助lineとして保持する。`EXDATE`はUTC instantへ正規化する。
+- ordinal `BYDAY`、`BYSETPOS`、`WKST`、negative month dayを含むrule partはRFC parserへ委譲し、独自の部分実装で意味を変えない。
 - master と exception を identity で関連付ける。
 - edit scope: this / this-and-following / series を明示する。
 - EXDATE / moved / cancelled occurrence を保持する。
-- count / until / timezone の semantic を test する。
+- count / until / timezone の semantic を test する。DST gapで存在しないwall timeは別時刻へ補正せず生成を見送り、overlapは基準offsetを使ったことをwarningにする。
+- 補助line 64件、1件2,000文字、EXDATE 10,000件、1回の展開65,534件をhard limitとする。UI previewは最大100件とする。
+- `RDATE;VALUE=PERIOD`の可変durationは固定長schedule modelへ変換しない。該当calendarを安全停止し、previous tokenと既存予定を保持する。
 
 ## 6. Overlap / current / next
 
@@ -68,6 +72,6 @@ UI input を timezone とともに resolve し、UTC instant を保存します�
 - New York / Berlin の gap / overlap。
 - system timezone change。
 - all-day multi-day。
-- recurrence master / exception / cancellation / until。
+- recurrence master / exception / cancellation / until、複数RRULE、RDATE、EXDATE、EXRULE、ordinal BYDAY、BYSETPOS、WKST。
 - 複数 timer の並行進行、1秒 / 7日境界、pause / resume、restart recovery、wall clock forward / backward。
 - stopwatch の repeated pause / resume、restart recovery、wall clock backward。

@@ -62,7 +62,7 @@ network request を DB write transaction 中に待ちません。
 |---|---|---|---|
 | final page + transaction commit | `synced` | new tokenとeventを同時確定 | 継続 |
 | timeout / DNS / 429 / 5xx | `retry_scheduled` | previous tokenとlocal dataを保持 | 他calendarを継続 |
-| 403 / 404 / unsupported recurrence | `unavailable` | previous tokenとlocal dataを保持 | 他calendarを継続 |
+| 403 / 404 / invalid or unrepresentable event | `unavailable` | previous tokenとlocal dataを保持 | 他calendarを継続 |
 | 401 / invalid refresh | `auth_required` | 全calendarのtokenとlocal dataを保持 | account batchを中止 |
 | cancellation / database failure | previous stable state | 未commit変更を破棄 | batchを中止 |
 
@@ -76,7 +76,10 @@ network request を DB write transaction 中に待ちません。
 - full syncで既存exception resourceが欠落した場合は、linked exceptionをsoft deleteし、master EXDATEから元の開始instantを除去する。
 - deleted masterは未送信local exceptionがないことを確認してlinked remote exceptionもsoft deleteする。未送信変更があればtokenを更新せず競合として停止する。
 - eventにtimezoneがない場合はcalendar timezoneをfallbackにする。`EXDATE;TZID=...`と`EXDATE;VALUE=DATE`をIANA timezoneで解釈し、DST gap / ambiguityを黙って補正しない。
-- `RDATE`、`EXRULE`、複数`RRULE`など未対応のrecurrence要素は黙って破棄せず、calendarを`unavailable / validation`にしてprevious tokenを保持する。
+- primary `RRULE`、追加`RRULE`、`RDATE`、`EXDATE`、legacy `EXRULE`を一つのrecurrence setとして取り込む。序数付き`BYDAY`、`BYSETPOS`、`WKST`、負の`BYMONTHDAY`を含むRFC 5545 rule partを手書きの部分parserで制限しない。
+- primary `RRULE`以外のinclusion / exclusion lineは順序に依存しない補助集合としてSQLiteへ保存し、Googleへ戻す際も欠落させない。`EXDATE`は比較可能なUTC instantへ正規化する。
+- 追加rule / dateを持つGoogle masterは表示・pull・incremental token更新を継続するが、系列編集による意味の破壊を避けるためlocal UIでは読み取り専用にする。
+- 補助lineは64件、1件2,000文字、`EXDATE`は10,000件を上限とする。許可外property、壊れたRFC入力、`RDATE;VALUE=PERIOD`など固定長scheduleで表現できない入力だけを`unavailable / validation`にし、page適用とnew tokenをcommitしない。
 
 ## 5. Push
 
@@ -127,4 +130,4 @@ base から local だけ変更、remote だけ変更は自動 merge。両方が�
 
 `.agents/skills/calendar-sync-review/SKILL.md` の matrix を必須とします。
 
-最低fixtureはinitial 1 page / multi page、incremental create / update / delete、page failure、410、401、403、404、429、5xx、offline、同時worker、master、moved exception、cancelled exception、exception reset、series deletion、timezone fallback、unsupported recurrenceを含めます。
+最低fixtureはinitial 1 page / multi page、incremental create / update / delete、page failure、410、401、403、404、429、5xx、offline、同時worker、master、moved exception、cancelled exception、exception reset、series deletion、timezone fallback、複数RRULE、RDATE、EXDATE、EXRULE、ordinal BYDAY、BYSETPOS、WKST、invalid / unrepresentable recurrenceを含めます。

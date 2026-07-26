@@ -848,6 +848,7 @@ mod tests {
             color: "#6F96F4".into(),
             priority: Priority::Normal,
             recurrence_rule: None,
+            recurrence_supplemental_lines: Vec::new(),
             recurrence_exdates: Vec::new(),
             start_notification_minutes: None,
             end_notification_minutes: None,

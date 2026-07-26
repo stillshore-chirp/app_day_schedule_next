@@ -162,7 +162,7 @@ impl AppService {
         let timezone = timezone_id.parse::<Tz>().unwrap_or(chrono_tz::UTC);
         let settings = self.database.settings().await?;
         Ok(Bootstrap {
-            schema_version: 12,
+            schema_version: 13,
             app_version: env!("CARGO_PKG_VERSION").into(),
             today: self
                 .clock

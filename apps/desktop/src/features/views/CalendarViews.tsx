@@ -771,6 +771,7 @@ async function carriedDraft(
     color: schedule.color,
     priority: schedule.priority,
     recurrenceRule: schedule.recurrenceRule,
+    recurrenceSupplementalLines: schedule.recurrenceSupplementalLines,
     recurrenceExdates: schedule.recurrenceExdates,
     startNotificationMinutes: schedule.startNotificationMinutes,
     endNotificationMinutes: schedule.endNotificationMinutes,

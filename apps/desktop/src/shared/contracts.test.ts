@@ -24,6 +24,7 @@ const valid = {
   color: "#336699",
   priority: "normal" as const,
   recurrenceRule: null,
+  recurrenceSupplementalLines: [],
   recurrenceExdates: [],
   startNotificationMinutes: null,
   endNotificationMinutes: null,
@@ -44,6 +45,31 @@ describe("scheduleDraftSchema", () => {
   it("rejects invalid colors and empty titles", () => {
     expect(scheduleDraftSchema.safeParse({ ...valid, color: "transparent" }).success).toBe(false);
     expect(scheduleDraftSchema.safeParse({ ...valid, title: " " }).success).toBe(false);
+  });
+
+  it("accepts parameterized recurrence-set lines and rejects unsafe properties", () => {
+    expect(
+      scheduleDraftSchema.safeParse({
+        ...valid,
+        recurrenceSupplementalLines: [
+          "RRULE:FREQ=MONTHLY;BYDAY=-1MO;WKST=SU",
+          "RDATE;TZID=Asia/Tokyo:20260723T090000",
+          "EXRULE:FREQ=WEEKLY;BYDAY=SU",
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      scheduleDraftSchema.safeParse({
+        ...valid,
+        recurrenceSupplementalLines: ["DTSTART;TZID=Asia/Tokyo:20260723T090000"],
+      }).success,
+    ).toBe(false);
+    expect(
+      scheduleDraftSchema.safeParse({
+        ...valid,
+        recurrenceSupplementalLines: ["RDATE:20260723T090000\nRRULE:FREQ=DAILY"],
+      }).success,
+    ).toBe(false);
   });
 });
 

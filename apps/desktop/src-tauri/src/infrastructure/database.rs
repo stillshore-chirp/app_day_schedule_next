@@ -406,7 +406,11 @@ impl Database {
         let rows = sqlx::query(
             r#"
             SELECT s.* FROM schedule_items s
-            WHERE (s.recurrence_rule IS NOT NULL OR (s.start_at_utc < ? AND s.end_at_utc > ?))
+            WHERE (
+              s.recurrence_rule IS NOT NULL
+              OR s.recurrence_supplemental_lines_json != '[]'
+              OR (s.start_at_utc < ? AND s.end_at_utc > ?)
+            )
               AND (? OR s.deleted_at_utc IS NULL)
               AND (? IS NULL
                 OR (? IS NOT NULL AND s.rowid IN (
@@ -481,7 +485,7 @@ impl Database {
                 schedule.id,
                 parse_datetime(row.get("updated_at_utc"), "schedule-list-updated")?,
             );
-            if schedule.draft.recurrence_rule.is_some() && schedule.deleted_at.is_none() {
+            if schedule.draft.is_recurring() && schedule.deleted_at.is_none() {
                 let expanded =
                     expand_recurrence(&schedule, query.start_utc, query.end_utc, expansion_limit)?;
                 for occurrence in expanded.items {
@@ -609,7 +613,7 @@ impl Database {
             });
         }
         let has_sync_target = has_default_write_target(&mut transaction).await?;
-        if before.draft.recurrence_rule.is_some()
+        if before.draft.is_recurring()
             && let Some(occurrence_start) = occurrence_start_utc
         {
             match scope {
@@ -758,7 +762,7 @@ impl Database {
         }
         let now = Utc::now();
         let has_sync_target = has_default_write_target(&mut transaction).await?;
-        if before.draft.recurrence_rule.is_some()
+        if before.draft.is_recurring()
             && let Some(occurrence_start) = occurrence_start_utc
         {
             let updated = match recurrence_scope {
@@ -1312,7 +1316,7 @@ impl Database {
         self.integrity_check().await?;
         Ok(DiagnosticsSnapshot {
             app_version: app_version.into(),
-            schema_version: 12,
+            schema_version: 13,
             database_state: "ready",
             schedule_count: schedule_count.max(0) as u64,
             deleted_count: deleted_count.max(0) as u64,
@@ -1337,10 +1341,10 @@ pub(super) async fn insert_schedule(
           id, title, description, location, start_at_utc, end_at_utc, time_zone,
           all_day, status, project, category, tags_json, color, sync_status,
           version, deleted_at_utc, created_at_utc, updated_at_utc, priority, recurrence_rule,
-          recurrence_exdates_json,
+          recurrence_supplemental_lines_json, recurrence_exdates_json,
           start_notification_minutes, end_notification_minutes,
           all_day_start_date, all_day_end_date_exclusive
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     )
     .bind(schedule.id.to_string())
     .bind(&schedule.draft.title)
@@ -1365,6 +1369,10 @@ pub(super) async fn insert_schedule(
     .bind(timestamp(now))
     .bind(schedule.draft.priority.as_str())
     .bind(&schedule.draft.recurrence_rule)
+    .bind(
+        serde_json::to_string(&schedule.draft.recurrence_supplemental_lines)
+            .map_err(|error| AppError::database("recurrence-supplemental-lines-encode", error))?,
+    )
     .bind(
         serde_json::to_string(&schedule.draft.recurrence_exdates)
             .map_err(|error| AppError::database("recurrence-exdates-encode", error))?,
@@ -1399,8 +1407,9 @@ pub(super) async fn update_schedule_row(
           title = ?, description = ?, location = ?, start_at_utc = ?, end_at_utc = ?,
           time_zone = ?, all_day = ?, status = ?, project = ?, category = ?, tags_json = ?,
           color = ?, sync_status = ?, version = ?, deleted_at_utc = ?, updated_at_utc = ?,
-          priority = ?, recurrence_rule = ?, recurrence_exdates_json = ?, start_notification_minutes = ?,
-          end_notification_minutes = ?, all_day_start_date = ?, all_day_end_date_exclusive = ?
+          priority = ?, recurrence_rule = ?, recurrence_supplemental_lines_json = ?,
+          recurrence_exdates_json = ?, start_notification_minutes = ?, end_notification_minutes = ?,
+          all_day_start_date = ?, all_day_end_date_exclusive = ?
         WHERE id = ?"#,
     )
     .bind(&schedule.draft.title)
@@ -1425,12 +1434,22 @@ pub(super) async fn update_schedule_row(
     .bind(schedule.draft.priority.as_str())
     .bind(&schedule.draft.recurrence_rule)
     .bind(
+        serde_json::to_string(&schedule.draft.recurrence_supplemental_lines).map_err(|error| {
+            AppError::database("recurrence-supplemental-lines-update-encode", error)
+        })?,
+    )
+    .bind(
         serde_json::to_string(&schedule.draft.recurrence_exdates)
             .map_err(|error| AppError::database("recurrence-exdates-update-encode", error))?,
     )
     .bind(schedule.draft.start_notification_minutes.map(i64::from))
     .bind(schedule.draft.end_notification_minutes.map(i64::from))
-    .bind(schedule.draft.all_day_start_date.map(|value| value.to_string()))
+    .bind(
+        schedule
+            .draft
+            .all_day_start_date
+            .map(|value| value.to_string()),
+    )
     .bind(
         schedule
             .draft
@@ -1812,6 +1831,10 @@ pub(super) fn row_to_schedule(row: &SqliteRow) -> AppResult<Schedule> {
             color: row.get("color"),
             priority: Priority::try_from(row.get::<&str, _>("priority"))?,
             recurrence_rule: row.get("recurrence_rule"),
+            recurrence_supplemental_lines: serde_json::from_str(
+                row.get("recurrence_supplemental_lines_json"),
+            )
+            .map_err(|error| AppError::database("schedule-recurrence-supplemental-lines", error))?,
             recurrence_exdates: serde_json::from_str(row.get("recurrence_exdates_json"))
                 .map_err(|error| AppError::database("recurrence-exdates-decode", error))?,
             start_notification_minutes: row
@@ -1937,6 +1960,7 @@ mod tests {
             color: "#6F96F4".into(),
             priority: Priority::Normal,
             recurrence_rule: None,
+            recurrence_supplemental_lines: Vec::new(),
             recurrence_exdates: Vec::new(),
             start_notification_minutes: None,
             end_notification_minutes: None,
@@ -2229,6 +2253,40 @@ mod tests {
             .unwrap();
         assert_eq!(total, 1);
         assert_eq!(items[0].draft.title, "隣接B");
+    }
+
+    #[tokio::test]
+    async fn list_includes_rdate_only_recurrence_outside_the_master_range() {
+        let database = Database::open_memory().await.unwrap();
+        let mut recurring = draft("RDATEのみ");
+        recurring.recurrence_supplemental_lines = vec!["RDATE;TZID=UTC:20260723T000000".into()];
+        database.create_schedule(recurring).await.unwrap();
+
+        let (items, total) = database
+            .list_schedules(ScheduleQuery {
+                start_utc: Utc.with_ymd_and_hms(2026, 7, 23, 0, 0, 0).unwrap(),
+                end_utc: Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap(),
+                search: None,
+                include_deleted: false,
+                limit: 100,
+                offset: 0,
+                status: None,
+                project: None,
+                category: None,
+                tag: None,
+                priority: None,
+                sync_status: None,
+                sync_target: None,
+                completion: "all".into(),
+                sort_by: "start".into(),
+                sort_descending: false,
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(total, 1);
+        assert_eq!(items[0].draft.title, "RDATEのみ");
+        assert!(items[0].draft.is_recurring());
     }
 
     #[tokio::test]
@@ -2713,6 +2771,145 @@ mod tests {
             )
         );
         assert_eq!(never, ("never".into(), None, None));
-        assert_eq!(schema_version, "12");
+        assert_eq!(schema_version, "13");
+    }
+
+    #[tokio::test]
+    async fn migration_v13_preserves_existing_recurrence_and_adds_constrained_set_storage() {
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")
+            .unwrap()
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let v12_migrator = sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                MIGRATOR
+                    .migrations
+                    .iter()
+                    .filter(|migration| migration.version <= 12)
+                    .cloned()
+                    .collect(),
+            ),
+            ignore_missing: false,
+            locking: true,
+            no_tx: false,
+        };
+        v12_migrator.run(&pool).await.unwrap();
+
+        let schedule_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO schedule_items(id, title, start_at_utc, end_at_utc, time_zone, status, color, created_at_utc, updated_at_utc, recurrence_rule, recurrence_exdates_json) VALUES (?, 'Synthetic recurrence', '2026-07-20T09:00:00Z', '2026-07-20T10:00:00Z', 'UTC', 'scheduled', '#6F96F4', '2026-07-20T00:00:00Z', '2026-07-20T00:00:00Z', 'FREQ=MONTHLY;BYDAY=-1MO', '[\"2026-08-31T09:00:00Z\"]')",
+        )
+        .bind(&schedule_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        MIGRATOR.run(&pool).await.unwrap();
+
+        let stored: (Option<String>, String, String) = sqlx::query_as(
+            "SELECT recurrence_rule, recurrence_exdates_json, recurrence_supplemental_lines_json FROM schedule_items WHERE id = ?",
+        )
+        .bind(&schedule_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let schema_version: String =
+            sqlx::query_scalar("SELECT value FROM app_meta WHERE key = 'schema_version'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let invalid = sqlx::query(
+            "UPDATE schedule_items SET recurrence_supplemental_lines_json = '{}' WHERE id = ?",
+        )
+        .bind(schedule_id)
+        .execute(&pool)
+        .await;
+
+        assert_eq!(
+            stored,
+            (
+                Some("FREQ=MONTHLY;BYDAY=-1MO".into()),
+                "[\"2026-08-31T09:00:00Z\"]".into(),
+                "[]".into()
+            )
+        );
+        assert_eq!(schema_version, "13");
+        assert!(invalid.is_err());
+    }
+
+    #[tokio::test]
+    async fn migration_v13_handles_fifty_thousand_schedule_rows_within_the_safety_budget() {
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")
+            .unwrap()
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let v12_migrator = sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                MIGRATOR
+                    .migrations
+                    .iter()
+                    .filter(|migration| migration.version <= 12)
+                    .cloned()
+                    .collect(),
+            ),
+            ignore_missing: false,
+            locking: true,
+            no_tx: false,
+        };
+        v12_migrator.run(&pool).await.unwrap();
+        sqlx::query(
+            r#"
+            WITH RECURSIVE synthetic_rows(value) AS (
+              SELECT 1
+              UNION ALL
+              SELECT value + 1 FROM synthetic_rows WHERE value < 50000
+            )
+            INSERT INTO schedule_items(
+              id, title, start_at_utc, end_at_utc, time_zone, status, color,
+              created_at_utc, updated_at_utc, recurrence_rule
+            )
+            SELECT
+              printf('00000000-0000-0000-0000-%012d', value),
+              'Synthetic recurrence ' || value,
+              '2026-07-20T09:00:00Z',
+              '2026-07-20T10:00:00Z',
+              'UTC',
+              'scheduled',
+              '#6F96F4',
+              '2026-07-20T00:00:00Z',
+              '2026-07-20T00:00:00Z',
+              'FREQ=DAILY;COUNT=2'
+            FROM synthetic_rows
+            "#,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let started = std::time::Instant::now();
+        MIGRATOR.run(&pool).await.unwrap();
+        let elapsed = started.elapsed();
+        let migrated_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM schedule_items WHERE recurrence_supplemental_lines_json = '[]'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(migrated_count, 50_000);
+        assert!(
+            elapsed < std::time::Duration::from_secs(30),
+            "v13 migration exceeded the 30 second safety budget: {elapsed:?}"
+        );
     }
 }

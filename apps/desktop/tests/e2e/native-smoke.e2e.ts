@@ -60,7 +60,7 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 12, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 13, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
@@ -598,6 +598,7 @@ describe("Day Schedule Next native smoke", () => {
             color: "#6F96F4",
             priority: "normal",
             recurrenceRule: null,
+            recurrenceSupplementalLines: [],
             recurrenceExdates: [],
             startNotificationMinutes: null,
             endNotificationMinutes: null,
@@ -710,6 +711,88 @@ describe("Day Schedule Next native smoke", () => {
     expect(profile.renderedScheduleNodes).toBeLessThan(200);
     expect(profile.scroll?.p95Ms).toBeLessThanOrEqual(16.7);
     expect(profile.drag?.p95Ms).toBeLessThanOrEqual(16.7);
+  });
+
+  it("shows a protected Google recurrence without implying that sync stopped", async () => {
+    if (process.platform !== "darwin") return;
+    const dataDirectory = process.env.DAY_SCHEDULE_TEST_DATA_DIR;
+    if (!dataDirectory) throw new Error("isolated native E2E data directory is missing");
+    const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
+      today: string;
+      timezoneId: string;
+    };
+    const startUtc = new Date(`${bootstrap.today}T09:00:00`).toISOString();
+    const endUtc = new Date(`${bootstrap.today}T10:00:00`).toISOString();
+    const compactDate = bootstrap.today.replace(/-/g, "");
+    const databasePath = path.join(dataDirectory, "day-schedule-next.sqlite3");
+    execFileSync("sqlite3", [
+      databasePath,
+      `
+        INSERT INTO schedule_items(
+          id, title, start_at_utc, end_at_utc, time_zone, status, color,
+          sync_status, created_at_utc, updated_at_utc, recurrence_rule,
+          recurrence_supplemental_lines_json
+        ) VALUES (
+          'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+          '複雑なGoogle繰り返し',
+          '${startUtc}',
+          '${endUtc}',
+          '${bootstrap.timezoneId}',
+          'scheduled',
+          '#6F96F4',
+          'read_only',
+          '2026-07-26T00:00:00Z',
+          '2026-07-26T00:00:00Z',
+          'FREQ=DAILY;COUNT=3',
+          '["RDATE;TZID=${bootstrap.timezoneId}:${compactDate}T090000"]'
+        );
+      `,
+    ]);
+
+    await browser.refresh();
+    await setLogicalWindowSize(1180, 820);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+    const schedule = $('//button[contains(@aria-label, "複雑なGoogle繰り返し")]');
+    await schedule.waitForDisplayed();
+    await schedule.click();
+    const protectedTitle = $(
+      '//*[normalize-space(.)="複雑な繰り返し予定はGoogle側で編集してください"]',
+    );
+    await protectedTitle.waitForDisplayed();
+    await expect(
+      $('//*[contains(normalize-space(.), "予定の表示と同期は継続します")]'),
+    ).toBeDisplayed();
+    await expect($('//aside//button[normalize-space(.)="変更を保存"]')).toBeDisabled();
+    await browser.saveScreenshot("./test-results/native-google-complex-recurrence.png");
+
+    await browser.execute(() => {
+      const inspector = document.querySelector("aside.inspector");
+      if (!(inspector instanceof HTMLElement)) throw new Error("Schedule inspector was not found");
+      const descendants: HTMLElement[] = Array.from(inspector.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      [inspector, ...descendants].forEach((element) => {
+        const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+        element.dataset.e2eOriginalFontSize = element.style.fontSize;
+        if (Number.isFinite(fontSize)) element.style.fontSize = `${fontSize * 2}px`;
+      });
+      inspector.scrollTop = 0;
+    });
+    await expect(protectedTitle).toBeDisplayed();
+    await browser.saveScreenshot("./test-results/native-google-complex-recurrence-text-200.png");
+    await browser.execute(() => {
+      const inspector = document.querySelector("aside.inspector");
+      if (!(inspector instanceof HTMLElement)) return;
+      const descendants: HTMLElement[] = Array.from(inspector.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      [inspector, ...descendants].forEach((element) => {
+        const original = element.dataset.e2eOriginalFontSize ?? "";
+        if (original) element.style.fontSize = original;
+        else element.style.removeProperty("font-size");
+        delete element.dataset.e2eOriginalFontSize;
+      });
+    });
   });
 
   it("shows per-calendar recovery states with synthetic native data", async () => {

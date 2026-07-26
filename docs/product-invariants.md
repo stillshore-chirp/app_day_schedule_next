@@ -157,7 +157,10 @@
 - attendees、conferenceData、reminders、unknown field を意図せず破棄しない。
 - recurrence master / exception / cancellation を round-trip する。
 - moved exceptionはmaster EXDATEとlinked exception、cancelled exceptionはmaster EXDATE、full-sync missing exceptionはEXDATE解除として表現し、deleted masterのlinked exceptionを孤立させない。
-- calendar timezoneをevent timezone欠落時のfallbackにし、`TZID` / all-day exceptionをIANA timezoneで解釈する。未対応recurrence要素は黙って破棄せずprevious tokenを保持する。
+- calendar timezoneをevent timezone欠落時のfallbackにし、`TZID` / all-day exceptionをIANA timezoneで解釈する。
+- recurrence masterはDTSTARTを基準に、primary `RRULE`、追加`RRULE`、`RDATE`、`EXDATE`、legacy `EXRULE`を一つのrecurrence setとして保存・展開する。序数付き`BYDAY`、`BYSETPOS`、`WKST`、負の月日などRFC 5545のrule partを手書きのallowlistで欠落させない。
+- 追加rule / dateを持つGoogle系列は、元のrecurrence lineを保持して表示・差分同期を継続する。系列の時刻編集で意味を壊さないようアプリ内では読み取り専用とし、Google側での編集を案内する。
+- 許可外property、壊れたRFC入力、`RDATE;VALUE=PERIOD`など現在の固定長schedule modelで表現できない入力は黙って破棄せず、該当calendarのprevious tokenと既存予定を保持する。
 - 403 / 404 / validation / 429 / 5xxはcalendar単位で状態を保存し、他の読み取り可能なcalendarを継続する。401 / invalid refreshだけをaccount-wide re-authとする。
 - `freeBusyReader` calendarはevent本文同期の対象にしない。
 - 手動取消は operation ID ごとに分離し、pagination / Outbox item / local transaction の安全な境界で停止する。確定済み remote write は戻さず、未完了 Outbox と決定的 remote event ID により再試行を冪等にする。

@@ -971,6 +971,10 @@ textarea[aria-invalid="true"] {
   gap: 10px;
 }
 
+.inspector .field-pair {
+  grid-template-columns: 1fr;
+}
+
 .field-help,
 .field-error,
 .status-message p,
@@ -1119,6 +1123,11 @@ textarea[aria-invalid="true"] {
   padding: 13px 15px;
   margin-bottom: 14px;
   color: var(--text);
+}
+
+.status-message > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .status-message strong,

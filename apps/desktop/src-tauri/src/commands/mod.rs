@@ -306,6 +306,7 @@ pub fn recurrence_preview_get(
         color: "#6F96F4".into(),
         priority: Priority::Normal,
         recurrence_rule: Some(request.recurrence_rule),
+        recurrence_supplemental_lines: Vec::new(),
         recurrence_exdates: Vec::new(),
         start_notification_minutes: None,
         end_notification_minutes: None,

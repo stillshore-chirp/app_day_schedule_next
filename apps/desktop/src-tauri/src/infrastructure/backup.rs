@@ -20,7 +20,7 @@ use super::Database;
 const BACKUP_GENERATIONS: usize = 10;
 const PENDING_RESTORE_NAME: &str = ".restore-pending.sqlite3";
 const PENDING_RESTORE_HASH_NAME: &str = ".restore-pending.sha256";
-pub const CURRENT_SCHEMA_VERSION: u32 = 12;
+pub const CURRENT_SCHEMA_VERSION: u32 = 13;
 
 #[derive(Debug, Clone)]
 pub struct PreparedMigrationBackup {
