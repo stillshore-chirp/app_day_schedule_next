@@ -63,7 +63,9 @@ describe("Day Schedule Next native smoke", () => {
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
     await persistFixtureTheme("light");
-    await browser.setWindowSize(1440, 920);
+    // Earlier specs intentionally resize the shared native window. Restore the
+    // deterministic Today baseline viewport before taking its screenshot.
+    await browser.setWindowSize(1024, 681);
     const addButton = $('//header//button[contains(normalize-space(.), "予定")]');
     await addButton.click();
     const titleInput = $('//aside//label[contains(., "タイトル")]/input');
