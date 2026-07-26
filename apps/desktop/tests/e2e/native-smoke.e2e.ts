@@ -549,7 +549,7 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-week.png");
 
     await $('//aside[@aria-label="主要画面"]//button[contains(., "データと診断")]').click();
-    await $("main h1").waitForDisplayed();
+    await $(".diagnostics-grid").waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-conflict.png");
 
     const originalHandle = await browser.getWindowHandle();

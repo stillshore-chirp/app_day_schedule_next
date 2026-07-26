@@ -63,7 +63,7 @@
 - Frontend: Google settings component 6 tests、typed contract、a11y 7 tests
 - Native: 13 tests、[通常のcalendar recovery state](../../evidence/issue-14/native-google-calendar-recovery.png)、[200% text](../../evidence/issue-14/native-google-calendar-recovery-text-200.png)
 - Before: [OAuth接続導線だけの状態](../../evidence/issue-13/native-google-connect-after.png)。Afterはcalendar単位の権限・回復状態を同じ設定panelへ追加
-- Visual regression: Issue #14の2 snapshotは独立した2回のmacOS arm64 CI actualがbyte一致し、synthetic dataだけであることと画面状態を目視確認してbaselineへ昇格した。既存5 snapshotを含む最終比較は、更新後headの同一CI環境で再確認する
+- Visual regression: 通常snapshotは独立した2回のmacOS arm64 CI actualがbyte一致。200% snapshotは最新CI actualで対象panelの文字拡大とsynthetic状態を目視確認し、誤って100%だったbaselineを置換した。既存5 snapshotを含む最終比較は、更新後headの同一CI環境で再確認する
 - E2E isolation: fixture themeを各証跡前にlightへ固定し、Compact windowを閉じてmain windowへ復帰する。通知履歴specではReactの5秒pollをE2E buildだけ停止し、specを唯一のclaim元にしてclock競合を排除する
 - macOS personal: personal build / debug DMGでtoken、mapping、active mapped itemが非0。Listはempty stateではなく、同期済みcalendarとvalidation calendarを設定画面で区別。個人予定本文と識別子は取得・保存していない
 - Pending: 更新後headのmacOS arm64 / x64 / Windows x64 CI、全snapshot比較、installer build、code review
