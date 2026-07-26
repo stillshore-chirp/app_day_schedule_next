@@ -22,10 +22,13 @@ Linux は対象外です。macOS / Windows は同じ domain、application、Reac
 corepack enable
 pnpm install --frozen-lockfile
 pnpm build
-pnpm tauri:build:debug
+node --env-file=.env.local scripts/provision-google-oauth-local.mjs
+node --env-file=.env.local scripts/build-personal-google-oauth.mjs
 ```
 
-ローカルで利用するアプリを生成する場合は、repository root で上記のうち `corepack enable`、依存関係の install、`pnpm tauri:build:debug` を順に実行します。生成物は `target/debug/bundle/` 以下の実行 OS 用ディレクトリに作られます。この手順は手元で利用するアプリの生成だけを対象とし、公開用 artifact の作成や第三者への配布準備を意味しません。
+`.env.local`にはGoogle Cloudの同じDesktop appから得た`DAY_SCHEDULE_GOOGLE_OAUTH_CLIENT_ID`と`DAY_SCHEDULE_GOOGLE_OAUTH_CLIENT_SECRET`を設定します。client IDはRustへcompile-time設定し、client secretはprovisionerがOS keyringへ登録してbundleへ含めません。実値やclient JSONはgit、Issue、PR、build logへ残しません。Google接続を使わないcompile/testでは未設定でも構いませんが、個人利用buildのOAuth実機smokeにはprovisioning済みbuildが必要です。client IDを変更したらRust側を再ビルドし、同じDesktop appのclient secretで再provisionします。
+
+ローカルで利用するアプリを生成する場合は、repository root で上記のうち `corepack enable`、依存関係のinstall、OS秘密ストアへのprovisioning、個人用buildを順に実行します。生成物は `target/debug/bundle/` 以下の実行 OS 用ディレクトリに作られます。この手順は手元で利用するアプリの生成だけを対象とし、公開用 artifact の作成や第三者への配布準備を意味しません。
 
 PR CI は全PRでharness / frontendを実行し、`apps/desktop`、Rust workspace、lockfile等に変更がある場合だけ、個人利用の主対象である`macos-15`でformat、clippy、all-feature test、通常identifierのno-bundle buildを実行します。open PRへのpushと`pull_request`の二重起動、毎回のinstaller artifact生成は行いません。
 

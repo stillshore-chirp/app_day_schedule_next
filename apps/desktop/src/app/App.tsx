@@ -128,6 +128,8 @@ export function App({ client }: { client: AppClient }) {
         return messages.states.conflict;
       case "auth_required":
         return messages.states.authRequired;
+      case "calendar_unavailable":
+        return translate("app.App.017");
     }
   }, [bootstrapQuery.data?.sync.state]);
 

@@ -1203,34 +1203,78 @@ impl Database {
                 .fetch_one(&self.pool)
                 .await
                 .map_err(|error| AppError::database("sync-conflicts", error))?;
-        let account_status: Option<String> = sqlx::query_scalar(
-            "SELECT status FROM google_accounts ORDER BY created_at_utc LIMIT 1",
+        let account = sqlx::query(
+            "SELECT status, last_completed_at_utc, next_retry_at_utc FROM google_accounts ORDER BY created_at_utc LIMIT 1",
         )
         .fetch_optional(&self.pool)
         .await
         .map_err(|error| AppError::database("sync-account", error))?;
+        let account_status = account.as_ref().map(|row| row.get::<String, _>("status"));
+        let last_completed: Option<String> = account
+            .as_ref()
+            .and_then(|row| row.get("last_completed_at_utc"));
+        let account_next_retry: Option<String> = account
+            .as_ref()
+            .and_then(|row| row.get("next_retry_at_utc"));
+        let has_calendar_unavailable: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM google_calendars WHERE selected = 1 AND sync_state = 'unavailable')",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| AppError::database("sync-calendar-unavailable-summary", error))?;
+        let has_calendar_retry: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM google_calendars WHERE selected = 1 AND sync_state = 'retry_scheduled')",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| AppError::database("sync-calendar-retry-summary", error))?;
+        let has_calendar_incomplete: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM google_calendars WHERE selected = 1 AND sync_state IN ('never', 'syncing', 'auth_required'))",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| AppError::database("sync-calendar-incomplete-summary", error))?;
         let state = if conflict_count > 0 {
             SyncSummaryState::Conflict
         } else if account_status.as_deref() == Some("auth_required") {
             SyncSummaryState::AuthRequired
         } else if account_status.as_deref() != Some("connected") {
             SyncSummaryState::Disconnected
+        } else if has_calendar_unavailable {
+            SyncSummaryState::CalendarUnavailable
         } else if pending_count > 0 {
             SyncSummaryState::Pending
+        } else if account_next_retry.is_some() || has_calendar_retry {
+            SyncSummaryState::RetryScheduled
+        } else if last_completed.is_none() || has_calendar_incomplete {
+            SyncSummaryState::Syncing
         } else {
             SyncSummaryState::Synced
         };
-        let next_retry: Option<String> = sqlx::query_scalar(
+        let outbox_next_retry: Option<String> = sqlx::query_scalar(
             "SELECT MIN(next_attempt_at_utc) FROM sync_outbox WHERE completed_at_utc IS NULL AND attempt_count > 0",
         )
         .fetch_one(&self.pool)
+            .await
+            .map_err(|error| AppError::database("sync-retry", error))?;
+        let calendar_next_retry: Option<String> = sqlx::query_scalar(
+            "SELECT MIN(next_retry_at_utc) FROM google_calendars WHERE selected = 1 AND sync_state = 'retry_scheduled'",
+        )
+        .fetch_one(&self.pool)
         .await
-        .map_err(|error| AppError::database("sync-retry", error))?;
+        .map_err(|error| AppError::database("sync-calendar-retry-date", error))?;
+        let next_retry = [account_next_retry, outbox_next_retry, calendar_next_retry]
+            .into_iter()
+            .flatten()
+            .min();
         Ok(SyncSummary {
             state,
             pending_count: pending_count.max(0) as u64,
             conflict_count: conflict_count.max(0) as u64,
-            last_completed_at: None,
+            last_completed_at: last_completed
+                .as_deref()
+                .map(|value| parse_datetime(value, "sync-last-completed"))
+                .transpose()?,
             next_retry_at: next_retry
                 .as_deref()
                 .map(|value| parse_datetime(value, "sync-retry-date"))
@@ -1268,7 +1312,7 @@ impl Database {
         self.integrity_check().await?;
         Ok(DiagnosticsSnapshot {
             app_version: app_version.into(),
-            schema_version: 11,
+            schema_version: 12,
             database_state: "ready",
             schedule_count: schedule_count.max(0) as u64,
             deleted_count: deleted_count.max(0) as u64,
@@ -1918,6 +1962,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn connected_account_is_not_synced_until_a_pull_completes() {
+        let database = Database::open_memory().await.unwrap();
+        connect_default_calendar(&database).await;
+
+        let before = database.sync_summary().await.unwrap();
+        assert_eq!(before.state, SyncSummaryState::Syncing);
+        assert!(before.last_completed_at.is_none());
+
+        let completed_at = Utc::now();
+        sqlx::query("UPDATE google_accounts SET last_completed_at_utc = ?")
+            .bind(completed_at.to_rfc3339())
+            .execute(&database.pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "UPDATE google_calendars SET sync_state = 'synced', last_sync_completed_at_utc = ?",
+        )
+        .bind(completed_at.to_rfc3339())
+        .execute(&database.pool)
+        .await
+        .unwrap();
+
+        let after = database.sync_summary().await.unwrap();
+        assert_eq!(after.state, SyncSummaryState::Synced);
+        assert_eq!(after.last_completed_at, Some(completed_at));
+    }
+
+    #[tokio::test]
+    async fn failed_initial_sync_is_reported_as_retry_scheduled() {
+        let database = Database::open_memory().await.unwrap();
+        connect_default_calendar(&database).await;
+        let retry_at = Utc::now() + chrono::Duration::minutes(5);
+        sqlx::query("UPDATE google_accounts SET next_retry_at_utc = ?")
+            .bind(retry_at.to_rfc3339())
+            .execute(&database.pool)
+            .await
+            .unwrap();
+
+        let summary = database.sync_summary().await.unwrap();
+        assert_eq!(summary.state, SyncSummaryState::RetryScheduled);
+        assert_eq!(summary.next_retry_at, Some(retry_at));
+        assert!(summary.last_completed_at.is_none());
+    }
+
+    #[tokio::test]
     async fn migration_crud_and_history_are_atomic() {
         let database = Database::open_memory().await.unwrap();
         let created = database.create_schedule(draft("初期")).await.unwrap();
@@ -2491,5 +2580,139 @@ mod tests {
             .unwrap();
         assert_eq!(templates, 1);
         assert_eq!(database.settings().await.unwrap(), Settings::default());
+    }
+
+    #[tokio::test]
+    async fn google_calendar_sync_state_schema_has_safe_defaults_and_constraints() {
+        let database = Database::open_memory().await.unwrap();
+        let account_id = Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO google_accounts(id, display_label, scopes_json, status, created_at_utc, updated_at_utc) VALUES (?, 'Synthetic Google', '[]', 'connected', ?, ?)",
+        )
+        .bind(&account_id)
+        .bind(&now)
+        .bind(&now)
+        .execute(&database.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO google_calendars(id, account_id, remote_calendar_id, display_name, color, time_zone, access_role, selected, default_write_target) VALUES (?, ?, 'synthetic-calendar', 'Synthetic calendar', '#6F96F4', 'UTC', 'owner', 1, 1)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(&account_id)
+        .execute(&database.pool)
+        .await
+        .unwrap();
+
+        let sync_state: String =
+            sqlx::query_scalar("SELECT sync_state FROM google_calendars LIMIT 1")
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        assert_eq!(sync_state, "never");
+
+        let invalid = sqlx::query(
+            "UPDATE google_calendars SET sync_state = 'unknown_state' WHERE account_id = ?",
+        )
+        .bind(account_id)
+        .execute(&database.pool)
+        .await;
+        assert!(invalid.is_err());
+    }
+
+    #[tokio::test]
+    async fn migration_v12_preserves_v11_calendar_tokens_and_backfills_sync_state() {
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")
+            .unwrap()
+            .create_if_missing(true)
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let v11_migrator = sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                MIGRATOR
+                    .migrations
+                    .iter()
+                    .filter(|migration| migration.version <= 11)
+                    .cloned()
+                    .collect(),
+            ),
+            ignore_missing: false,
+            locking: true,
+            no_tx: false,
+        };
+        v11_migrator.run(&pool).await.unwrap();
+
+        let account_id = Uuid::new_v4().to_string();
+        let synced_calendar_id = Uuid::new_v4().to_string();
+        let never_calendar_id = Uuid::new_v4().to_string();
+        let completed_at = "2026-07-25T12:00:00+00:00";
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO google_accounts(id, display_label, scopes_json, status, created_at_utc, updated_at_utc, last_completed_at_utc) VALUES (?, 'Synthetic Google', '[]', 'connected', ?, ?, ?)",
+        )
+        .bind(&account_id)
+        .bind(&now)
+        .bind(&now)
+        .bind(completed_at)
+        .execute(&pool)
+        .await
+        .unwrap();
+        for (calendar_id, remote_id, token) in [
+            (
+                &synced_calendar_id,
+                "synced-calendar",
+                Some("preserved-token"),
+            ),
+            (&never_calendar_id, "never-calendar", None),
+        ] {
+            sqlx::query(
+                "INSERT INTO google_calendars(id, account_id, remote_calendar_id, display_name, color, time_zone, access_role, selected, default_write_target, sync_token) VALUES (?, ?, ?, 'Synthetic calendar', '#6F96F4', 'UTC', 'owner', 1, 0, ?)",
+            )
+            .bind(calendar_id)
+            .bind(&account_id)
+            .bind(remote_id)
+            .bind(token)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+
+        MIGRATOR.run(&pool).await.unwrap();
+
+        let synced: (String, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT sync_state, sync_token, last_sync_completed_at_utc FROM google_calendars WHERE id = ?",
+        )
+        .bind(synced_calendar_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let never: (String, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT sync_state, sync_token, last_sync_completed_at_utc FROM google_calendars WHERE id = ?",
+        )
+        .bind(never_calendar_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let schema_version: String =
+            sqlx::query_scalar("SELECT value FROM app_meta WHERE key = 'schema_version'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+
+        assert_eq!(
+            synced,
+            (
+                "synced".into(),
+                Some("preserved-token".into()),
+                Some(completed_at.into())
+            )
+        );
+        assert_eq!(never, ("never".into(), None, None));
+        assert_eq!(schema_version, "12");
     }
 }

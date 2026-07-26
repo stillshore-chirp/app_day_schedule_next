@@ -179,6 +179,7 @@ function syncLabel(state: string): string {
       retry_scheduled: translate("app.CompactApp.024"),
       conflict: translate("app.CompactApp.025"),
       auth_required: translate("app.CompactApp.026"),
+      calendar_unavailable: translate("app.CompactApp.033"),
     }[state] ?? translate("app.CompactApp.027")
   );
 }

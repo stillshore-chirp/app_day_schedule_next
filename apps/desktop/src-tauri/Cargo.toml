@@ -5,6 +5,7 @@ description = "Local-first minute-precision day scheduling desktop app"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+default-run = "day-schedule-next"
 
 [lib]
 name = "day_schedule_next_lib"
@@ -13,6 +14,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [[bin]]
 name = "day-schedule-next"
 path = "src/main.rs"
+
+[[bin]]
+name = "provision-google-oauth"
+path = "src/bin/provision_google_oauth.rs"
+required-features = ["google-sync"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

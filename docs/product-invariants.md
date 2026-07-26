@@ -129,19 +129,24 @@
 
 ## 9. Google OAuth
 
-- Desktop app client。
+- Desktop app client IDはgit追跡外のbuild設定から埋め込み、通常利用者へOAuth JSONを要求しない。
+- installed appはsecretを秘匿できないため、標準経路にclient secretをbundleしない。
+- Google token endpointが要求するDesktop client secretは、追跡外の初回provisioningからOS keyringへ登録し、client IDとの一致を確認してRust adapterだけが使用する。
+- 保存済みDesktop OAuth JSON設定は開発者向け互換経路としてbuild設定より優先する。
 - system browser + Authorization Code + PKCE S256。
 - random `state` と `127.0.0.1` random port loopback listener。
 - listener は single-use、timeout、state validation。
 - refresh token は OS keyring。access token は memory 優先。
 - scope は最小化し、同意前に用途を説明する。
 - reconnect / revoke / disconnect の data impact を UI に示す。
+- reconnectは既存account、calendar、sync mapping、差分同期tokenを保持し、認証情報だけを安全に更新する。
 
 ## 10. Google Calendar sync
 
 - local-first: network failure で local edit を拒否しない。
 - Outbox operation は idempotency key、entity version、retry state を持つ。
 - calendar ごとに initial full sync と `nextSyncToken` を保持する。
+- initial / incremental / paginationは`showDeleted=true`、`singleEvents=false`、同一page sizeとquery shapeを使い、未検証のpartial-response selectorを実アカウントへ送らない。
 - pagination 完了と local transaction commit 後にだけ new sync token を保存する。
 - deleted remote entries を処理する。
 - 410 は対象 calendar の remote shadow を full resync する。local-owned item と pending Outbox を消さない。
@@ -151,6 +156,10 @@
 - conflict は明示解決まで sync complete と表示しない。
 - attendees、conferenceData、reminders、unknown field を意図せず破棄しない。
 - recurrence master / exception / cancellation を round-trip する。
+- moved exceptionはmaster EXDATEとlinked exception、cancelled exceptionはmaster EXDATE、full-sync missing exceptionはEXDATE解除として表現し、deleted masterのlinked exceptionを孤立させない。
+- calendar timezoneをevent timezone欠落時のfallbackにし、`TZID` / all-day exceptionをIANA timezoneで解釈する。未対応recurrence要素は黙って破棄せずprevious tokenを保持する。
+- 403 / 404 / validation / 429 / 5xxはcalendar単位で状態を保存し、他の読み取り可能なcalendarを継続する。401 / invalid refreshだけをaccount-wide re-authとする。
+- `freeBusyReader` calendarはevent本文同期の対象にしない。
 - 手動取消は operation ID ごとに分離し、pagination / Outbox item / local transaction の安全な境界で停止する。確定済み remote write は戻さず、未完了 Outbox と決定的 remote event ID により再試行を冪等にする。
 - Undo / Redo は古い entity version の未完了 Outbox を同一 transaction で無効化し、復元版へ単調増加する version と補償 Outbox を与える。
 - Google disconnect は未完了 Outbox を無効化し、未送信 entity を `local_only` へ戻してから account / mapping を削除する。再接続先へ古い操作を暗黙に転送しない。

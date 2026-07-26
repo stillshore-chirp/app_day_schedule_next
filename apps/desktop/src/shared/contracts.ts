@@ -123,6 +123,7 @@ export const syncSummarySchema = z.object({
     "retry_scheduled",
     "conflict",
     "auth_required",
+    "calendar_unavailable",
   ]),
   pendingCount: z.number().int().nonnegative(),
   conflictCount: z.number().int().nonnegative(),
@@ -427,6 +428,19 @@ export const googleCalendarSchema = z.object({
   selected: z.boolean(),
   defaultWriteTarget: z.boolean(),
   writable: z.boolean(),
+  eventReadable: z.boolean(),
+  syncState: z.enum([
+    "never",
+    "syncing",
+    "synced",
+    "retry_scheduled",
+    "auth_required",
+    "unavailable",
+  ]),
+  lastErrorCategory: z
+    .enum(["auth", "permission", "not_found", "rate_limited", "server", "network", "validation"])
+    .nullable(),
+  nextRetryAt: z.iso.datetime({ offset: true }).nullable(),
 });
 
 export const googleConnectionSchema = z.object({

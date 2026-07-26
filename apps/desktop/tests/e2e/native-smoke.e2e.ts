@@ -1,6 +1,8 @@
 import { $, browser, expect } from "@wdio/globals";
 import "@wdio/tauri-service";
+import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
+import path from "node:path";
 
 describe("Day Schedule Next native smoke", () => {
   const title = `E2E予定-${Date.now()}`;
@@ -43,7 +45,7 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 11, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 12, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
@@ -79,6 +81,71 @@ describe("Day Schedule Next native smoke", () => {
     await expect(settingsHeading).toBeDisplayed();
     await expect(settingsHeading).toHaveText("設定");
     await browser.saveScreenshot("./test-results/native-narrow-settings.png");
+  });
+
+  it("offers the app-managed Google connection without requiring OAuth JSON", async () => {
+    await setLogicalWindowSize(1180, 820);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
+    const googlePanel = $('section[aria-labelledby="google-panel-title"]');
+    await googlePanel.waitForExist();
+    await browser.execute(() => {
+      document
+        .querySelector('section[aria-labelledby="google-panel-title"]')
+        ?.scrollIntoView({ block: "start" });
+    });
+
+    const connection = (await browser.tauri.execute(({ core }) =>
+      core.invoke("google_connection_get"),
+    )) as { configured: boolean; state: string; accountId: string | null };
+    expect(connection).toMatchObject({
+      configured: true,
+      state: "configured",
+      accountId: null,
+    });
+
+    const connect = $('//button[normalize-space(.)="Google カレンダーに接続"]');
+    await connect.waitForDisplayed();
+    await expect(connect).toBeEnabled();
+    await expect($('//summary[normalize-space(.)="開発者向けOAuth設定"]')).toBeDisplayed();
+    await expect(
+      $('//button[contains(normalize-space(.), "独自のOAuth設定")]'),
+    ).not.toBeDisplayed();
+    await browser.saveScreenshot("./test-results/native-google-connect.png");
+
+    await browser.execute(() => {
+      const panel = document.querySelector('section[aria-labelledby="google-panel-title"]');
+      if (!(panel instanceof HTMLElement)) throw new Error("Google panel was not found");
+      const descendants: HTMLElement[] = Array.from(panel.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      const elements: HTMLElement[] = [panel, ...descendants];
+      const sizes: Array<{ element: HTMLElement; fontSize: number; original: string }> =
+        elements.map((element) => ({
+          element,
+          fontSize: Number.parseFloat(window.getComputedStyle(element).fontSize),
+          original: element.style.fontSize,
+        }));
+      sizes.forEach(({ element, fontSize, original }) => {
+        element.dataset.e2eOriginalFontSize = original;
+        if (Number.isFinite(fontSize)) element.style.fontSize = `${fontSize * 2}px`;
+      });
+      panel.scrollIntoView({ block: "start" });
+    });
+    await expect(connect).toBeDisplayed();
+    await browser.saveScreenshot("./test-results/native-google-connect-text-200.png");
+    await browser.execute(() => {
+      const panel = document.querySelector('section[aria-labelledby="google-panel-title"]');
+      if (!(panel instanceof HTMLElement)) return;
+      const descendants: HTMLElement[] = Array.from(panel.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      [panel, ...descendants].forEach((element: HTMLElement) => {
+        const original = element.dataset.e2eOriginalFontSize ?? "";
+        if (original) element.style.fontSize = original;
+        else element.style.removeProperty("font-size");
+        delete element.dataset.e2eOriginalFontSize;
+      });
+    });
   });
 
   it("persists template, Quick Block, alarm, and Focus workflows through native IPC", async () => {
@@ -610,5 +677,90 @@ describe("Day Schedule Next native smoke", () => {
     expect(profile.renderedScheduleNodes).toBeLessThan(200);
     expect(profile.scroll?.p95Ms).toBeLessThanOrEqual(16.7);
     expect(profile.drag?.p95Ms).toBeLessThanOrEqual(16.7);
+  });
+
+  it("shows per-calendar recovery states with synthetic native data", async () => {
+    if (process.platform !== "darwin") return;
+    const dataDirectory = process.env.DAY_SCHEDULE_TEST_DATA_DIR;
+    if (!dataDirectory) throw new Error("isolated native E2E data directory is missing");
+    const databasePath = path.join(dataDirectory, "day-schedule-next.sqlite3");
+    execFileSync("sqlite3", [
+      databasePath,
+      `
+        INSERT INTO google_accounts(
+          id, display_label, scopes_json, status, created_at_utc, updated_at_utc
+        ) VALUES (
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          'Synthetic Google',
+          '[]',
+          'connected',
+          '2026-07-26T00:00:00Z',
+          '2026-07-26T00:00:00Z'
+        );
+        INSERT INTO google_calendars(
+          id, account_id, remote_calendar_id, display_name, color, time_zone, access_role,
+          selected, default_write_target, sync_state, last_error_category
+        ) VALUES
+        (
+          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          'synthetic-permission-calendar',
+          '同期確認用カレンダー',
+          '#6F96F4',
+          'Asia/Tokyo',
+          'reader',
+          1,
+          0,
+          'unavailable',
+          'permission'
+        ),
+        (
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+          'synthetic-free-busy-calendar',
+          '空き時間のみ',
+          '#6F96F4',
+          'Asia/Tokyo',
+          'freeBusyReader',
+          0,
+          0,
+          'never',
+          NULL
+        );
+      `,
+    ]);
+    await browser.refresh();
+    await setLogicalWindowSize(1180, 820);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
+    await $('//*[normalize-space(.)="同期確認用カレンダー"]').waitForDisplayed();
+    await expect(
+      $('//*[normalize-space(.)="同期を停止しました。Google側の共有権限を確認してください。"]'),
+    ).toBeDisplayed();
+    const freeBusyCheckbox = $(
+      '//article[.//*[normalize-space(.)="空き時間のみ"]]//input[@type="checkbox"]',
+    );
+    await expect(freeBusyCheckbox).toBeDisabled();
+    await browser.execute(() => {
+      document
+        .querySelector('section[aria-labelledby="google-panel-title"]')
+        ?.scrollIntoView({ block: "start" });
+    });
+    await browser.saveScreenshot("./test-results/native-google-calendar-recovery.png");
+
+    await browser.execute(() => {
+      const panel = document.querySelector('section[aria-labelledby="google-panel-title"]');
+      if (!(panel instanceof HTMLElement)) throw new Error("Google panel was not found");
+      const descendants: HTMLElement[] = Array.from(panel.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      [panel, ...descendants].forEach((element) => {
+        const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+        element.dataset.e2eOriginalFontSize = element.style.fontSize;
+        if (Number.isFinite(fontSize)) element.style.fontSize = `${fontSize * 2}px`;
+      });
+      panel.scrollIntoView({ block: "start" });
+    });
+    await expect(freeBusyCheckbox).toBeDisplayed();
+    await browser.saveScreenshot("./test-results/native-google-calendar-recovery-text-200.png");
   });
 });

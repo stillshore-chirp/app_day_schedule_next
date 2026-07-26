@@ -9,7 +9,7 @@ Day Schedule Next は、一日の予定を分単位で設計・実行し、現�
 - 日次テンプレート、適用前プレビュー、追加／安全な置換、Quick Block、自由アラーム
 - Focus の開始・一時停止・再開・休憩・終了、予定への紐付け、予定別実績集計、当日履歴
 - 永続通知台帳、重複抑止、復帰時の猶予・上限、OS 通知とアプリ内音の独立設定
-- Desktop OAuth + Authorization Code + PKCE + loopback、Outbox、差分同期、競合解決
+- OAuth JSON不要のDesktop OAuth + Authorization Code + PKCE + loopback、Outbox、差分同期、競合解決
 - SQLite migration、バックアップ、復元 staging、JSON export / import、旧 DB の read-only preview
 - Compact Window、トレイ常駐、single instance、構造化・マスク済み診断 export
 

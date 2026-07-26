@@ -84,7 +84,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build isolated WebdriverIO debug application
         shell: bash
-        run: VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
+        run: DAY_SCHEDULE_GOOGLE_OAUTH_CLIENT_ID=synthetic-native-e2e-client.apps.googleusercontent.com VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
       - name: Run native E2E with synthetic fixtures
         run: pnpm test:e2e
       - name: Compare macOS arm64 visual baselines

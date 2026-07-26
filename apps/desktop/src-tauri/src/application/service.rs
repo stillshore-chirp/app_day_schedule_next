@@ -162,7 +162,7 @@ impl AppService {
         let timezone = timezone_id.parse::<Tz>().unwrap_or(chrono_tz::UTC);
         let settings = self.database.settings().await?;
         Ok(Bootstrap {
-            schema_version: 11,
+            schema_version: 12,
             app_version: env!("CARGO_PKG_VERSION").into(),
             today: self
                 .clock
@@ -806,7 +806,12 @@ impl AppService {
         let cancellation = self.operations.begin(operation_id).await?;
         let result = async {
             let Ok(_guard) = self.sync_gate.try_lock() else {
-                return self.database.sync_summary().await;
+                return Err(AppError::Conflict {
+                    message: "別のGoogle同期が進行中です。".into(),
+                    recovery:
+                        "進行中の同期が完了するまで待つか、データと診断から同期を取り消してください。"
+                            .into(),
+                });
             };
             cancellation.check()?;
             let summary = self.database.sync_summary().await?;
@@ -949,6 +954,10 @@ impl AppService {
 
     pub async fn begin_google_oauth(&self) -> AppResult<OAuthBeginResult> {
         self.database.begin_google_oauth().await
+    }
+
+    pub fn cancel_google_oauth_attempt(&self) {
+        self.database.cancel_google_oauth_attempt();
     }
 
     pub async fn google_connection(&self) -> AppResult<GoogleConnection> {
@@ -1299,5 +1308,16 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(completion_count, 1);
+    }
+
+    #[tokio::test]
+    async fn concurrent_sync_is_not_reported_as_success() {
+        let database = Database::open_memory().await.unwrap();
+        let service = AppService::new_started_at(database, Instant::now());
+        let _guard = service.sync_gate.lock().await;
+
+        let result = service.run_sync(Uuid::new_v4()).await;
+
+        assert!(matches!(result, Err(AppError::Conflict { .. })));
     }
 }
