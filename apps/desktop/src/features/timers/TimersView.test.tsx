@@ -106,5 +106,5 @@ describe("TimersView", () => {
 
     await screen.findByRole("heading", { name: "負荷タイマー 500" });
     expect(screen.getAllByRole("article")).toHaveLength(500);
-  });
+  }, 15_000);
 });

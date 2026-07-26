@@ -23,7 +23,9 @@ network request を DB write transaction 中に待ちません。
 
 ## 2. OAuth
 
-- Google Cloud Desktop app client。
+- Google Cloud Desktop app client IDを`DAY_SCHEDULE_GOOGLE_OAUTH_CLIENT_ID`からcompile-time設定し、通常利用者へOAuth JSONを要求しない。
+- installed appはsecretを秘匿できないため、標準経路はclient secretをbundleしない。追跡外の初回provisioningからOS keyringへ登録し、Google公式authorization/token endpointへのtoken交換と更新時だけRust adapterが読む。
+- 既存のDesktop OAuth JSON設定は開発者向けoverrideとして維持し、保存済み設定をbuild設定より優先する。
 - system browser。
 - Authorization Code + PKCE S256。
 - random high-entropy `state`。
@@ -31,6 +33,7 @@ network request を DB write transaction 中に待ちません。
 - callback session は single-use + timeout。
 - refresh token は OS keyring。
 - access token / authorization code / verifier を永続ログへ出さない。
+- re-authは既存account IDとcredential keyを再利用し、calendar、mapping、`nextSyncToken`を削除しない。
 
 ## 3. Local model
 
@@ -42,12 +45,38 @@ network request を DB write transaction 中に待ちません。
 
 ## 4. Initial / incremental sync
 
+- `events.list` は initial / incremental / pagination の全 request で `showDeleted=true`、`singleEvents=false`、`maxResults=250` を固定する。Google公式の既定responseを使い、未検証のpartial-response selectorを送らない。
 - initial full sync の最後の page で `nextSyncToken` を取得する。
 - page processing と new token 保存は一つの local transaction へまとめる。
 - incremental は同じ query shape と previous token を使う。
 - deleted events を含めて処理する。
 - 410 は対象 calendar の remote shadow と token を再構築する。full sync の全ページに現れなかった既存 mapping は remote deletion として同じ transaction で照合し、未送信ローカル変更があれば削除競合として保持する。
 - full resync が local entity / pending Outbox を削除しない。
+- network requestはtransaction外で完了させ、page群をmemoryへstageした後、event適用・missing照合・token更新をcalendar単位の単一transactionで確定する。
+
+### 4.1 Calendar state
+
+`google_calendars`は`sync_state`、試行／完了時刻、次回再試行、allowlist error categoryを保持する。token、remote payload、予定本文は状態列へ保存しない。
+
+| Result | Calendar state | Token / local data | Batch behavior |
+|---|---|---|---|
+| final page + transaction commit | `synced` | new tokenとeventを同時確定 | 継続 |
+| timeout / DNS / 429 / 5xx | `retry_scheduled` | previous tokenとlocal dataを保持 | 他calendarを継続 |
+| 403 / 404 / unsupported recurrence | `unavailable` | previous tokenとlocal dataを保持 | 他calendarを継続 |
+| 401 / invalid refresh | `auth_required` | 全calendarのtokenとlocal dataを保持 | account batchを中止 |
+| cancellation / database failure | previous stable state | 未commit変更を破棄 | batchを中止 |
+
+`freeBusyReader`はevent本文を読めないため選択不可とし、`reader`以上だけをpull対象にする。account summaryは一つでも`unavailable`なら「確認が必要」、一時失敗なら「再試行予定」とし、初回pull完了前を「同期済み」と表示しない。
+
+### 4.2 Recurrence import
+
+- master eventをexceptionより先に適用する。API response順には依存しない。
+- moved / edited exceptionは`recurringEventId`でmaster mappingを解決し、`originalStartTime`をmaster EXDATEへ追加する。exceptionは`recurrence_series_id`と`recurrence_original_start_utc`を持つ非再発scheduleとして保存する。
+- cancelled exceptionはmaster EXDATEだけを追加し、既存linked exceptionがあればsoft deleteする。
+- full syncで既存exception resourceが欠落した場合は、linked exceptionをsoft deleteし、master EXDATEから元の開始instantを除去する。
+- deleted masterは未送信local exceptionがないことを確認してlinked remote exceptionもsoft deleteする。未送信変更があればtokenを更新せず競合として停止する。
+- eventにtimezoneがない場合はcalendar timezoneをfallbackにする。`EXDATE;TZID=...`と`EXDATE;VALUE=DATE`をIANA timezoneで解釈し、DST gap / ambiguityを黙って補正しない。
+- `RDATE`、`EXRULE`、複数`RRULE`など未対応のrecurrence要素は黙って破棄せず、calendarを`unavailable / validation`にしてprevious tokenを保持する。
 
 ## 5. Push
 
@@ -97,3 +126,5 @@ base から local だけ変更、remote だけ変更は自動 merge。両方が�
 ## 9. Tests
 
 `.agents/skills/calendar-sync-review/SKILL.md` の matrix を必須とします。
+
+最低fixtureはinitial 1 page / multi page、incremental create / update / delete、page failure、410、401、403、404、429、5xx、offline、同時worker、master、moved exception、cancelled exception、exception reset、series deletion、timezone fallback、unsupported recurrenceを含めます。

@@ -82,6 +82,7 @@ const requiredFiles = [
   '.github/dependabot.yml',
   'scripts/verify-agent-harness.mjs',
   'scripts/verify-workflow-policy.mjs',
+  'scripts/verify-patched-dependencies.mjs',
   'scripts/verify-doc-links.mjs',
   'scripts/security-scan-text.mjs',
   'scripts/check-repository-boundaries.mjs',

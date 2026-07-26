@@ -35,9 +35,11 @@ jobs:
       - name: Activate pnpm
         run: |
           corepack enable
-          corepack prepare pnpm@10.13.1 --activate
+          corepack prepare pnpm@11.17.0 --activate
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify patched dependency compatibility
+        run: pnpm verify:patched-dependencies
       - name: Format
         run: pnpm format:check
       - name: Lint
@@ -86,7 +88,7 @@ jobs:
         shell: bash
         run: |
           corepack enable
-          corepack prepare pnpm@10.13.1 --activate
+          corepack prepare pnpm@11.17.0 --activate
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:

@@ -16,6 +16,7 @@
 corepack enable
 pnpm install --frozen-lockfile
 npm run verify:bootstrap
+pnpm verify:patched-dependencies
 pnpm format:check
 pnpm lint
 pnpm typecheck
@@ -29,7 +30,7 @@ pnpm tauri:build:debug
 git diff --check
 ```
 
-`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎます。
+`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎます。`pnpm verify:patched-dependencies` は、脆弱な `brace-expansion` 1.x / 2.x を修正版 5.0.8 へ統一するpatchが、利用中の全 `minimatch` majorでCommonJS / ESMのbrace展開互換性を保つことを確認します。
 
 ## 3. Frontend unit / accessibility
 
@@ -57,7 +58,7 @@ cargo test --workspace --all-features
 - notification delivery key、grace、Quick Block active linkage、Focus transition / history / 予定別実績集計
 - 予定分類の最大500件原子的変更、1 action Undo、read-only拒否
 - JSON import fingerprint、legacy preview / transaction、backup / staged restore
-- Google Desktop OAuth validation、PKCE、initial / incremental / pagination / delete / 410 / 401 / 412 / 429 / 5xx / offline、3-way merge
+- Google Desktop OAuth build設定validation、client secret不要契約、PKCE、再接続時のcalendar / sync token保持、initial / incremental / pagination / delete / 410 / 401 / 412 / 429 / 5xx / offline、3-way merge
 - structured diagnostic export の redaction
 - operation ID ごとの cancel isolation、同期 token / local event 保持、export `.part` cleanup、backup file / history 非生成
 
@@ -68,13 +69,14 @@ Google integration test は local TCP mock server を bind します。制限 sa
 通常 build に WebDriver plugin を含めないため、E2E 専用 identifier / capability / feature で build します。
 
 ```bash
-VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
+DAY_SCHEDULE_GOOGLE_OAUTH_CLIENT_ID=synthetic-native-e2e-client.apps.googleusercontent.com VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
 pnpm test:e2e
 ```
 
 現行 smoke:
 
 - real Tauri app 起動と real IPC bootstrap
+- compile-timeのsynthetic Desktop client IDによるOAuth JSON不要の接続状態
 - UI 作成 → Rust command → SQLite 永続化 → 再起動／検索
 - 設定保存 → 再起動、pointer drag作成、分類の一括変更 → SQLite再検索
 - 720 × 720 の最小幅ナビゲーション
@@ -82,6 +84,8 @@ pnpm test:e2e
 - Today、List、Week、Template、Focus、Compact、Data / Conflict の synthetic native screenshot
 - 30分予定のoverview marker、detail 1行density、完全なaccessible name、title / timeのcard内geometry
 - 専用一時DBへ500予定を実IPCで投入し、仮想化DOM上限とscroll / dragのmain-thread 16.7ms budgetを各30回測定
+
+`VITE_WDIO=true` のE2E buildでは、通知履歴specとアプリの5秒foreground pollが同じdeliveryを競合してclaimしないよう、Reactの自動notification runtimeだけを停止します。通知履歴specが単独で実IPC pollを行い、delivery key・結果記録・再読込後の表示を確認します。Rustの候補抽出、重複抑止、DST、grace / replayは固定clockのintegration test、OS permission / deliveryはrelease manual matrixを正本とします。
 
 Native E2E はPRごとには起動しません。`Native release validation` workflowで`macos-arm64`、`macos-x64`、`windows-x64`、`all`から対象を選びます。通常の個人利用確認はmacOS arm64、release判断は`all`です。失敗時だけscreenshotとマスク対象を確認したlogを7日間artifactにします。macOS arm64では続けて`scripts/compare-visual-snapshots.swift`を実行し、Today、Week、Template、Compact、Conflictをchannel差32・不一致pixel 4%の許容差で比較します。超過時は赤い差分PNGを確認し、意図した変更だけbaseline更新としてレビューします。
 
@@ -138,7 +142,7 @@ warm profile は未計測の1回で事前起動後に同じsynthetic profileを3
 | clean install / launch / quit | release manual | release manual | release manual |
 | Keychain / Credential Manager | release manual | release manual | release manual |
 | notification permission / delivery | release manual | release manual | release manual |
-| OAuth browser / loopback | release manual | release manual | release manual |
+| OAuth browser / loopback / keyring / calendar list | release manual | release manual | release manual |
 | tray / Compact / topmost / window restore | release manual | risk-based | release manual |
 | sleep / resume / clock jump | release manual | risk-based | release manual |
 | high DPI / multi-monitor / uninstall | risk-based | risk-based | risk-based |

@@ -52,6 +52,7 @@ export const jaMessages = {
   "app.App.014": " ＋ 予定 ",
   "app.App.015": "主要画面",
   "app.App.016": " ▱ コンパクト表示 ",
+  "app.App.017": "確認が必要なGoogleカレンダーがあります",
   "app.CompactApp.001": " 予定を開いています… ",
   "app.CompactApp.002": "コンパクト表示を開けませんでした",
   "app.CompactApp.003":
@@ -85,6 +86,7 @@ export const jaMessages = {
   "app.CompactApp.030": "進行中",
   "app.CompactApp.031": "完了",
   "app.CompactApp.032": "取消",
+  "app.CompactApp.033": "カレンダー確認",
   "features.schedule.DayOverview.001": "一日の分布",
   "features.schedule.DayOverview.002": "24時間ストリップ",
   "features.schedule.DayOverview.003": " 同期待ちを点線で表示 ",
@@ -617,16 +619,13 @@ export const jaMessages = {
   "features.views.OperationalViews.075": "保存中…",
   "features.views.OperationalViews.076": "設定を保存",
   "features.views.OperationalViews.077": "Google接続状態を取得できませんでした。",
-  "features.views.OperationalViews.078": "Google OAuth Desktop app JSONを選択",
-  "features.views.OperationalViews.079":
-    "OAuth設定 {0} を読み込みました。client secretはOS秘密ストアへ保存しました。",
-  "features.views.OperationalViews.080":
-    "OAuth JSONを読み込めませんでした。Google CloudでDesktop appとして作成したJSONを確認してください。",
+  "features.views.OperationalViews.078": "独自のGoogle OAuth Desktop app JSONを選択",
+  "features.views.OperationalViews.079": "独自のOAuth設定 {0} を読み込みました。",
+  "features.views.OperationalViews.080": "独自のOAuth設定を読み込めませんでした。",
   "features.views.OperationalViews.081":
     "システムブラウザを開きました。3分以内にGoogleの同意を完了してください。",
   "features.views.OperationalViews.082": "ブラウザでGoogleの同意を完了してください。",
-  "features.views.OperationalViews.083":
-    "Google接続を開始できませんでした。OAuth設定と既定ブラウザを確認してください。",
+  "features.views.OperationalViews.083": "Google接続を開始できませんでした。",
   "features.views.OperationalViews.084":
     "カレンダー設定を保存できませんでした。権限と接続状態を確認してください。",
   "features.views.OperationalViews.085":
@@ -636,13 +635,13 @@ export const jaMessages = {
   "features.views.OperationalViews.087":
     "Google接続を解除できませんでした。認証情報とローカル予定は保持されています。",
   "features.views.OperationalViews.088":
-    " Desktop OAuth、PKCE S256、127.0.0.1の一時ポートを使い、予定編集とカレンダー一覧だけを許可します。 ",
+    " この端末の予定をGoogle カレンダーと同期します。接続しなくてもローカル予定は利用できます。 ",
   "features.views.OperationalViews.089": "このビルドはローカル専用です",
   "features.views.OperationalViews.090":
     " Google同期を含まない機能フラグでビルドされています。ローカル予定、通知、Focusは利用できます。 ",
-  "features.views.OperationalViews.091": " Desktop OAuth JSONを読み込む ",
-  "features.views.OperationalViews.092": " システムブラウザでGoogleへ接続 ",
-  "features.views.OperationalViews.093": " OAuth JSONを変更 ",
+  "features.views.OperationalViews.091": " 独自のOAuth設定を読み込む ",
+  "features.views.OperationalViews.092": " Google カレンダーに接続 ",
+  "features.views.OperationalViews.093": " 独自のOAuth設定を変更 ",
   "features.views.OperationalViews.094": "ブラウザでGoogle接続を待っています",
   "features.views.OperationalViews.095":
     " このアプリが認可コード、state、PKCE verifierを検証します。ブラウザに表示されたコードを貼り付ける必要はありません。 ",
@@ -662,13 +661,13 @@ export const jaMessages = {
   "features.views.OperationalViews.108": " やめる ",
   "features.views.OperationalViews.109": " ローカル予定を残して解除… ",
   "features.views.OperationalViews.110": " 対応ローカル予定も削除して解除… ",
-  "features.views.OperationalViews.111": "Google Cloud設定の注意",
+  "features.views.OperationalViews.111": "接続時の権限と安全性",
   "features.views.OperationalViews.112":
     " OAuth同意画面が「Testing」の場合、refresh tokenが短期間で失効することがあります。継続利用する場合はGoogle Cloudの公開状態とテストユーザー設定を確認してください。未確認アプリの警告が表示される場合があります。 ",
   "features.views.OperationalViews.113": " 要求スコープ: ",
   "features.views.OperationalViews.114": " と ",
   "features.views.OperationalViews.115":
-    " のみ。client secret、access token、refresh tokenはOS秘密ストアへ保存し、SQLiteと画面には返しません。 ",
+    " のみ。認証情報はOS秘密ストアで管理し、予定データのSQLiteや画面には表示しません。 ",
   "features.views.OperationalViews.116": "予定データをJSONへエクスポート",
   "features.views.OperationalViews.117":
     "{0}へ予定{1}件、テンプレート{2}件、タイマー{3}件、タイマー構成セット{4}件を保存しました。",
@@ -942,6 +941,69 @@ export const jaMessages = {
   "features.views.OperationalViews.348": "タイマー",
   "features.views.OperationalViews.349": "タイマー構成セット",
   "features.views.OperationalViews.350": "一度に通知する上限を超えたため見送り",
+  "features.views.OperationalViews.361":
+    "ローカル予定は利用できます。設定画面を開き直して再試行してください。",
+  "features.views.OperationalViews.362":
+    "Google CloudでDesktop appとして作成したJSONを確認してください。",
+  "features.views.OperationalViews.363":
+    "ローカル予定は保持されています。既定ブラウザを確認して再試行してください。",
+  "features.views.OperationalViews.364":
+    "選択内容は変更されていません。Googleの権限と接続状態を確認してください。",
+  "features.views.OperationalViews.365":
+    "認証情報とローカル予定は保持されています。時間を置いて再試行してください。",
+  "features.views.OperationalViews.366": "Google接続を完了できませんでした",
+  "features.views.OperationalViews.367":
+    "ローカル予定は保持されています。ブラウザでキャンセルした場合は、必要なときにもう一度接続してください。",
+  "features.views.OperationalViews.368": "このビルドではGoogle カレンダーへ接続できません",
+  "features.views.OperationalViews.369":
+    "ローカル予定はそのまま利用できます。OAuth設定を含む個人用ビルドを利用してください。",
+  "features.views.OperationalViews.370": "Googleへの再接続が必要です",
+  "features.views.OperationalViews.371":
+    "ローカル予定は保持されています。再接続後に同期を再開します。",
+  "features.views.OperationalViews.372": "Googleへ再接続",
+  "features.views.OperationalViews.373": "開発者向けOAuth設定",
+  "features.views.OperationalViews.374":
+    "通常は変更不要です。別のGoogle Cloudプロジェクトを使う場合だけ、Desktop appのOAuth JSONを読み込みます。",
+  "features.views.OperationalViews.375": "Google カレンダー",
+  "features.views.OperationalViews.376": "ブラウザからの応答を確認できませんでした",
+  "features.views.OperationalViews.377":
+    "ローカル予定は保持されています。接続を開始したブラウザタブで3分以内に同意を完了し、もう一度お試しください。",
+  "features.views.OperationalViews.378": "OAuthクライアント設定が一致しません",
+  "features.views.OperationalViews.379":
+    "Desktop appのクライアントIDとloopback接続設定を確認して、アプリを再ビルドしてください。",
+  "features.views.OperationalViews.380": "Googleとの安全な接続を完了できませんでした",
+  "features.views.OperationalViews.381":
+    "ローカル予定は保持されています。ネットワークを確認して、もう一度お試しください。",
+  "features.views.OperationalViews.382": "Googleの認可コードを利用できませんでした",
+  "features.views.OperationalViews.383":
+    "接続を最初からやり直してください。以前のブラウザタブは再利用できません。",
+  "features.views.OperationalViews.384": "認証情報をOS秘密ストアへ保存できませんでした",
+  "features.views.OperationalViews.385":
+    "ローカル予定は保持されています。キーチェーンまたは資格情報ストアを利用できる状態にして再試行してください。",
+  "features.views.OperationalViews.386": "Google接続をローカルへ確定できませんでした",
+  "features.views.OperationalViews.387":
+    "ローカル予定は保持されています。アプリを再起動して、もう一度接続してください。",
+  "features.views.OperationalViews.388": "Googleのカレンダー一覧を取得できませんでした",
+  "features.views.OperationalViews.389":
+    "認証情報とローカル予定は保持されています。Calendar APIとネットワークを確認して、同期を再試行してください。",
+  "features.views.OperationalViews.390":
+    "ローカル変更と前回の同期tokenは保持されています。表示された回復手順を確認して再試行してください。",
+  "features.views.OperationalViews.391":
+    "空き時間のみ参照できます。予定を同期するにはGoogle側で予定詳細の読み取り権限が必要です。",
+  "features.views.OperationalViews.392":
+    "同期を停止しました。Google側の共有権限を確認してください。",
+  "features.views.OperationalViews.393":
+    "同期を停止しました。Google側でカレンダーが削除されていないか確認してください。",
+  "features.views.OperationalViews.394":
+    "未対応の予定形式を検出したため、既存予定を保ったまま同期を停止しました。",
+  "features.views.OperationalViews.395":
+    "このカレンダーは確認が必要です。既存予定と同期位置は保持されています。",
+  "features.views.OperationalViews.396": "まだ同期していません。",
+  "features.views.OperationalViews.397": "予定を同期しています。",
+  "features.views.OperationalViews.398": "同期済みです。",
+  "features.views.OperationalViews.399":
+    "一時的に同期できません。既存予定を保持して自動再試行します。",
+  "features.views.OperationalViews.400": "Googleへの再接続後に同期を再開します。",
   "main.001": "Day Schedule Next の画面を開始できませんでした。再起動してください。",
   "shared.contracts.001": "終了時刻は開始時刻より後にしてください。",
   "shared.contracts.002": "終日予定の終了日は開始日より後にしてください。",

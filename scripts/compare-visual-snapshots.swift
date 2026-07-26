@@ -16,7 +16,7 @@ enum SnapshotError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "usage: compare-visual-snapshots.swift <baseline-dir> <actual-dir> <diff-dir>"
+            return "usage: compare-visual-snapshots.swift <baseline-dir> <actual-dir> <diff-dir> [snapshot ...]"
         case let .unreadable(path):
             return "PNGを読み込めません: \(path)"
         case let .dimension(name, expectedWidth, expectedHeight, actualWidth, actualHeight):
@@ -33,6 +33,8 @@ let requiredSnapshots = [
     "native-template-editor.png",
     "native-compact.png",
     "native-conflict.png",
+    "native-google-calendar-recovery.png",
+    "native-google-calendar-recovery-text-200.png",
 ]
 let channelTolerance = 32
 let mismatchRatioTolerance = 0.04
@@ -143,17 +145,19 @@ func compare(name: String, baselineURL: URL, actualURL: URL, diffURL: URL) throw
 }
 
 do {
-    guard CommandLine.arguments.count == 4 else { throw SnapshotError.usage }
+    guard CommandLine.arguments.count >= 4 else { throw SnapshotError.usage }
     let baselineDirectory = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
     let actualDirectory = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
     let diffDirectory = URL(fileURLWithPath: CommandLine.arguments[3], isDirectory: true)
+    let requestedSnapshots = Array(CommandLine.arguments.dropFirst(4))
+    let snapshots = requestedSnapshots.isEmpty ? requiredSnapshots : requestedSnapshots
     try FileManager.default.createDirectory(
         at: diffDirectory,
         withIntermediateDirectories: true
     )
 
     var failed = false
-    for name in requiredSnapshots {
+    for name in snapshots {
         let ratio = try compare(
             name: name,
             baselineURL: baselineDirectory.appendingPathComponent(name),

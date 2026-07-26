@@ -86,3 +86,10 @@ Rules:
 - JSON export format version 2 は timer のラベル・設定時間と timer set を含める。実行状態、残り時間、stopwatch state、completion / notification ledger は含めない。
 - version 1 JSON は timer field がないものとして引き続き取り込む。version 2 import は timer を停止状態で追加し、replace 時は timer / set / stopwatch state も同一 transaction で置換・初期化する。
 - 同名 timer set の追加 import は100文字制約内の連番名へ解決する。既存 timer と合わせて500件を超える import は transaction 全体を拒否する。
+
+## 10. Google calendar sync state compatibility
+
+- schema version 12 は`google_calendars`へcalendar単位の`sync_state`、試行／完了時刻、次回再試行時刻、allowlist error categoryを追加する。
+- v11以前からのmigrationでは、既存`sync_token`があるcalendarを`synced`、ないcalendarを`never`へbackfillする。token、mapping、選択、既定書込先は変更しない。
+- error categoryには予定本文、calendar / event ID、HTTP body、tokenを保存しない。
+- fresh DBのdefault / constraint testと、v11→v12でtoken・完了時刻を保持するmigration testを必須とする。

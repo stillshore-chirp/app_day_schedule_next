@@ -75,16 +75,18 @@ jobs:
         shell: bash
         run: |
           corepack enable
-          corepack prepare pnpm@10.13.1 --activate
+          corepack prepare pnpm@11.17.0 --activate
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.89.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Verify patched dependency compatibility
+        run: pnpm verify:patched-dependencies
       - name: Build isolated WebdriverIO debug application
         shell: bash
-        run: VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
+        run: DAY_SCHEDULE_GOOGLE_OAUTH_CLIENT_ID=synthetic-native-e2e-client.apps.googleusercontent.com VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
       - name: Run native E2E with synthetic fixtures
         run: pnpm test:e2e
       - name: Compare macOS arm64 visual baselines

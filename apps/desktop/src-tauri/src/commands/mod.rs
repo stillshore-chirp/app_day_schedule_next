@@ -768,15 +768,20 @@ pub async fn google_oauth_begin(
         .begin_google_oauth()
         .await
         .map_err(UserSafeError::from)?;
-    app.opener()
+    if app
+        .opener()
         .open_url(flow.authorization_url, None::<String>)
-        .map_err(|_| UserSafeError {
+        .is_err()
+    {
+        service.cancel_google_oauth_attempt();
+        return Err(UserSafeError {
             code: "browser",
             message: "システムブラウザを開けませんでした。".into(),
             recovery: "既定ブラウザを設定してから、Google接続をもう一度開始してください。".into(),
             retryable: true,
             diagnostic_id: None,
-        })?;
+        });
+    }
     Ok(OAuthLaunchResult {
         opened_in_system_browser: true,
         expires_at: flow.expires_at,

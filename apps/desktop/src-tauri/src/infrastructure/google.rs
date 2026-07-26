@@ -3,7 +3,7 @@ use std::{
     fs,
     future::Future,
     path::Path,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration as StdDuration,
 };
 
@@ -38,12 +38,21 @@ use super::{
 
 const KEYRING_SERVICE: &str = "com.stillshorechirp.dayschedulenext.google";
 const OAUTH_CLIENT_USER: &str = "oauth-client";
+const BUILT_IN_OAUTH_CLIENT_USER: &str = "oauth-built-in-client";
 const CALENDAR_SCOPE: &str = "https://www.googleapis.com/auth/calendar.events";
 const CALENDAR_LIST_SCOPE: &str = "https://www.googleapis.com/auth/calendar.calendarlist.readonly";
+const GOOGLE_AUTH_URI: &str = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URI: &str = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API_ROOT: &str = "https://www.googleapis.com/calendar/v3/";
+const GOOGLE_CALENDAR_LIST_URL: &str =
+    "https://www.googleapis.com/calendar/v3/users/me/calendarList";
+const GOOGLE_EVENTS_PAGE_SIZE: &str = "250";
+const GOOGLE_SYNC_RETRY_SECONDS: i64 = 5 * 60;
 const MAX_OAUTH_FILE_BYTES: u64 = 1024 * 1024;
 const LOOPBACK_TIMEOUT_SECONDS: u64 = 180;
+const BUILT_IN_OAUTH_CLIENT_ID: Option<&str> = option_env!("DAY_SCHEDULE_GOOGLE_OAUTH_CLIENT_ID");
 static OAUTH_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+static OAUTH_ATTEMPT_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +92,10 @@ pub struct GoogleCalendar {
     pub selected: bool,
     pub default_write_target: bool,
     pub writable: bool,
+    pub event_readable: bool,
+    pub sync_state: String,
+    pub last_error_category: Option<String>,
+    pub next_retry_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -122,6 +135,19 @@ struct TokenSecret {
     expires_at: DateTime<Utc>,
 }
 
+#[derive(Debug)]
+struct OAuthAccountTarget {
+    account_id: Uuid,
+    credential_key: String,
+    existing: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProvisionedOAuthClient {
+    client_id: String,
+    client_secret: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -130,6 +156,50 @@ struct TokenResponse {
     expires_in: i64,
     #[serde(default)]
     scope: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OAuthFailureCategory {
+    CallbackTimeout,
+    CallbackInvalid,
+    AttemptCancelled,
+    TokenNetwork,
+    TokenInvalidClient,
+    TokenInvalidGrant,
+    TokenRedirectUri,
+    TokenRejected,
+    TokenResponseInvalid,
+    TokenScopeInvalid,
+    RefreshTokenMissing,
+    CredentialStoreFailed,
+    AccountPersistenceFailed,
+    CalendarFetchFailed,
+}
+
+impl OAuthFailureCategory {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::CallbackTimeout => "oauth_callback_timeout",
+            Self::CallbackInvalid => "oauth_callback_invalid",
+            Self::AttemptCancelled => "oauth_attempt_cancelled",
+            Self::TokenNetwork => "oauth_token_network",
+            Self::TokenInvalidClient => "oauth_token_invalid_client",
+            Self::TokenInvalidGrant => "oauth_token_invalid_grant",
+            Self::TokenRedirectUri => "oauth_token_redirect_uri",
+            Self::TokenRejected => "oauth_token_rejected",
+            Self::TokenResponseInvalid => "oauth_token_response_invalid",
+            Self::TokenScopeInvalid => "oauth_token_scope_invalid",
+            Self::RefreshTokenMissing => "oauth_refresh_token_missing",
+            Self::CredentialStoreFailed => "oauth_credential_store_failed",
+            Self::AccountPersistenceFailed => "oauth_account_persistence_failed",
+            Self::CalendarFetchFailed => "oauth_calendar_fetch_failed",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct OAuthErrorResponse {
+    error: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -168,6 +238,8 @@ struct EventListPage {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum HttpFailure {
     Auth,
+    Forbidden,
+    NotFound,
     Conflict(Option<Value>),
     Gone,
     Retryable(Option<u64>),
@@ -231,14 +303,31 @@ impl Database {
                 recovery: "ブラウザの接続を完了するか、3分待ってから再試行してください。".into(),
             });
         }
-        let result = self.prepare_oauth_flow().await;
+        let attempt_id = OAUTH_ATTEMPT_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+        let result = async {
+            sqlx::query(
+                "INSERT INTO app_meta(key, value, updated_at_utc) VALUES ('google_last_error', 'none', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at_utc = excluded.updated_at_utc",
+            )
+            .bind(Utc::now().to_rfc3339())
+            .execute(&self.pool)
+            .await
+            .map_err(|error| AppError::database("google-oauth-error-clear", error))?;
+            self.prepare_oauth_flow(attempt_id).await
+        }
+        .await;
         if result.is_err() {
             OAUTH_IN_PROGRESS.store(false, Ordering::SeqCst);
         }
         result
     }
 
-    async fn prepare_oauth_flow(&self) -> AppResult<OAuthBeginResult> {
+    pub fn cancel_google_oauth_attempt(&self) {
+        if OAUTH_IN_PROGRESS.swap(false, Ordering::SeqCst) {
+            OAUTH_ATTEMPT_GENERATION.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    async fn prepare_oauth_flow(&self, attempt_id: u64) -> AppResult<OAuthBeginResult> {
         let config = self.oauth_config().await?;
         let listener = TcpListener::bind(("127.0.0.1", 0))
             .await
@@ -277,21 +366,20 @@ impl Database {
                 verifier,
                 state,
                 redirect_uri,
+                attempt_id,
             )
             .await;
-            let category = if outcome.is_ok() {
-                "none"
-            } else {
-                "oauth_failed"
-            };
-            let _ = sqlx::query(
-                "INSERT INTO app_meta(key, value, updated_at_utc) VALUES ('google_last_error', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at_utc = excluded.updated_at_utc",
-            )
-            .bind(category)
-            .bind(Utc::now().to_rfc3339())
-            .execute(&database.pool)
-            .await;
-            OAUTH_IN_PROGRESS.store(false, Ordering::SeqCst);
+            if oauth_attempt_is_current(attempt_id) {
+                let category = outcome.err().map_or("none", OAuthFailureCategory::as_str);
+                let _ = sqlx::query(
+                    "INSERT INTO app_meta(key, value, updated_at_utc) VALUES ('google_last_error', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at_utc = excluded.updated_at_utc",
+                )
+                .bind(category)
+                .bind(Utc::now().to_rfc3339())
+                .execute(&database.pool)
+                .await;
+                OAUTH_IN_PROGRESS.store(false, Ordering::SeqCst);
+            }
         });
         Ok(OAuthBeginResult {
             authorization_url: authorization_url.into(),
@@ -300,12 +388,17 @@ impl Database {
     }
 
     pub async fn google_connection(&self) -> AppResult<GoogleConnection> {
-        let configured: bool = sqlx::query_scalar(
+        let stored_configured: bool = sqlx::query_scalar(
             "SELECT EXISTS(SELECT 1 FROM google_oauth_config WHERE singleton = 1)",
         )
         .fetch_one(&self.pool)
         .await
         .map_err(|error| AppError::database("google-status-config", error))?;
+        let configured = if stored_configured {
+            true
+        } else {
+            built_in_oauth_config(BUILT_IN_OAUTH_CLIENT_ID)?.is_some()
+        };
         let account = sqlx::query(
             "SELECT id, display_label, status FROM google_accounts WHERE status != 'disconnected' ORDER BY updated_at_utc DESC LIMIT 1",
         )
@@ -355,7 +448,7 @@ impl Database {
 
     pub async fn google_calendars(&self) -> AppResult<Vec<GoogleCalendar>> {
         let rows = sqlx::query(
-            "SELECT id, display_name, color, time_zone, access_role, selected, default_write_target FROM google_calendars ORDER BY default_write_target DESC, display_name, id",
+            "SELECT id, display_name, color, time_zone, access_role, selected, default_write_target, sync_state, last_error_category, next_retry_at_utc FROM google_calendars ORDER BY default_write_target DESC, display_name, id",
         )
         .fetch_all(&self.pool)
         .await
@@ -369,9 +462,13 @@ impl Database {
                     color: row.get("color"),
                     timezone_id: row.get("time_zone"),
                     writable: matches!(role.as_str(), "owner" | "writer"),
+                    event_readable: role != "freeBusyReader",
                     access_role: role,
                     selected: row.get("selected"),
                     default_write_target: row.get("default_write_target"),
+                    sync_state: row.get("sync_state"),
+                    last_error_category: row.get("last_error_category"),
+                    next_retry_at: row.get("next_retry_at_utc"),
                 })
             })
             .collect()
@@ -398,6 +495,12 @@ impl Database {
                     message: "Googleカレンダーが見つかりません。".into(),
                     recovery: "カレンダー一覧を更新してください。".into(),
                 })?;
+        if selected && role == "freeBusyReader" {
+            return Err(validation(
+                "空き時間のみ参照できるカレンダーは予定同期の対象にできません。",
+                "Google側で予定詳細の読み取り権限を付与するか、別のカレンダーを選んでください。",
+            ));
+        }
         if default_write_target && !matches!(role.as_str(), "owner" | "writer") {
             return Err(validation(
                 "読み取り専用カレンダーは新規予定の同期先にできません。",
@@ -517,29 +620,84 @@ impl Database {
         &self,
         cancellation: &OperationCancellation,
     ) -> AppResult<SyncSummary> {
-        cancellation.check()?;
-        let client = Client::builder()
-            .timeout(StdDuration::from_secs(30))
-            .build()
-            .map_err(|error| AppError::database("sync-http-client", error))?;
-        let (account_id, access_token) = self.valid_access_token(&client).await?;
-        cancellation.check()?;
-        fetch_and_persist_calendars(self, &client, account_id, &access_token, Some(cancellation))
+        let result = async {
+            cancellation.check()?;
+            record_google_sync_stage(self, "access_token").await?;
+            sqlx::query(
+                "UPDATE google_accounts SET next_retry_at_utc = NULL WHERE status = 'connected'",
+            )
+            .execute(&self.pool)
+            .await
+            .map_err(|error| AppError::database("sync-retry-clear", error))?;
+            let client = Client::builder()
+                .timeout(StdDuration::from_secs(30))
+                .build()
+                .map_err(|error| AppError::database("sync-http-client", error))?;
+            let (account_id, access_token) = self.valid_access_token(&client).await?;
+            cancellation.check()?;
+            record_google_sync_stage(self, "calendar_list").await?;
+            fetch_and_persist_calendars(
+                self,
+                &client,
+                account_id,
+                &access_token,
+                Some(cancellation),
+            )
             .await?;
-        push_due_outbox(self, &client, &access_token, cancellation).await?;
-        pull_selected_calendars(self, &client, &access_token, cancellation).await?;
-        cancellation.check()?;
-        let now = Utc::now().to_rfc3339();
-        sqlx::query(
-            "UPDATE google_accounts SET status = 'connected', last_completed_at_utc = ?, next_retry_at_utc = NULL, updated_at_utc = ? WHERE id = ?",
-        )
-        .bind(&now)
-        .bind(&now)
-        .bind(account_id.to_string())
-        .execute(&self.pool)
-        .await
-        .map_err(|error| AppError::database("sync-account-complete", error))?;
-        self.sync_summary().await
+            record_google_sync_stage(self, "push").await?;
+            push_due_outbox(self, &client, &access_token, cancellation).await?;
+            record_google_sync_stage(self, "pull").await?;
+            pull_selected_calendars(self, &client, &access_token, cancellation).await?;
+            cancellation.check()?;
+            record_google_sync_stage(self, "finalize").await?;
+            let now = Utc::now().to_rfc3339();
+            let has_incomplete_calendar: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM google_calendars WHERE account_id = ? AND selected = 1 AND sync_state != 'synced')",
+            )
+            .bind(account_id.to_string())
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|error| AppError::database("sync-account-calendar-state", error))?;
+            if has_incomplete_calendar {
+                sqlx::query(
+                    "UPDATE google_accounts SET status = 'connected', next_retry_at_utc = NULL, updated_at_utc = ? WHERE id = ?",
+                )
+                .bind(&now)
+                .bind(account_id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(|error| AppError::database("sync-account-partial", error))?;
+            } else {
+                sqlx::query(
+                    "UPDATE google_accounts SET status = 'connected', last_completed_at_utc = ?, next_retry_at_utc = NULL, updated_at_utc = ? WHERE id = ?",
+                )
+                .bind(&now)
+                .bind(&now)
+                .bind(account_id.to_string())
+                .execute(&self.pool)
+                .await
+                .map_err(|error| AppError::database("sync-account-complete", error))?;
+            }
+            record_google_sync_stage(self, "idle").await?;
+            self.sync_summary().await
+        }
+        .await;
+        if let Err(error) = &result {
+            if matches!(error, AppError::Cancelled { .. }) {
+                let _ = record_google_sync_stage(self, "cancelled").await;
+            } else {
+                let now = Utc::now();
+                let retry_at = now + Duration::seconds(GOOGLE_SYNC_RETRY_SECONDS);
+                let _ = sqlx::query(
+                    "UPDATE google_accounts SET next_retry_at_utc = ?, updated_at_utc = ? WHERE status = 'connected'",
+                )
+                .bind(retry_at.to_rfc3339())
+                .bind(now.to_rfc3339())
+                .execute(&self.pool)
+                .await;
+            }
+        }
+        result
     }
 
     async fn valid_access_token(&self, client: &Client) -> AppResult<(Uuid, String)> {
@@ -641,19 +799,27 @@ impl Database {
         )
         .fetch_optional(&self.pool)
         .await
-        .map_err(|error| AppError::database("google-config-load", error))?
-        .ok_or_else(|| {
+        .map_err(|error| AppError::database("google-config-load", error))?;
+        if let Some(row) = row {
+            let auth_uri: String = row.get("auth_uri");
+            let token_uri: String = row.get("token_uri");
+            validate_google_endpoint(&auth_uri, "accounts.google.com")?;
+            validate_google_endpoint(&token_uri, "oauth2.googleapis.com")?;
+            return Ok(OAuthConfig {
+                client_id: row.get("client_id"),
+                client_secret: load_keyring(OAUTH_CLIENT_USER.to_owned()).await?,
+                auth_uri,
+                token_uri,
+            });
+        }
+        let mut config = built_in_oauth_config(BUILT_IN_OAUTH_CLIENT_ID)?.ok_or_else(|| {
             validation(
-                "Google OAuth設定がありません。",
-                "Google CloudからDesktop appのOAuth JSONを先に読み込んでください。",
+                "このビルドではGoogle カレンダーへ接続できません。",
+                "ローカル予定はそのまま利用できます。OAuth設定を含む個人用ビルドを利用してください。",
             )
         })?;
-        Ok(OAuthConfig {
-            client_id: row.get("client_id"),
-            client_secret: load_keyring(OAUTH_CLIENT_USER.to_owned()).await?,
-            auth_uri: row.get("auth_uri"),
-            token_uri: row.get("token_uri"),
-        })
+        config.client_secret = load_provisioned_oauth_secret(&config.client_id).await?;
+        Ok(config)
     }
 }
 
@@ -664,51 +830,29 @@ async fn complete_oauth(
     verifier: String,
     expected_state: String,
     redirect_uri: String,
-) -> AppResult<()> {
+    attempt_id: u64,
+) -> Result<(), OAuthFailureCategory> {
     let (mut socket, _) = timeout(
         StdDuration::from_secs(LOOPBACK_TIMEOUT_SECONDS),
         listener.accept(),
     )
     .await
-    .map_err(|_| {
-        unavailable(
-            "Google接続が時間切れになりました。",
-            "接続をもう一度開始してください。",
-        )
-    })?
-    .map_err(|error| AppError::database("oauth-loopback-accept", error))?;
+    .map_err(|_| OAuthFailureCategory::CallbackTimeout)?
+    .map_err(|_| OAuthFailureCategory::CallbackInvalid)?;
     let mut buffer = vec![0_u8; 16_384];
     let count = timeout(StdDuration::from_secs(10), socket.read(&mut buffer))
         .await
-        .map_err(|_| {
-            unavailable(
-                "Googleからの応答が時間切れになりました。",
-                "接続をもう一度開始してください。",
-            )
-        })?
-        .map_err(|error| AppError::database("oauth-loopback-read", error))?;
-    let request = std::str::from_utf8(&buffer[..count]).map_err(|_| {
-        validation(
-            "Googleからの応答を解析できません。",
-            "接続をもう一度開始してください。",
-        )
-    })?;
+        .map_err(|_| OAuthFailureCategory::CallbackTimeout)?
+        .map_err(|_| OAuthFailureCategory::CallbackInvalid)?;
+    let request =
+        std::str::from_utf8(&buffer[..count]).map_err(|_| OAuthFailureCategory::CallbackInvalid)?;
     let target = request
         .lines()
         .next()
         .and_then(|line| line.split_whitespace().nth(1))
-        .ok_or_else(|| {
-            validation(
-                "Googleからの応答が正しくありません。",
-                "接続をもう一度開始してください。",
-            )
-        })?;
-    let callback = Url::parse(&format!("http://127.0.0.1{target}")).map_err(|_| {
-        validation(
-            "Googleからの応答URLが正しくありません。",
-            "接続をもう一度開始してください。",
-        )
-    })?;
+        .ok_or(OAuthFailureCategory::CallbackInvalid)?;
+    let callback = Url::parse(&format!("http://127.0.0.1{target}"))
+        .map_err(|_| OAuthFailureCategory::CallbackInvalid)?;
     let parameters = callback
         .query_pairs()
         .collect::<std::collections::HashMap<_, _>>();
@@ -735,17 +879,16 @@ async fn complete_oauth(
     socket
         .write_all(response.as_bytes())
         .await
-        .map_err(|error| AppError::database("oauth-loopback-write", error))?;
+        .map_err(|_| OAuthFailureCategory::CallbackInvalid)?;
     if !success {
-        return Err(validation(
-            "Google接続のstateまたは認可コードを確認できません。",
-            "接続を最初からやり直してください。",
-        ));
+        return Err(OAuthFailureCategory::CallbackInvalid);
     }
+    ensure_oauth_attempt_is_current(attempt_id)
+        .map_err(|_| OAuthFailureCategory::AttemptCancelled)?;
     let client = Client::builder()
         .timeout(StdDuration::from_secs(30))
         .build()
-        .map_err(|error| AppError::database("oauth-http-client", error))?;
+        .map_err(|_| OAuthFailureCategory::TokenNetwork)?;
     let mut form = vec![
         ("client_id", config.client_id.as_str()),
         ("code", code),
@@ -761,61 +904,125 @@ async fn complete_oauth(
         .form(&form)
         .send()
         .await
-        .map_err(|_| {
-            unavailable(
-                "Googleへの接続に失敗しました。",
-                "ネットワークを確認して再試行してください。",
-            )
-        })?;
+        .map_err(|_| OAuthFailureCategory::TokenNetwork)?;
     if !response.status().is_success() {
-        return Err(unavailable(
-            "Googleの認可コードをトークンへ交換できませんでした。",
-            "接続を最初からやり直してください。",
-        ));
+        let category = response
+            .json::<OAuthErrorResponse>()
+            .await
+            .ok()
+            .map(|body| token_failure_category(&body.error))
+            .unwrap_or(OAuthFailureCategory::TokenRejected);
+        return Err(category);
     }
-    let token: TokenResponse = response.json().await.map_err(|_| {
-        unavailable(
-            "Googleのトークン応答を解析できません。",
-            "接続をやり直してください。",
-        )
-    })?;
-    validate_token_response(&token)?;
-    let refresh_token = token.refresh_token.ok_or_else(|| {
-        unavailable(
-            "オフライン利用用のrefresh tokenを受け取れませんでした。",
-            "Googleアカウントの接続許可を取り消してから、もう一度接続してください。",
-        )
-    })?;
-    let account_id = Uuid::new_v4();
-    let credential_key = format!("google-account-{account_id}");
+    let token: TokenResponse = response
+        .json()
+        .await
+        .map_err(|_| OAuthFailureCategory::TokenResponseInvalid)?;
+    validate_token_response(&token).map_err(|_| OAuthFailureCategory::TokenScopeInvalid)?;
+    ensure_oauth_attempt_is_current(attempt_id)
+        .map_err(|_| OAuthFailureCategory::AttemptCancelled)?;
+    let refresh_token = token
+        .refresh_token
+        .ok_or(OAuthFailureCategory::RefreshTokenMissing)?;
+    let account = oauth_account_target(&database)
+        .await
+        .map_err(|_| OAuthFailureCategory::AccountPersistenceFailed)?;
     let secret = TokenSecret {
         access_token: token.access_token,
         refresh_token,
         expires_at: Utc::now() + Duration::seconds(token.expires_in.max(60)),
     };
     store_keyring(
-        credential_key.clone(),
-        serde_json::to_string(&secret)
-            .map_err(|error| AppError::database("oauth-secret-encode", error))?,
+        account.credential_key.clone(),
+        serde_json::to_string(&secret).map_err(|_| OAuthFailureCategory::CredentialStoreFailed)?,
     )
-    .await?;
-    let now = Utc::now().to_rfc3339();
-    sqlx::query("DELETE FROM google_accounts WHERE status != 'disconnected'")
-        .execute(&database.pool)
-        .await
-        .map_err(|error| AppError::database("oauth-account-clear", error))?;
-    sqlx::query(
-        "INSERT INTO google_accounts(id, display_label, scopes_json, status, created_at_utc, updated_at_utc, credential_key) VALUES (?, 'Google Calendar', ?, 'connected', ?, ?, ?)",
-    )
-    .bind(account_id.to_string())
-    .bind(serde_json::json!([CALENDAR_SCOPE, CALENDAR_LIST_SCOPE]).to_string())
-    .bind(&now)
-    .bind(&now)
-    .bind(&credential_key)
-    .execute(&database.pool)
     .await
-    .map_err(|error| AppError::database("oauth-account-save", error))?;
-    fetch_and_persist_calendars(&database, &client, account_id, &secret.access_token, None).await
+    .map_err(|_| OAuthFailureCategory::CredentialStoreFailed)?;
+    persist_connected_account(&database, &account, &Utc::now().to_rfc3339())
+        .await
+        .map_err(|_| OAuthFailureCategory::AccountPersistenceFailed)?;
+    fetch_and_persist_calendars(
+        &database,
+        &client,
+        account.account_id,
+        &secret.access_token,
+        None,
+    )
+    .await
+    .map_err(|_| OAuthFailureCategory::CalendarFetchFailed)
+}
+
+async fn oauth_account_target(database: &Database) -> AppResult<OAuthAccountTarget> {
+    let existing = sqlx::query(
+        "SELECT id, credential_key FROM google_accounts WHERE status != 'disconnected' ORDER BY updated_at_utc DESC LIMIT 1",
+    )
+    .fetch_optional(&database.pool)
+    .await
+    .map_err(|error| AppError::database("oauth-account-read", error))?;
+    if let Some(existing) = existing {
+        let account_id = parse_uuid(existing.get("id"))?;
+        let credential_key = existing
+            .get::<Option<String>, _>("credential_key")
+            .unwrap_or_else(|| format!("google-account-{account_id}"));
+        return Ok(OAuthAccountTarget {
+            account_id,
+            credential_key,
+            existing: true,
+        });
+    }
+    let account_id = Uuid::new_v4();
+    Ok(OAuthAccountTarget {
+        account_id,
+        credential_key: format!("google-account-{account_id}"),
+        existing: false,
+    })
+}
+
+async fn persist_connected_account(
+    database: &Database,
+    account: &OAuthAccountTarget,
+    now: &str,
+) -> AppResult<()> {
+    let scopes = serde_json::json!([CALENDAR_SCOPE, CALENDAR_LIST_SCOPE]).to_string();
+    let mut transaction = database
+        .pool
+        .begin()
+        .await
+        .map_err(|error| AppError::database("oauth-account-begin", error))?;
+    if account.existing {
+        let updated = sqlx::query(
+            "UPDATE google_accounts SET display_label = 'Google Calendar', scopes_json = ?, status = 'connected', updated_at_utc = ?, credential_key = ? WHERE id = ?",
+        )
+        .bind(&scopes)
+        .bind(now)
+        .bind(&account.credential_key)
+        .bind(account.account_id.to_string())
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("oauth-account-update", error))?;
+        if updated.rows_affected() != 1 {
+            return Err(AppError::database(
+                "oauth-account-update-missing",
+                "account disappeared during OAuth completion",
+            ));
+        }
+    } else {
+        sqlx::query(
+            "INSERT INTO google_accounts(id, display_label, scopes_json, status, created_at_utc, updated_at_utc, credential_key) VALUES (?, 'Google Calendar', ?, 'connected', ?, ?, ?)",
+        )
+        .bind(account.account_id.to_string())
+        .bind(&scopes)
+        .bind(now)
+        .bind(now)
+        .bind(&account.credential_key)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("oauth-account-insert", error))?;
+    }
+    transaction
+        .commit()
+        .await
+        .map_err(|error| AppError::database("oauth-account-commit", error))
 }
 
 async fn fetch_and_persist_calendars(
@@ -825,11 +1032,30 @@ async fn fetch_and_persist_calendars(
     access_token: &str,
     cancellation: Option<&OperationCancellation>,
 ) -> AppResult<()> {
+    fetch_and_persist_calendars_at(
+        database,
+        client,
+        account_id,
+        access_token,
+        cancellation,
+        GOOGLE_CALENDAR_LIST_URL,
+    )
+    .await
+}
+
+async fn fetch_and_persist_calendars_at(
+    database: &Database,
+    client: &Client,
+    account_id: Uuid,
+    access_token: &str,
+    cancellation: Option<&OperationCancellation>,
+    calendar_list_url: &str,
+) -> AppResult<()> {
     let mut page_token: Option<String> = None;
     let mut calendars = Vec::new();
     loop {
         check_optional_cancellation(cancellation)?;
-        let mut url = Url::parse("https://www.googleapis.com/calendar/v3/users/me/calendarList")
+        let mut url = Url::parse(calendar_list_url)
             .map_err(|error| AppError::database("calendar-list-url", error))?;
         url.query_pairs_mut().append_pair("maxResults", "250");
         if let Some(token) = &page_token {
@@ -847,6 +1073,13 @@ async fn fetch_and_persist_calendars(
                 )
             })?;
         if !response.status().is_success() {
+            if response.status() == StatusCode::UNAUTHORIZED {
+                mark_auth_required(database, account_id).await?;
+                return Err(unavailable(
+                    "Googleへの再認証が必要です。",
+                    "ローカル予定は保持されています。設定から再接続してください。",
+                ));
+            }
             return Err(unavailable(
                 "Googleカレンダー一覧を取得できません。",
                 "接続状態を確認して再試行してください。",
@@ -896,12 +1129,13 @@ async fn fetch_and_persist_calendars(
         .map_err(|error| AppError::database("calendar-list-existing", error))?
         .unwrap_or_else(|| Uuid::new_v4().to_string());
         let writable = matches!(remote.access_role.as_str(), "owner" | "writer");
+        let event_readable = can_read_event_details(&remote.access_role);
         let make_default = may_assign_primary_default && remote.primary && writable;
         if make_default {
             may_assign_primary_default = false;
         }
         sqlx::query(
-            "INSERT INTO google_calendars(id, account_id, remote_calendar_id, display_name, color, time_zone, access_role, selected, default_write_target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(account_id, remote_calendar_id) DO UPDATE SET display_name = excluded.display_name, color = excluded.color, time_zone = excluded.time_zone, access_role = excluded.access_role",
+            "INSERT INTO google_calendars(id, account_id, remote_calendar_id, display_name, color, time_zone, access_role, selected, default_write_target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(account_id, remote_calendar_id) DO UPDATE SET display_name = excluded.display_name, color = excluded.color, time_zone = excluded.time_zone, access_role = excluded.access_role, selected = CASE WHEN excluded.access_role = 'freeBusyReader' THEN 0 ELSE google_calendars.selected END, default_write_target = CASE WHEN excluded.access_role = 'freeBusyReader' THEN 0 ELSE google_calendars.default_write_target END",
         )
         .bind(local_id)
         .bind(account_id.to_string())
@@ -910,7 +1144,7 @@ async fn fetch_and_persist_calendars(
         .bind(remote.background_color)
         .bind(remote.time_zone)
         .bind(remote.access_role)
-        .bind(remote.selected || remote.primary)
+        .bind(event_readable && (remote.selected || remote.primary))
         .bind(make_default)
         .execute(&mut *transaction)
         .await
@@ -981,6 +1215,32 @@ async fn push_due_outbox(
             Err(HttpFailure::Retryable(retry_after)) => {
                 mark_outbox_failure(database, &outbox_id, attempts, "retryable", retry_after)
                     .await?;
+            }
+            Err(HttpFailure::Forbidden) => {
+                if let Some(calendar_id) = sqlx::query_scalar::<_, String>(
+                    "SELECT calendar_id FROM sync_mappings WHERE schedule_item_id = ? LIMIT 1",
+                )
+                .bind(schedule_id.to_string())
+                .fetch_optional(&database.pool)
+                .await
+                .map_err(|error| AppError::database("sync-outbox-permission-calendar", error))?
+                {
+                    mark_calendar_unavailable(database, &calendar_id, "permission").await?;
+                }
+                mark_outbox_failure(database, &outbox_id, attempts, "permission", None).await?;
+            }
+            Err(HttpFailure::NotFound) => {
+                if let Some(calendar_id) = sqlx::query_scalar::<_, String>(
+                    "SELECT calendar_id FROM sync_mappings WHERE schedule_item_id = ? LIMIT 1",
+                )
+                .bind(schedule_id.to_string())
+                .fetch_optional(&database.pool)
+                .await
+                .map_err(|error| AppError::database("sync-outbox-missing-calendar", error))?
+                {
+                    mark_calendar_unavailable(database, &calendar_id, "not_found").await?;
+                }
+                mark_outbox_failure(database, &outbox_id, attempts, "not_found", None).await?;
             }
             Err(HttpFailure::Gone | HttpFailure::Permanent) => {
                 mark_outbox_failure(database, &outbox_id, attempts, "permanent", None).await?;
@@ -1294,20 +1554,38 @@ async fn pull_selected_calendars(
     access_token: &str,
     cancellation: &OperationCancellation,
 ) -> AppResult<()> {
+    pull_selected_calendars_at(
+        database,
+        client,
+        access_token,
+        cancellation,
+        GOOGLE_CALENDAR_API_ROOT,
+    )
+    .await
+}
+
+async fn pull_selected_calendars_at(
+    database: &Database,
+    client: &Client,
+    access_token: &str,
+    cancellation: &OperationCancellation,
+    api_root: &str,
+) -> AppResult<()> {
     cancellation.check()?;
     let calendars = sqlx::query(
-        "SELECT id, remote_calendar_id, access_role, sync_token FROM google_calendars WHERE selected = 1 ORDER BY id",
+        "SELECT id, remote_calendar_id, access_role, sync_token FROM google_calendars WHERE selected = 1 AND access_role != 'freeBusyReader' ORDER BY remote_calendar_id, id",
     )
     .fetch_all(&database.pool)
     .await
     .map_err(|error| AppError::database("sync-calendar-list", error))?;
+    record_google_sync_stage(database, "pull_calendars_loaded").await?;
     for calendar in calendars {
         cancellation.check()?;
         let local_id: String = calendar.get("id");
         let remote_id: String = calendar.get("remote_calendar_id");
         let role: String = calendar.get("access_role");
         let sync_token: Option<String> = calendar.get("sync_token");
-        pull_one_calendar_at(
+        match pull_one_calendar_at(
             database,
             client,
             access_token,
@@ -1316,15 +1594,50 @@ async fn pull_selected_calendars(
                 remote_calendar_id: &remote_id,
                 access_role: &role,
                 initial_sync_token: sync_token.as_deref(),
-                api_root: GOOGLE_CALENDAR_API_ROOT,
+                api_root,
             },
             cancellation,
         )
-        .await?;
+        .await
+        {
+            Ok(()) => {}
+            Err(error @ AppError::Cancelled { .. }) | Err(error @ AppError::Database { .. }) => {
+                return Err(error);
+            }
+            Err(error) => {
+                let state: String =
+                    sqlx::query_scalar("SELECT sync_state FROM google_calendars WHERE id = ?")
+                        .bind(&local_id)
+                        .fetch_one(&database.pool)
+                        .await
+                        .map_err(|database_error| {
+                            AppError::database("sync-calendar-failure-state", database_error)
+                        })?;
+                if state == "auth_required" {
+                    return Err(error);
+                }
+                if !matches!(state.as_str(), "retry_scheduled" | "unavailable") {
+                    return Err(error);
+                }
+            }
+        }
     }
     Ok(())
 }
 
+async fn record_google_sync_stage(database: &Database, stage: &str) -> AppResult<()> {
+    sqlx::query(
+        "INSERT INTO app_meta(key, value, updated_at_utc) VALUES ('google_sync_stage', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at_utc = excluded.updated_at_utc",
+    )
+    .bind(stage)
+    .bind(Utc::now().to_rfc3339())
+    .execute(&database.pool)
+    .await
+    .map_err(|error| AppError::database("sync-stage", error))?;
+    Ok(())
+}
+
+#[derive(Clone, Copy)]
 struct CalendarPullRequest<'a> {
     local_calendar_id: &'a str,
     remote_calendar_id: &'a str,
@@ -1340,6 +1653,80 @@ async fn pull_one_calendar_at(
     request: CalendarPullRequest<'_>,
     cancellation: &OperationCancellation,
 ) -> AppResult<()> {
+    let previous_state: String =
+        sqlx::query_scalar("SELECT sync_state FROM google_calendars WHERE id = ?")
+            .bind(request.local_calendar_id)
+            .fetch_one(&database.pool)
+            .await
+            .map_err(|error| AppError::database("sync-calendar-previous-state", error))?;
+    let stable_previous_state = if previous_state == "syncing" {
+        if request.initial_sync_token.is_some() {
+            "synced"
+        } else {
+            "never"
+        }
+    } else {
+        previous_state.as_str()
+    };
+    sqlx::query(
+        "UPDATE google_calendars SET sync_state = 'syncing', last_sync_attempt_at_utc = ?, next_retry_at_utc = NULL, last_error_category = NULL WHERE id = ?",
+    )
+    .bind(Utc::now().to_rfc3339())
+    .bind(request.local_calendar_id)
+    .execute(&database.pool)
+    .await
+    .map_err(|error| AppError::database("sync-calendar-attempt", error))?;
+
+    let result =
+        pull_one_calendar_pages(database, client, access_token, request, cancellation).await;
+    if let Err(error) = &result {
+        let current_state: String =
+            sqlx::query_scalar("SELECT sync_state FROM google_calendars WHERE id = ?")
+                .bind(request.local_calendar_id)
+                .fetch_one(&database.pool)
+                .await
+                .map_err(|database_error| {
+                    AppError::database("sync-calendar-current-state", database_error)
+                })?;
+        if current_state == "syncing" {
+            match error {
+                AppError::Cancelled { .. } | AppError::Database { .. } => {
+                    restore_calendar_sync_state(
+                        database,
+                        request.local_calendar_id,
+                        stable_previous_state,
+                    )
+                    .await?;
+                }
+                AppError::Validation { .. }
+                | AppError::Conflict { .. }
+                | AppError::NotFound { .. } => {
+                    mark_calendar_unavailable(database, request.local_calendar_id, "validation")
+                        .await?;
+                }
+                AppError::Unavailable { .. } => {
+                    mark_calendar_retry(database, request.local_calendar_id, "network", None)
+                        .await?;
+                }
+            }
+        }
+    }
+    result
+}
+
+async fn pull_one_calendar_pages(
+    database: &Database,
+    client: &Client,
+    access_token: &str,
+    request: CalendarPullRequest<'_>,
+    cancellation: &OperationCancellation,
+) -> AppResult<()> {
+    let calendar_timezone_id: String =
+        sqlx::query_scalar("SELECT time_zone FROM google_calendars WHERE id = ?")
+            .bind(request.local_calendar_id)
+            .fetch_one(&database.pool)
+            .await
+            .map_err(|error| AppError::database("sync-calendar-timezone", error))?;
     let mut sync_token = request.initial_sync_token.map(str::to_owned);
     let mut retried_full = false;
     loop {
@@ -1356,7 +1743,7 @@ async fn pull_one_calendar_at(
                 query
                     .append_pair("showDeleted", "true")
                     .append_pair("singleEvents", "false")
-                    .append_pair("maxResults", "2500");
+                    .append_pair("maxResults", GOOGLE_EVENTS_PAGE_SIZE);
                 if let Some(token) = &sync_token {
                     query.append_pair("syncToken", token);
                 }
@@ -1364,28 +1751,100 @@ async fn pull_one_calendar_at(
                     query.append_pair("pageToken", token);
                 }
             }
-            let response = client
-                .get(url)
-                .bearer_auth(access_token)
-                .send()
-                .await
-                .map_err(|_| {
-                    unavailable(
+            record_google_sync_stage(database, "pull_request").await?;
+            let response = client.get(url).bearer_auth(access_token).send().await;
+            let response = match response {
+                Ok(response) => response,
+                Err(_) => {
+                    mark_calendar_retry(database, request.local_calendar_id, "network", None)
+                        .await?;
+                    return Err(unavailable(
                         "Google差分同期へ接続できません。",
                         "ローカル編集は保存されています。ネットワーク復帰後に再試行してください。",
-                    )
-                })?;
+                    ));
+                }
+            };
             if response.status() == StatusCode::GONE && sync_token.is_some() && !retried_full {
                 sync_token = None;
                 retried_full = true;
                 break;
             }
             if !response.status().is_success() {
-                return Err(sync_http_error(&response));
+                let failure = classify_http(&response);
+                match failure {
+                    HttpFailure::Auth => {
+                        let account_id: String = sqlx::query_scalar(
+                            "SELECT account_id FROM google_calendars WHERE id = ?",
+                        )
+                        .bind(request.local_calendar_id)
+                        .fetch_one(&database.pool)
+                        .await
+                        .map_err(|error| AppError::database("sync-calendar-account", error))?;
+                        mark_auth_required(database, parse_uuid(&account_id)?).await?;
+                    }
+                    HttpFailure::Forbidden => {
+                        mark_calendar_unavailable(
+                            database,
+                            request.local_calendar_id,
+                            "permission",
+                        )
+                        .await?;
+                    }
+                    HttpFailure::NotFound => {
+                        mark_calendar_unavailable(database, request.local_calendar_id, "not_found")
+                            .await?;
+                    }
+                    HttpFailure::Retryable(retry_after) => {
+                        let category = if response.status() == StatusCode::TOO_MANY_REQUESTS {
+                            "rate_limited"
+                        } else {
+                            "server"
+                        };
+                        mark_calendar_retry(
+                            database,
+                            request.local_calendar_id,
+                            category,
+                            retry_after,
+                        )
+                        .await?;
+                    }
+                    HttpFailure::Permanent | HttpFailure::Conflict(_) | HttpFailure::Gone => {
+                        mark_calendar_unavailable(
+                            database,
+                            request.local_calendar_id,
+                            "validation",
+                        )
+                        .await?;
+                    }
+                }
+                return Err(sync_failure_error(failure, "Google同期"));
             }
-            let page_value = response_json_limited(response)
-                .await
-                .map_err(|failure| sync_failure_error(failure, "Googleイベント一覧"))?;
+            let page_value = match response_json_limited(response).await {
+                Ok(value) => value,
+                Err(failure) => {
+                    match failure {
+                        HttpFailure::Retryable(retry_after) => {
+                            mark_calendar_retry(
+                                database,
+                                request.local_calendar_id,
+                                "network",
+                                retry_after,
+                            )
+                            .await?;
+                        }
+                        _ => {
+                            mark_calendar_unavailable(
+                                database,
+                                request.local_calendar_id,
+                                "validation",
+                            )
+                            .await?;
+                        }
+                    }
+                    return Err(sync_failure_error(failure, "Googleイベント一覧"));
+                }
+            };
+            record_google_sync_stage(database, "pull_response").await?;
             let page: EventListPage = serde_json::from_value(page_value).map_err(|_| {
                 validation(
                     "Googleイベント一覧を解析できません。",
@@ -1409,6 +1868,7 @@ async fn pull_one_calendar_at(
         if retried_full && sync_token.is_none() && final_sync_token.is_none() {
             continue;
         }
+        record_google_sync_stage(database, "pull_apply").await?;
         let mut transaction = database
             .pool
             .begin()
@@ -1419,12 +1879,14 @@ async fn pull_one_calendar_at(
             .filter_map(|event| event.get("id").and_then(Value::as_str))
             .map(str::to_owned)
             .collect::<HashSet<_>>();
+        staged_events.sort_by_key(|event| event.get("recurringEventId").is_some());
         for event in staged_events {
             cancellation.check()?;
             apply_remote_event(
                 &mut transaction,
                 request.local_calendar_id,
                 request.access_role,
+                &calendar_timezone_id,
                 event,
             )
             .await?;
@@ -1434,6 +1896,7 @@ async fn pull_one_calendar_at(
                 &mut transaction,
                 request.local_calendar_id,
                 request.access_role,
+                &calendar_timezone_id,
                 &seen_remote_event_ids,
             )
             .await?;
@@ -1445,8 +1908,12 @@ async fn pull_one_calendar_at(
             )
         })?;
         cancellation.check()?;
-        sqlx::query("UPDATE google_calendars SET sync_token = ? WHERE id = ?")
+        let completed_at = Utc::now().to_rfc3339();
+        sqlx::query(
+            "UPDATE google_calendars SET sync_token = ?, sync_state = 'synced', last_sync_completed_at_utc = ?, next_retry_at_utc = NULL, last_error_category = NULL WHERE id = ?",
+        )
             .bind(final_token)
+            .bind(completed_at)
             .bind(request.local_calendar_id)
             .execute(&mut *transaction)
             .await
@@ -1460,27 +1927,104 @@ async fn pull_one_calendar_at(
     }
 }
 
+async fn restore_calendar_sync_state(
+    database: &Database,
+    calendar_id: &str,
+    state: &str,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE google_calendars SET sync_state = ?, next_retry_at_utc = NULL, last_error_category = NULL WHERE id = ?",
+    )
+    .bind(state)
+    .bind(calendar_id)
+    .execute(&database.pool)
+    .await
+    .map_err(|error| AppError::database("sync-calendar-restore-state", error))?;
+    Ok(())
+}
+
+async fn mark_calendar_unavailable(
+    database: &Database,
+    calendar_id: &str,
+    category: &str,
+) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE google_calendars SET sync_state = 'unavailable', next_retry_at_utc = NULL, last_error_category = ? WHERE id = ?",
+    )
+    .bind(category)
+    .bind(calendar_id)
+    .execute(&database.pool)
+    .await
+    .map_err(|error| AppError::database("sync-calendar-unavailable", error))?;
+    Ok(())
+}
+
+async fn mark_calendar_retry(
+    database: &Database,
+    calendar_id: &str,
+    category: &str,
+    retry_after: Option<u64>,
+) -> AppResult<()> {
+    let delay = retry_after
+        .unwrap_or(GOOGLE_SYNC_RETRY_SECONDS as u64)
+        .min(86_400);
+    let retry_at = Utc::now() + Duration::seconds(delay as i64);
+    sqlx::query(
+        "UPDATE google_calendars SET sync_state = 'retry_scheduled', next_retry_at_utc = ?, last_error_category = ? WHERE id = ?",
+    )
+    .bind(retry_at.to_rfc3339())
+    .bind(category)
+    .bind(calendar_id)
+    .execute(&database.pool)
+    .await
+    .map_err(|error| AppError::database("sync-calendar-retry", error))?;
+    Ok(())
+}
+
 async fn reconcile_missing_remote_events(
     transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     calendar_id: &str,
     access_role: &str,
+    calendar_timezone_id: &str,
     seen_remote_event_ids: &HashSet<String>,
 ) -> AppResult<()> {
-    let mapped_remote_event_ids: Vec<String> = sqlx::query_scalar(
-        "SELECT remote_event_id FROM sync_mappings WHERE calendar_id = ? ORDER BY remote_event_id",
+    let mappings = sqlx::query(
+        "SELECT m.remote_event_id, s.recurrence_series_id, s.recurrence_original_start_utc FROM sync_mappings m JOIN schedule_items s ON s.id = m.schedule_item_id WHERE m.calendar_id = ? ORDER BY m.remote_event_id",
     )
     .bind(calendar_id)
     .fetch_all(&mut **transaction)
     .await
     .map_err(|error| AppError::database("sync-full-mapping-list", error))?;
-    for remote_event_id in mapped_remote_event_ids {
+    for mapping in mappings {
+        let remote_event_id: String = mapping.get("remote_event_id");
         if seen_remote_event_ids.contains(&remote_event_id) {
             continue;
         }
-        apply_remote_event(
+        let recurrence_series_id: Option<String> = mapping.get("recurrence_series_id");
+        let recurrence_original_start: Option<String> =
+            mapping.get("recurrence_original_start_utc");
+        if let (Some(series_id), Some(original_start)) =
+            (recurrence_series_id, recurrence_original_start)
+        {
+            let original_start = DateTime::parse_from_rfc3339(&original_start).map_err(|_| {
+                validation(
+                    "ローカルの再発例外時刻が正しくありません。",
+                    "同期トークンは更新していません。診断を確認してください。",
+                )
+            })?;
+            set_master_exdate(
+                transaction,
+                parse_uuid(&series_id)?,
+                original_start.with_timezone(&Utc),
+                false,
+            )
+            .await?;
+        }
+        apply_remote_event_independent(
             transaction,
             calendar_id,
             access_role,
+            calendar_timezone_id,
             serde_json::json!({
                 "id": remote_event_id,
                 "status": "cancelled",
@@ -1499,6 +2043,234 @@ async fn apply_remote_event(
     transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     calendar_id: &str,
     access_role: &str,
+    calendar_timezone_id: &str,
+    event: Value,
+) -> AppResult<()> {
+    if event
+        .get("recurringEventId")
+        .and_then(Value::as_str)
+        .is_some()
+    {
+        return apply_remote_recurrence_exception(
+            transaction,
+            calendar_id,
+            access_role,
+            calendar_timezone_id,
+            event,
+        )
+        .await;
+    }
+    apply_remote_event_independent(
+        transaction,
+        calendar_id,
+        access_role,
+        calendar_timezone_id,
+        event,
+    )
+    .await
+}
+
+async fn apply_remote_recurrence_exception(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    calendar_id: &str,
+    access_role: &str,
+    calendar_timezone_id: &str,
+    event: Value,
+) -> AppResult<()> {
+    let recurring_event_id = event
+        .get("recurringEventId")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty() && value.len() <= 1_024)
+        .ok_or_else(|| {
+            validation(
+                "Google再発例外の系列IDが正しくありません。",
+                "同期トークンは更新していません。Google側の系列を確認してください。",
+            )
+        })?;
+    let original_start = google_original_start(&event, calendar_timezone_id)?;
+    let master_schedule_id: String = sqlx::query_scalar(
+        "SELECT schedule_item_id FROM sync_mappings WHERE calendar_id = ? AND remote_event_id = ?",
+    )
+    .bind(calendar_id)
+    .bind(recurring_event_id)
+    .fetch_optional(&mut **transaction)
+    .await
+    .map_err(|error| AppError::database("sync-recurrence-master-mapping", error))?
+    .ok_or_else(|| {
+        validation(
+            "Google再発例外の親系列を確認できません。",
+            "同期トークンは更新していません。対象カレンダーを再同期してください。",
+        )
+    })?;
+    let master_schedule_id = parse_uuid(&master_schedule_id)?;
+    set_master_exdate(transaction, master_schedule_id, original_start, true).await?;
+
+    let cancelled = event.get("status").and_then(Value::as_str) == Some("cancelled");
+    if cancelled {
+        let has_mapping: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM sync_mappings WHERE calendar_id = ? AND remote_event_id = ?)",
+        )
+        .bind(calendar_id)
+        .bind(
+            event
+                .get("id")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+        )
+        .fetch_one(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("sync-recurrence-cancel-mapping", error))?;
+        if !has_mapping {
+            return Ok(());
+        }
+    }
+
+    let remote_event_id = event
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            validation(
+                "Google再発例外のIDが正しくありません。",
+                "同期トークンは更新していません。Google側の系列を確認してください。",
+            )
+        })?;
+    apply_remote_event_independent(
+        transaction,
+        calendar_id,
+        access_role,
+        calendar_timezone_id,
+        event,
+    )
+    .await?;
+    if !cancelled {
+        sqlx::query(
+            "UPDATE schedule_items SET recurrence_series_id = ?, recurrence_original_start_utc = ? WHERE id = (SELECT schedule_item_id FROM sync_mappings WHERE calendar_id = ? AND remote_event_id = ?)",
+        )
+        .bind(master_schedule_id.to_string())
+        .bind(original_start.to_rfc3339())
+        .bind(calendar_id)
+        .bind(remote_event_id)
+        .execute(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("sync-recurrence-exception-link", error))?;
+    }
+    Ok(())
+}
+
+async fn set_master_exdate(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    master_schedule_id: Uuid,
+    original_start: DateTime<Utc>,
+    present: bool,
+) -> AppResult<()> {
+    let pending: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM sync_outbox WHERE entity_id = ? AND completed_at_utc IS NULL)",
+    )
+    .bind(master_schedule_id.to_string())
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(|error| AppError::database("sync-recurrence-master-pending", error))?;
+    if pending {
+        return Err(AppError::Conflict {
+            message: "ローカル編集中の再発系列にGoogle側の例外変更があります。".into(),
+            recovery: "競合を確認してから対象カレンダーを再同期してください。".into(),
+        });
+    }
+    let master_row = sqlx::query("SELECT * FROM schedule_items WHERE id = ?")
+        .bind(master_schedule_id.to_string())
+        .fetch_optional(&mut **transaction)
+        .await
+        .map_err(|error| AppError::database("sync-recurrence-master-read", error))?
+        .ok_or_else(|| AppError::database("sync-recurrence-master-missing", "missing"))?;
+    let mut master = row_to_schedule(&master_row)?;
+    if master.draft.recurrence_rule.is_none() {
+        return Err(validation(
+            "Google再発例外の親予定が繰り返し系列ではありません。",
+            "同期トークンは更新していません。対象カレンダーを再同期してください。",
+        ));
+    }
+    let changed = if present {
+        if master.draft.recurrence_exdates.contains(&original_start) {
+            false
+        } else {
+            master.draft.recurrence_exdates.push(original_start);
+            true
+        }
+    } else {
+        let before = master.draft.recurrence_exdates.len();
+        master
+            .draft
+            .recurrence_exdates
+            .retain(|value| *value != original_start);
+        before != master.draft.recurrence_exdates.len()
+    };
+    if changed {
+        master.draft.recurrence_exdates.sort();
+        master.draft.recurrence_exdates.dedup();
+        master.version += 1;
+        update_schedule_row(transaction, &master, Utc::now()).await?;
+    }
+    Ok(())
+}
+
+fn google_original_start(event: &Value, calendar_timezone_id: &str) -> AppResult<DateTime<Utc>> {
+    let original = event
+        .get("originalStartTime")
+        .and_then(Value::as_object)
+        .ok_or_else(|| {
+            validation(
+                "Google再発例外の元の開始時刻がありません。",
+                "同期トークンは更新していません。Google側の系列を確認してください。",
+            )
+        })?;
+    if let Some(value) = original.get("dateTime").and_then(Value::as_str) {
+        return DateTime::parse_from_rfc3339(value)
+            .map(|value| value.with_timezone(&Utc))
+            .map_err(|_| {
+                validation(
+                    "Google再発例外の元の開始instantが正しくありません。",
+                    "同期トークンは更新していません。Google側の系列を確認してください。",
+                )
+            });
+    }
+    let date = original
+        .get("date")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            validation(
+                "Google再発例外の元の日付がありません。",
+                "同期トークンは更新していません。Google側の系列を確認してください。",
+            )
+        })?;
+    let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|_| {
+        validation(
+            "Google再発例外の元の日付が正しくありません。",
+            "同期トークンは更新していません。Google側の系列を確認してください。",
+        )
+    })?;
+    let timezone_id = original
+        .get("timeZone")
+        .and_then(Value::as_str)
+        .unwrap_or(calendar_timezone_id);
+    let timezone: chrono_tz::Tz = timezone_id.parse().map_err(|_| {
+        validation(
+            "Google再発例外のIANAタイムゾーンが正しくありません。",
+            "同期トークンは更新していません。Google側の系列を確認してください。",
+        )
+    })?;
+    local_datetime_to_utc(
+        timezone,
+        date.and_time(NaiveTime::MIN),
+        "Google再発例外の日付がDST境界で曖昧です。",
+    )
+}
+
+async fn apply_remote_event_independent(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    calendar_id: &str,
+    access_role: &str,
+    calendar_timezone_id: &str,
     event: Value,
 ) -> AppResult<()> {
     let remote_event_id = event
@@ -1543,7 +2315,7 @@ async fn apply_remote_event(
                 let base: ScheduleDraft =
                     serde_json::from_str(mapping.get::<&str, _>("base_snapshot_json"))
                         .map_err(|error| AppError::database("sync-conflict-base-decode", error))?;
-                let mut remote = remote_event_to_draft(&event)?;
+                let mut remote = remote_event_to_draft_in_timezone(&event, calendar_timezone_id)?;
                 remote.validate()?;
                 let (mut merged, fields) = merge_schedule_drafts(&base, &local.draft, &remote)?;
                 if fields.is_empty() {
@@ -1609,6 +2381,33 @@ async fn apply_remote_event(
             return Ok(());
         }
         if cancelled {
+            if local.draft.recurrence_rule.is_some() {
+                let linked_pending: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM schedule_items s JOIN sync_outbox o ON o.entity_id = s.id WHERE s.recurrence_series_id = ? AND o.completed_at_utc IS NULL)",
+                )
+                .bind(schedule_id.to_string())
+                .fetch_one(&mut **transaction)
+                .await
+                .map_err(|error| AppError::database("sync-series-delete-pending", error))?;
+                if linked_pending {
+                    return Err(AppError::Conflict {
+                        message: "Googleで削除された再発系列に、未同期のローカル例外があります。"
+                            .into(),
+                        recovery: "ローカル変更を確認してから対象カレンダーを再同期してください。"
+                            .into(),
+                    });
+                }
+                let now = Utc::now().to_rfc3339();
+                sqlx::query(
+                    "UPDATE schedule_items SET deleted_at_utc = ?, sync_status = 'synced', version = version + 1, updated_at_utc = ? WHERE recurrence_series_id = ? AND deleted_at_utc IS NULL",
+                )
+                .bind(&now)
+                .bind(&now)
+                .bind(schedule_id.to_string())
+                .execute(&mut **transaction)
+                .await
+                .map_err(|error| AppError::database("sync-series-delete-exceptions", error))?;
+            }
             sqlx::query(
                 "UPDATE schedule_items SET deleted_at_utc = ?, sync_status = 'synced', version = version + 1, updated_at_utc = ? WHERE id = ?",
             )
@@ -1629,7 +2428,7 @@ async fn apply_remote_event(
             .await?;
             return Ok(());
         }
-        let mut draft = remote_event_to_draft(&event)?;
+        let mut draft = remote_event_to_draft_in_timezone(&event, calendar_timezone_id)?;
         draft.validate()?;
         let read_only = !matches!(access_role, "owner" | "writer") || event_is_read_only(&event);
         let updated = Schedule {
@@ -1658,7 +2457,7 @@ async fn apply_remote_event(
     if cancelled {
         return Ok(());
     }
-    let mut draft = remote_event_to_draft(&event)?;
+    let mut draft = remote_event_to_draft_in_timezone(&event, calendar_timezone_id)?;
     draft.validate()?;
     let requested_id = event
         .pointer("/extendedProperties/private/dayScheduleNextLocalId")
@@ -1899,6 +2698,13 @@ async fn save_outbox_conflict(
 }
 
 fn remote_event_to_draft(event: &Value) -> AppResult<ScheduleDraft> {
+    remote_event_to_draft_in_timezone(event, "UTC")
+}
+
+fn remote_event_to_draft_in_timezone(
+    event: &Value,
+    calendar_timezone_id: &str,
+) -> AppResult<ScheduleDraft> {
     let title = bounded_string(event.get("summary"), "(タイトルなし)", 200);
     let description = bounded_string(event.get("description"), "", 10_000);
     let location = bounded_string(event.get("location"), "", 500);
@@ -1926,7 +2732,7 @@ fn remote_event_to_draft(event: &Value) -> AppResult<ScheduleDraft> {
                 .get("timeZone")
                 .or_else(|| end.get("timeZone"))
                 .and_then(Value::as_str)
-                .unwrap_or("UTC")
+                .unwrap_or(calendar_timezone_id)
                 .to_owned();
             let timezone: chrono_tz::Tz = timezone_id.parse().map_err(|_| {
                 validation(
@@ -1984,7 +2790,7 @@ fn remote_event_to_draft(event: &Value) -> AppResult<ScheduleDraft> {
                 .get("timeZone")
                 .or_else(|| end.get("timeZone"))
                 .and_then(Value::as_str)
-                .unwrap_or("UTC")
+                .unwrap_or(calendar_timezone_id)
                 .to_owned();
             if timezone_id.parse::<chrono_tz::Tz>().is_err() {
                 return Err(validation(
@@ -2010,35 +2816,47 @@ fn remote_event_to_draft(event: &Value) -> AppResult<ScheduleDraft> {
                 })?;
             (start_utc, end_utc, timezone_id, false, None, None)
         };
-    let recurrence_rule = event
+    let recurrence = event
         .get("recurrence")
         .and_then(Value::as_array)
-        .and_then(|values| {
-            values
-                .iter()
-                .filter_map(Value::as_str)
-                .find(|value| value.starts_with("RRULE:"))
-        })
-        .map(|value| value.trim_start_matches("RRULE:").to_owned());
-    let recurrence_exdates = event
-        .get("recurrence")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .filter_map(|value| value.strip_prefix("EXDATE:"))
-        .flat_map(|value| value.split(','))
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let recurrence_lines = recurrence
+        .iter()
         .map(|value| {
-            DateTime::parse_from_str(value, "%Y%m%dT%H%M%SZ")
-                .map(|value| value.with_timezone(&Utc))
-                .map_err(|_| {
-                    validation(
-                        "Google繰り返し例外の時刻が正しくありません。",
-                        "同期トークンは更新していません。Google側の系列を確認してください。",
-                    )
-                })
+            value.as_str().ok_or_else(|| {
+                validation(
+                    "Google繰り返し設定が正しくありません。",
+                    "同期トークンは更新していません。Google側の系列を確認してください。",
+                )
+            })
         })
         .collect::<AppResult<Vec<_>>>()?;
+    let rule_lines = recurrence_lines
+        .iter()
+        .filter(|value| value.starts_with("RRULE:"))
+        .copied()
+        .collect::<Vec<_>>();
+    if rule_lines.len() > 1
+        || recurrence_lines
+            .iter()
+            .any(|value| !value.starts_with("RRULE:") && !value.starts_with("EXDATE"))
+    {
+        return Err(validation(
+            "このGoogle繰り返し設定には未対応の要素があります。",
+            "予定を変更せず同期を停止しました。Google側の系列を確認してください。",
+        ));
+    }
+    let recurrence_rule = rule_lines
+        .first()
+        .map(|value| value.trim_start_matches("RRULE:").to_owned());
+    let mut recurrence_exdates = Vec::new();
+    for line in recurrence_lines
+        .iter()
+        .filter(|value| value.starts_with("EXDATE"))
+    {
+        recurrence_exdates.extend(parse_google_exdate_line(line, calendar_timezone_id)?);
+    }
     Ok(ScheduleDraft {
         title,
         description,
@@ -2060,6 +2878,91 @@ fn remote_event_to_draft(event: &Value) -> AppResult<ScheduleDraft> {
         start_notification_minutes: None,
         end_notification_minutes: None,
     })
+}
+
+fn parse_google_exdate_line(
+    line: &str,
+    calendar_timezone_id: &str,
+) -> AppResult<Vec<DateTime<Utc>>> {
+    let (property, values) = line.split_once(':').ok_or_else(|| {
+        validation(
+            "Google繰り返し例外の形式が正しくありません。",
+            "同期トークンは更新していません。Google側の系列を確認してください。",
+        )
+    })?;
+    if !property.starts_with("EXDATE") {
+        return Err(validation(
+            "Google繰り返し例外の形式が正しくありません。",
+            "同期トークンは更新していません。Google側の系列を確認してください。",
+        ));
+    }
+    let timezone_id = property
+        .split(';')
+        .find_map(|part| part.strip_prefix("TZID="))
+        .unwrap_or(calendar_timezone_id);
+    let timezone: chrono_tz::Tz = timezone_id.parse().map_err(|_| {
+        validation(
+            "Google繰り返し例外のIANAタイムゾーンが正しくありません。",
+            "同期トークンは更新していません。Google側の系列を確認してください。",
+        )
+    })?;
+    let date_only = property
+        .split(';')
+        .any(|part| part.eq_ignore_ascii_case("VALUE=DATE"));
+    values
+        .split(',')
+        .map(|value| {
+            if date_only {
+                let date = NaiveDate::parse_from_str(value, "%Y%m%d").map_err(|_| {
+                    validation(
+                        "Google繰り返し例外の日付が正しくありません。",
+                        "同期トークンは更新していません。Google側の系列を確認してください。",
+                    )
+                })?;
+                return local_datetime_to_utc(
+                    timezone,
+                    date.and_time(NaiveTime::MIN),
+                    "Google繰り返し例外の日付がDST境界で曖昧です。",
+                );
+            }
+            if value.ends_with('Z') {
+                return DateTime::parse_from_str(value, "%Y%m%dT%H%M%SZ")
+                    .map(|value| value.with_timezone(&Utc))
+                    .map_err(|_| {
+                        validation(
+                            "Google繰り返し例外の時刻が正しくありません。",
+                            "同期トークンは更新していません。Google側の系列を確認してください。",
+                        )
+                    });
+            }
+            let local =
+                chrono::NaiveDateTime::parse_from_str(value, "%Y%m%dT%H%M%S").map_err(|_| {
+                    validation(
+                        "Google繰り返し例外のローカル時刻が正しくありません。",
+                        "同期トークンは更新していません。Google側の系列を確認してください。",
+                    )
+                })?;
+            local_datetime_to_utc(
+                timezone,
+                local,
+                "Google繰り返し例外のローカル時刻がDST境界で曖昧です。",
+            )
+        })
+        .collect()
+}
+
+fn local_datetime_to_utc(
+    timezone: chrono_tz::Tz,
+    local: chrono::NaiveDateTime,
+    message: &str,
+) -> AppResult<DateTime<Utc>> {
+    match timezone.from_local_datetime(&local) {
+        LocalResult::Single(value) => Ok(value.with_timezone(&Utc)),
+        LocalResult::Ambiguous(_, _) | LocalResult::None => Err(validation(
+            message,
+            "同期トークンは更新していません。Google側の系列を確認してください。",
+        )),
+    }
 }
 
 fn merge_schedule_drafts(
@@ -2210,6 +3113,10 @@ fn event_is_read_only(event: &Value) -> bool {
     )
 }
 
+fn can_read_event_details(access_role: &str) -> bool {
+    matches!(access_role, "owner" | "writer" | "reader")
+}
+
 fn bounded_string(value: Option<&Value>, fallback: &str, maximum: usize) -> String {
     value
         .and_then(Value::as_str)
@@ -2239,6 +3146,7 @@ fn event_url_at(api_root: &str, calendar_id: &str, event_id: Option<&str>) -> Ap
         let mut segments = url
             .path_segments_mut()
             .map_err(|_| AppError::database("google-api-path", "cannot be base"))?;
+        segments.pop_if_empty();
         segments.extend(["calendars", calendar_id, "events"]);
         if let Some(event_id) = event_id {
             segments.push(event_id);
@@ -2266,7 +3174,9 @@ async fn response_json_limited(response: reqwest::Response) -> Result<Value, Htt
 
 fn classify_http(response: &reqwest::Response) -> HttpFailure {
     match response.status() {
-        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => HttpFailure::Auth,
+        StatusCode::UNAUTHORIZED => HttpFailure::Auth,
+        StatusCode::FORBIDDEN => HttpFailure::Forbidden,
+        StatusCode::NOT_FOUND => HttpFailure::NotFound,
         StatusCode::PRECONDITION_FAILED => HttpFailure::Conflict(None),
         StatusCode::GONE => HttpFailure::Gone,
         StatusCode::TOO_MANY_REQUESTS => HttpFailure::Retryable(retry_after_seconds(response)),
@@ -2341,6 +3251,13 @@ async fn mark_auth_required(database: &Database, account_id: Uuid) -> AppResult<
     .await
     .map_err(|error| AppError::database("sync-auth-required", error))?;
     sqlx::query(
+        "UPDATE google_calendars SET sync_state = 'auth_required', next_retry_at_utc = NULL, last_error_category = 'auth' WHERE account_id = ?",
+    )
+    .bind(account_id.to_string())
+    .execute(&database.pool)
+    .await
+    .map_err(|error| AppError::database("sync-auth-calendars", error))?;
+    sqlx::query(
         "UPDATE schedule_items SET sync_status = 'auth_required' WHERE id IN (SELECT schedule_item_id FROM sync_mappings)",
     )
     .execute(&database.pool)
@@ -2349,15 +3266,19 @@ async fn mark_auth_required(database: &Database, account_id: Uuid) -> AppResult<
     Ok(())
 }
 
-fn sync_http_error(response: &reqwest::Response) -> AppError {
-    sync_failure_error(classify_http(response), "Google同期")
-}
-
 fn sync_failure_error(failure: HttpFailure, operation: &str) -> AppError {
     match failure {
         HttpFailure::Auth => unavailable(
             "Googleへの再認証が必要です。",
             "ローカル予定は保持されています。設定から再接続してください。",
+        ),
+        HttpFailure::Forbidden => unavailable(
+            "このGoogleカレンダーを読み取る権限がありません。",
+            "ローカル予定は保持されています。カレンダーの共有権限または同期対象を確認してください。",
+        ),
+        HttpFailure::NotFound => unavailable(
+            "このGoogleカレンダーを確認できません。",
+            "ローカル予定は保持されています。カレンダーが削除されていないか確認してください。",
         ),
         HttpFailure::Gone => unavailable(
             "Google同期トークンが無効です。",
@@ -2424,6 +3345,31 @@ fn validate_oauth_installed(value: &OAuthInstalled) -> AppResult<()> {
     Ok(())
 }
 
+fn built_in_oauth_config(client_id: Option<&str>) -> AppResult<Option<OAuthConfig>> {
+    let Some(client_id) = client_id else {
+        return Ok(None);
+    };
+    if client_id.len() < 30
+        || client_id.len() > 500
+        || client_id.trim() != client_id
+        || !client_id.ends_with(".apps.googleusercontent.com")
+        || !client_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_'))
+    {
+        return Err(validation(
+            "このビルドのGoogle OAuth設定が正しくありません。",
+            "ローカル予定はそのまま利用できます。Desktop OAuth client IDを確認して再ビルドしてください。",
+        ));
+    }
+    Ok(Some(OAuthConfig {
+        client_id: client_id.to_owned(),
+        client_secret: String::new(),
+        auth_uri: GOOGLE_AUTH_URI.to_owned(),
+        token_uri: GOOGLE_TOKEN_URI.to_owned(),
+    }))
+}
+
 fn validate_google_endpoint(value: &str, expected_host: &str) -> AppResult<()> {
     let url = Url::parse(value).map_err(|_| {
         validation(
@@ -2486,6 +3432,41 @@ fn validate_remote_calendar(calendar: &RemoteCalendar) -> AppResult<()> {
     Ok(())
 }
 
+async fn load_provisioned_oauth_secret(expected_client_id: &str) -> AppResult<String> {
+    let encoded = load_keyring(BUILT_IN_OAUTH_CLIENT_USER.to_owned())
+        .await
+        .map_err(|_| {
+            validation(
+                "この端末のGoogle OAuth資格情報が未設定です。",
+                "追跡外の環境変数からprovision-google-oauthを実行して、OS秘密ストアへ登録してください。",
+            )
+        })?;
+    parse_provisioned_oauth_secret(&encoded, expected_client_id)
+}
+
+fn parse_provisioned_oauth_secret(encoded: &str, expected_client_id: &str) -> AppResult<String> {
+    let provisioned: ProvisionedOAuthClient = serde_json::from_str(encoded).map_err(|_| {
+        validation(
+            "OS秘密ストアのGoogle OAuth資格情報が正しくありません。",
+            "provision-google-oauthをもう一度実行してください。",
+        )
+    })?;
+    if provisioned.client_id != expected_client_id
+        || !(8..=2_000).contains(&provisioned.client_secret.len())
+        || provisioned.client_secret.trim() != provisioned.client_secret
+        || provisioned
+            .client_secret
+            .bytes()
+            .any(|byte| byte.is_ascii_control())
+    {
+        return Err(validation(
+            "OS秘密ストアのGoogle OAuth資格情報がこのビルドと一致しません。",
+            "同じDesktop appのclient IDとclient secretでprovision-google-oauthを実行してください。",
+        ));
+    }
+    Ok(provisioned.client_secret)
+}
+
 #[derive(Debug)]
 struct TzCompat;
 
@@ -2519,7 +3500,7 @@ async fn load_keyring(user: String) -> AppResult<String> {
             .map_err(|_| {
                 unavailable(
                     "OS秘密ストアからOAuth設定を取得できません。",
-                    "OAuth JSONを読み込み直してください。",
+                    "Googleへ再接続してください。独自のOAuth設定を使う場合は設定画面から読み込み直してください。",
                 )
             })
     })
@@ -2579,6 +3560,30 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
         == 0
 }
 
+fn oauth_attempt_is_current(attempt_id: u64) -> bool {
+    OAUTH_ATTEMPT_GENERATION.load(Ordering::SeqCst) == attempt_id
+}
+
+fn token_failure_category(error: &str) -> OAuthFailureCategory {
+    match error {
+        "invalid_client" => OAuthFailureCategory::TokenInvalidClient,
+        "invalid_grant" => OAuthFailureCategory::TokenInvalidGrant,
+        "redirect_uri_mismatch" => OAuthFailureCategory::TokenRedirectUri,
+        _ => OAuthFailureCategory::TokenRejected,
+    }
+}
+
+fn ensure_oauth_attempt_is_current(attempt_id: u64) -> AppResult<()> {
+    if oauth_attempt_is_current(attempt_id) {
+        Ok(())
+    } else {
+        Err(AppError::Conflict {
+            message: "このGoogle接続要求は取り消されています。".into(),
+            recovery: "設定画面から新しい接続を完了してください。".into(),
+        })
+    }
+}
+
 fn validation(message: &str, recovery: &str) -> AppError {
     AppError::Validation {
         message: message.into(),
@@ -2605,6 +3610,7 @@ fn default_timezone() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::SyncSummaryState;
 
     struct MockHttpResponse {
         status: &'static str,
@@ -2694,6 +3700,29 @@ mod tests {
         calendar_id
     }
 
+    async fn seed_additional_calendar(
+        database: &Database,
+        remote_calendar_id: &str,
+        access_role: &str,
+    ) -> String {
+        let account_id: String = sqlx::query_scalar("SELECT id FROM google_accounts LIMIT 1")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap();
+        let calendar_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO google_calendars(id, account_id, remote_calendar_id, display_name, color, time_zone, access_role, selected, default_write_target) VALUES (?, ?, ?, 'Additional calendar', '#6F96F4', 'Asia/Tokyo', ?, 1, 0)",
+        )
+        .bind(&calendar_id)
+        .bind(account_id)
+        .bind(remote_calendar_id)
+        .bind(access_role)
+        .execute(&database.pool)
+        .await
+        .unwrap();
+        calendar_id
+    }
+
     fn local_draft() -> ScheduleDraft {
         ScheduleDraft {
             title: "Synthetic local schedule".into(),
@@ -2767,6 +3796,187 @@ mod tests {
         let mut invalid = valid;
         invalid.token_uri = "https://example.invalid/token".into();
         assert!(validate_oauth_installed(&invalid).is_err());
+    }
+
+    #[test]
+    fn built_in_oauth_client_uses_official_endpoints_without_a_secret() {
+        let config =
+            built_in_oauth_config(Some("synthetic-desktop-client.apps.googleusercontent.com"))
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(
+            config.client_id,
+            "synthetic-desktop-client.apps.googleusercontent.com"
+        );
+        assert!(config.client_secret.is_empty());
+        assert_eq!(
+            config.auth_uri,
+            "https://accounts.google.com/o/oauth2/v2/auth"
+        );
+        assert_eq!(config.token_uri, "https://oauth2.googleapis.com/token");
+    }
+
+    #[test]
+    fn built_in_oauth_client_rejects_malformed_ids() {
+        assert!(built_in_oauth_config(None).unwrap().is_none());
+        assert!(built_in_oauth_config(Some("not-a-desktop-client")).is_err());
+        assert!(built_in_oauth_config(Some("contains space.apps.googleusercontent.com")).is_err());
+    }
+
+    #[test]
+    fn provisioned_oauth_secret_must_match_the_built_client_id() {
+        let client_id = "synthetic-desktop-client.apps.googleusercontent.com";
+        let encoded = serde_json::json!({
+            "client_id": client_id,
+            "client_secret": "<redacted>"
+        })
+        .to_string();
+        assert_eq!(
+            parse_provisioned_oauth_secret(&encoded, client_id).unwrap(),
+            "<redacted>"
+        );
+        assert!(
+            parse_provisioned_oauth_secret(
+                &encoded,
+                "another-desktop-client.apps.googleusercontent.com"
+            )
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn reauthentication_updates_account_without_deleting_calendars() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, Some("preserved-token")).await;
+        let original_account_id: String =
+            sqlx::query_scalar("SELECT account_id FROM google_calendars WHERE id = ?")
+                .bind(&calendar_id)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+
+        let account = oauth_account_target(&database).await.unwrap();
+        assert!(account.existing);
+        assert_eq!(account.account_id.to_string(), original_account_id);
+        persist_connected_account(&database, &account, &Utc::now().to_rfc3339())
+            .await
+            .unwrap();
+
+        let calendar_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM google_calendars WHERE id = ?")
+                .bind(&calendar_id)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        let stored_sync_token: Option<String> =
+            sqlx::query_scalar("SELECT sync_token FROM google_calendars WHERE id = ?")
+                .bind(&calendar_id)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        let stored_status: String =
+            sqlx::query_scalar("SELECT status FROM google_accounts WHERE id = ?")
+                .bind(account.account_id.to_string())
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        assert_eq!(calendar_count, 1);
+        assert_eq!(stored_sync_token.as_deref(), Some("preserved-token"));
+        assert_eq!(stored_status, "connected");
+    }
+
+    #[tokio::test]
+    async fn unauthorized_calendar_list_marks_the_account_for_reauthentication() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, Some("preserved-token")).await;
+        let account_id: String =
+            sqlx::query_scalar("SELECT account_id FROM google_calendars WHERE id = ?")
+                .bind(&calendar_id)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        let (api_root, server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "401 Unauthorized",
+            serde_json::json!({}),
+        )])
+        .await;
+
+        let result = fetch_and_persist_calendars_at(
+            &database,
+            &Client::new(),
+            parse_uuid(&account_id).unwrap(),
+            "synthetic-access-token",
+            None,
+            &format!("{api_root}users/me/calendarList"),
+        )
+        .await;
+        server.await.unwrap();
+
+        assert!(result.is_err());
+        let states: (String, String, Option<String>) = sqlx::query_as(
+            "SELECT a.status, c.sync_state, c.sync_token FROM google_accounts a JOIN google_calendars c ON c.account_id = a.id WHERE c.id = ?",
+        )
+        .bind(calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            states,
+            (
+                "auth_required".into(),
+                "auth_required".into(),
+                Some("preserved-token".into())
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn calendar_list_never_selects_a_free_busy_only_calendar_for_event_sync() {
+        let database = Database::open_memory().await.unwrap();
+        let existing_calendar = seed_calendar(&database, None).await;
+        let account_id: String =
+            sqlx::query_scalar("SELECT account_id FROM google_calendars WHERE id = ?")
+                .bind(existing_calendar)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        let (api_root, server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [{
+                    "id": "synthetic-free-busy",
+                    "summary": "Free busy only",
+                    "backgroundColor": "#6F96F4",
+                    "timeZone": "Asia/Tokyo",
+                    "accessRole": "freeBusyReader",
+                    "selected": true,
+                    "primary": false
+                }]
+            }),
+        )])
+        .await;
+
+        fetch_and_persist_calendars_at(
+            &database,
+            &Client::new(),
+            parse_uuid(&account_id).unwrap(),
+            "synthetic-access-token",
+            None,
+            &format!("{api_root}users/me/calendarList"),
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+
+        let selected: bool = sqlx::query_scalar(
+            "SELECT selected FROM google_calendars WHERE account_id = ? AND remote_calendar_id = 'synthetic-free-busy'",
+        )
+        .bind(account_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert!(!selected);
     }
 
     #[test]
@@ -2857,7 +4067,12 @@ mod tests {
         .unwrap();
         let requests = server.await.unwrap();
         assert_eq!(requests.len(), 2);
+        assert!(requests[0].starts_with("GET /calendar/v3/calendars/synthetic-calendar/events?"));
         assert!(!requests[0].contains("pageToken"));
+        assert!(requests[0].contains("showDeleted=true"));
+        assert!(requests[0].contains("singleEvents=false"));
+        assert!(requests[0].contains("maxResults=250"));
+        assert!(!requests[0].contains("fields="));
         assert!(requests[1].contains("pageToken=page-two"));
         let schedule_count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM schedule_items WHERE deleted_at_utc IS NULL")
@@ -2912,6 +4127,502 @@ mod tests {
                 .unwrap();
         assert_eq!(deleted_count, 1);
         assert_eq!(token, "sync-two");
+    }
+
+    #[test]
+    fn unsupported_recurrence_parts_are_rejected_instead_of_silently_dropped() {
+        let mut event = remote_event("unsupported-recurrence", "Unsupported recurrence");
+        event["recurrence"] =
+            serde_json::json!(["RRULE:FREQ=DAILY;COUNT=3", "RDATE:20260723T000000Z"]);
+
+        assert!(remote_event_to_draft(&event).is_err());
+    }
+
+    #[tokio::test]
+    async fn moved_recurrence_exception_is_linked_and_excludes_the_original_occurrence() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, None).await;
+        let mut master = remote_event("series-master", "Recurring master");
+        master["recurrence"] = serde_json::json!(["RRULE:FREQ=DAILY;COUNT=3"]);
+        let mut moved = remote_event("series-moved-instance", "Moved instance");
+        moved["recurringEventId"] = serde_json::json!("series-master");
+        moved["originalStartTime"] =
+            serde_json::json!({ "dateTime": "2026-07-21T00:00:00Z", "timeZone": "UTC" });
+        moved["start"] =
+            serde_json::json!({ "dateTime": "2026-07-21T02:00:00Z", "timeZone": "UTC" });
+        moved["end"] = serde_json::json!({ "dateTime": "2026-07-21T03:00:00Z", "timeZone": "UTC" });
+        let (api_root, server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                // The API does not promise master-before-exception ordering.
+                "items": [moved, master],
+                "nextSyncToken": "recurrence-token"
+            }),
+        )])
+        .await;
+
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &api_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+
+        let master_id: String = sqlx::query_scalar(
+            "SELECT schedule_item_id FROM sync_mappings WHERE calendar_id = ? AND remote_event_id = 'series-master'",
+        )
+        .bind(&calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        let exception_row = sqlx::query(
+            "SELECT s.recurrence_series_id, s.recurrence_original_start_utc FROM schedule_items s JOIN sync_mappings m ON m.schedule_item_id = s.id WHERE m.calendar_id = ? AND m.remote_event_id = 'series-moved-instance'",
+        )
+        .bind(&calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        let master_exdates: String =
+            sqlx::query_scalar("SELECT recurrence_exdates_json FROM schedule_items WHERE id = ?")
+                .bind(&master_id)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+
+        assert_eq!(
+            exception_row.get::<Option<String>, _>("recurrence_series_id"),
+            Some(master_id)
+        );
+        assert_eq!(
+            exception_row
+                .get::<Option<String>, _>("recurrence_original_start_utc")
+                .as_deref(),
+            Some("2026-07-21T00:00:00+00:00")
+        );
+        assert!(master_exdates.contains("2026-07-21T00:00:00Z"));
+    }
+
+    #[tokio::test]
+    async fn cancelled_recurrence_exception_excludes_the_occurrence_without_a_standalone_item() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, None).await;
+        let mut master = remote_event("cancel-series-master", "Recurring master");
+        master["recurrence"] = serde_json::json!(["RRULE:FREQ=DAILY;COUNT=3"]);
+        let cancelled = serde_json::json!({
+            "id": "cancelled-instance",
+            "status": "cancelled",
+            "recurringEventId": "cancel-series-master",
+            "originalStartTime": {
+                "dateTime": "2026-07-21T00:00:00Z",
+                "timeZone": "UTC"
+            }
+        });
+        let (api_root, server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [cancelled, master],
+                "nextSyncToken": "cancel-token"
+            }),
+        )])
+        .await;
+
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &api_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+
+        let master_exdates: String = sqlx::query_scalar(
+            "SELECT s.recurrence_exdates_json FROM schedule_items s JOIN sync_mappings m ON m.schedule_item_id = s.id WHERE m.calendar_id = ? AND m.remote_event_id = 'cancel-series-master'",
+        )
+        .bind(&calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        let standalone_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM sync_mappings WHERE calendar_id = ? AND remote_event_id = 'cancelled-instance'",
+        )
+        .bind(&calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+
+        assert!(master_exdates.contains("2026-07-21T00:00:00Z"));
+        assert_eq!(standalone_count, 0);
+    }
+
+    #[tokio::test]
+    async fn full_sync_missing_exception_restores_the_master_occurrence() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, None).await;
+        let mut master = remote_event("reset-series-master", "Recurring master");
+        master["recurrence"] = serde_json::json!(["RRULE:FREQ=DAILY;COUNT=3"]);
+        let mut moved = remote_event("reset-series-instance", "Moved instance");
+        moved["recurringEventId"] = serde_json::json!("reset-series-master");
+        moved["originalStartTime"] =
+            serde_json::json!({ "dateTime": "2026-07-21T00:00:00Z", "timeZone": "UTC" });
+        let (initial_root, initial_server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [master.clone(), moved],
+                "nextSyncToken": "initial-reset-token"
+            }),
+        )])
+        .await;
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &initial_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        initial_server.await.unwrap();
+
+        let (reset_root, reset_server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [master],
+                "nextSyncToken": "reset-token"
+            }),
+        )])
+        .await;
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &reset_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        reset_server.await.unwrap();
+
+        let master_exdates: String = sqlx::query_scalar(
+            "SELECT s.recurrence_exdates_json FROM schedule_items s JOIN sync_mappings m ON m.schedule_item_id = s.id WHERE m.calendar_id = ? AND m.remote_event_id = 'reset-series-master'",
+        )
+        .bind(&calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        let exception_deleted: Option<String> = sqlx::query_scalar(
+            "SELECT s.deleted_at_utc FROM schedule_items s JOIN sync_mappings m ON m.schedule_item_id = s.id WHERE m.calendar_id = ? AND m.remote_event_id = 'reset-series-instance'",
+        )
+        .bind(&calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+
+        assert_eq!(master_exdates, "[]");
+        assert!(exception_deleted.is_some());
+    }
+
+    #[tokio::test]
+    async fn deleted_recurrence_master_also_deletes_linked_remote_exceptions() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, None).await;
+        let mut master = remote_event("deleted-series-master", "Recurring master");
+        master["recurrence"] = serde_json::json!(["RRULE:FREQ=DAILY;COUNT=3"]);
+        let mut moved = remote_event("deleted-series-instance", "Moved instance");
+        moved["recurringEventId"] = serde_json::json!("deleted-series-master");
+        moved["originalStartTime"] =
+            serde_json::json!({ "dateTime": "2026-07-21T00:00:00Z", "timeZone": "UTC" });
+        let (initial_root, initial_server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [master, moved],
+                "nextSyncToken": "series-before-delete"
+            }),
+        )])
+        .await;
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &initial_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        initial_server.await.unwrap();
+
+        let (delete_root, delete_server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [{
+                    "id": "deleted-series-master",
+                    "status": "cancelled",
+                    "etag": "deleted-master-etag"
+                }],
+                "nextSyncToken": "series-after-delete"
+            }),
+        )])
+        .await;
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: Some("series-before-delete"),
+                api_root: &delete_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        delete_server.await.unwrap();
+
+        let active_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM schedule_items s JOIN sync_mappings m ON m.schedule_item_id = s.id WHERE m.calendar_id = ? AND s.deleted_at_utc IS NULL",
+        )
+        .bind(calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert_eq!(active_count, 0);
+    }
+
+    #[test]
+    fn event_and_exdate_use_the_calendar_timezone_when_the_event_omits_one() {
+        let mut event = remote_event("timezone-fallback", "Timezone fallback");
+        event["start"] = serde_json::json!({ "dateTime": "2026-07-20T09:00:00+09:00" });
+        event["end"] = serde_json::json!({ "dateTime": "2026-07-20T10:00:00+09:00" });
+        event["recurrence"] = serde_json::json!([
+            "RRULE:FREQ=DAILY;COUNT=3",
+            "EXDATE;TZID=Asia/Tokyo:20260721T090000"
+        ]);
+
+        let draft = remote_event_to_draft_in_timezone(&event, "Asia/Tokyo").unwrap();
+
+        assert_eq!(draft.timezone_id, "Asia/Tokyo");
+        assert_eq!(
+            draft.recurrence_exdates,
+            vec![Utc.with_ymd_and_hms(2026, 7, 21, 0, 0, 0).unwrap()]
+        );
+    }
+
+    #[tokio::test]
+    async fn forbidden_calendar_does_not_block_another_selected_calendar() {
+        let database = Database::open_memory().await.unwrap();
+        let forbidden_calendar = seed_calendar(&database, None).await;
+        sqlx::query(
+            "UPDATE google_calendars SET remote_calendar_id = 'forbidden-calendar' WHERE id = ?",
+        )
+        .bind(&forbidden_calendar)
+        .execute(&database.pool)
+        .await
+        .unwrap();
+        let readable_calendar =
+            seed_additional_calendar(&database, "readable-calendar", "reader").await;
+        let (api_root, server) = spawn_http_sequence(vec![
+            MockHttpResponse::json("403 Forbidden", serde_json::json!({})),
+            MockHttpResponse::json(
+                "200 OK",
+                serde_json::json!({
+                    "items": [remote_event("readable-event", "Readable event")],
+                    "nextSyncToken": "readable-token"
+                }),
+            ),
+        ])
+        .await;
+
+        pull_selected_calendars_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            &OperationCancellation::default(),
+            &api_root,
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+
+        let forbidden_state: (String, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT sync_state, last_error_category, sync_token FROM google_calendars WHERE id = ?",
+        )
+        .bind(forbidden_calendar)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        let readable_state: (String, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT sync_state, last_error_category, sync_token FROM google_calendars WHERE id = ?",
+        )
+        .bind(readable_calendar)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+
+        assert_eq!(
+            forbidden_state,
+            ("unavailable".into(), Some("permission".into()), None)
+        );
+        assert_eq!(
+            readable_state,
+            ("synced".into(), None, Some("readable-token".into()))
+        );
+        assert_eq!(
+            database.sync_summary().await.unwrap().state,
+            SyncSummaryState::CalendarUnavailable
+        );
+    }
+
+    #[tokio::test]
+    async fn transient_calendar_failure_preserves_token_and_does_not_block_another_calendar() {
+        for (status, headers, expected_category) in [
+            (
+                "429 Too Many Requests",
+                vec![("Retry-After", "120")],
+                "rate_limited",
+            ),
+            ("503 Service Unavailable", Vec::new(), "server"),
+        ] {
+            let database = Database::open_memory().await.unwrap();
+            let retry_calendar = seed_calendar(&database, Some("preserved-token")).await;
+            sqlx::query(
+                "UPDATE google_calendars SET remote_calendar_id = 'a-retry-calendar' WHERE id = ?",
+            )
+            .bind(&retry_calendar)
+            .execute(&database.pool)
+            .await
+            .unwrap();
+            let readable_calendar =
+                seed_additional_calendar(&database, "z-readable-calendar", "reader").await;
+            let (api_root, server) = spawn_http_sequence(vec![
+                MockHttpResponse {
+                    status,
+                    headers,
+                    body: "{}".into(),
+                },
+                MockHttpResponse::json(
+                    "200 OK",
+                    serde_json::json!({
+                        "items": [remote_event("transient-readable-event", "Readable event")],
+                        "nextSyncToken": "readable-token"
+                    }),
+                ),
+            ])
+            .await;
+
+            pull_selected_calendars_at(
+                &database,
+                &Client::new(),
+                "synthetic-access-token",
+                &OperationCancellation::default(),
+                &api_root,
+            )
+            .await
+            .unwrap();
+            server.await.unwrap();
+
+            let retry_state: (String, Option<String>, Option<String>, Option<String>) =
+                sqlx::query_as(
+                    "SELECT sync_state, last_error_category, sync_token, next_retry_at_utc FROM google_calendars WHERE id = ?",
+                )
+                .bind(retry_calendar)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+            let readable_state: (String, Option<String>) =
+                sqlx::query_as("SELECT sync_state, sync_token FROM google_calendars WHERE id = ?")
+                    .bind(readable_calendar)
+                    .fetch_one(&database.pool)
+                    .await
+                    .unwrap();
+
+            assert_eq!(retry_state.0, "retry_scheduled");
+            assert_eq!(retry_state.1.as_deref(), Some(expected_category));
+            assert_eq!(retry_state.2.as_deref(), Some("preserved-token"));
+            assert!(retry_state.3.is_some());
+            assert_eq!(
+                readable_state,
+                ("synced".into(), Some("readable-token".into()))
+            );
+            assert_eq!(
+                database.sync_summary().await.unwrap().state,
+                SyncSummaryState::RetryScheduled
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unauthorized_calendar_aborts_the_batch_and_marks_account_for_reauthentication() {
+        let database = Database::open_memory().await.unwrap();
+        seed_calendar(&database, None).await;
+        let untouched_calendar =
+            seed_additional_calendar(&database, "untouched-calendar", "reader").await;
+        let (api_root, server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "401 Unauthorized",
+            serde_json::json!({}),
+        )])
+        .await;
+
+        let result = pull_selected_calendars_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            &OperationCancellation::default(),
+            &api_root,
+        )
+        .await;
+        server.await.unwrap();
+
+        assert!(result.is_err());
+        let account_status: String =
+            sqlx::query_scalar("SELECT status FROM google_accounts LIMIT 1")
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        let untouched_state: String =
+            sqlx::query_scalar("SELECT sync_state FROM google_calendars WHERE id = ?")
+                .bind(untouched_calendar)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        assert_eq!(account_status, "auth_required");
+        assert_eq!(untouched_state, "auth_required");
     }
 
     #[tokio::test]
@@ -3080,6 +4791,8 @@ mod tests {
     async fn http_matrix_classifies_reauth_conflict_rate_limit_and_server_failure() {
         let responses = vec![
             MockHttpResponse::json("401 Unauthorized", serde_json::json!({})),
+            MockHttpResponse::json("403 Forbidden", serde_json::json!({})),
+            MockHttpResponse::json("404 Not Found", serde_json::json!({})),
             MockHttpResponse::json("412 Precondition Failed", serde_json::json!({})),
             MockHttpResponse {
                 status: "429 Too Many Requests",
@@ -3091,7 +4804,14 @@ mod tests {
         let (api_root, server) = spawn_http_sequence(responses).await;
         let client = Client::new();
         let mut failures = Vec::new();
-        for path in ["reauth", "conflict", "rate", "server"] {
+        for path in [
+            "reauth",
+            "forbidden",
+            "not-found",
+            "conflict",
+            "rate",
+            "server",
+        ] {
             let response = client
                 .get(format!("{api_root}{path}"))
                 .send()
@@ -3101,9 +4821,19 @@ mod tests {
         }
         server.await.unwrap();
         assert_eq!(failures[0], HttpFailure::Auth);
-        assert_eq!(failures[1], HttpFailure::Conflict(None));
-        assert_eq!(failures[2], HttpFailure::Retryable(Some(120)));
-        assert_eq!(failures[3], HttpFailure::Retryable(None));
+        assert_eq!(failures[1], HttpFailure::Forbidden);
+        assert_eq!(failures[2], HttpFailure::NotFound);
+        assert_eq!(failures[3], HttpFailure::Conflict(None));
+        assert_eq!(failures[4], HttpFailure::Retryable(Some(120)));
+        assert_eq!(failures[5], HttpFailure::Retryable(None));
+    }
+
+    #[test]
+    fn free_busy_reader_cannot_read_event_details() {
+        assert!(can_read_event_details("owner"));
+        assert!(can_read_event_details("writer"));
+        assert!(can_read_event_details("reader"));
+        assert!(!can_read_event_details("freeBusyReader"));
     }
 
     #[tokio::test]
@@ -3242,6 +4972,26 @@ mod tests {
         assert_eq!(
             database.schedule(schedule.id).await.unwrap().sync_status,
             SyncStatus::Pending
+        );
+    }
+
+    #[test]
+    fn oauth_token_errors_are_reduced_to_non_sensitive_failure_categories() {
+        assert_eq!(
+            token_failure_category("invalid_client").as_str(),
+            "oauth_token_invalid_client"
+        );
+        assert_eq!(
+            token_failure_category("invalid_grant").as_str(),
+            "oauth_token_invalid_grant"
+        );
+        assert_eq!(
+            token_failure_category("redirect_uri_mismatch").as_str(),
+            "oauth_token_redirect_uri"
+        );
+        assert_eq!(
+            token_failure_category("unexpected_server_detail").as_str(),
+            "oauth_token_rejected"
         );
     }
 }

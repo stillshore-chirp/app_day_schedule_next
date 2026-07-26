@@ -41,6 +41,7 @@ pub enum SyncSummaryState {
     RetryScheduled,
     Conflict,
     AuthRequired,
+    CalendarUnavailable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

@@ -12,6 +12,7 @@ import type {
   FocusState,
   FocusHistoryReport,
   Schedule,
+  GoogleCalendar,
   GoogleConnection,
   ImportPreview,
   ImportResult,
@@ -594,10 +595,11 @@ function GooglePanel({ client }: { client: AppClient }) {
   const [connection, setConnection] = useState<GoogleConnection | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ title: string; detail?: string } | null>(null);
   const [disconnectMode, setDisconnectMode] = useState<"keep_local" | "delete_mapped_local" | null>(
     null,
   );
+  const oauthFailure = googleOAuthFailureCopy(connection?.lastError);
 
   const refresh = async () => setConnection(await client.googleConnection());
 
@@ -607,7 +609,16 @@ function GooglePanel({ client }: { client: AppClient }) {
       client
         .googleConnection()
         .then((value) => active && setConnection(value))
-        .catch(() => active && setError(translate("features.views.OperationalViews.077")));
+        .catch((readError) => {
+          if (!active) return;
+          setError(
+            googleUiError(
+              readError,
+              translate("features.views.OperationalViews.077"),
+              translate("features.views.OperationalViews.361"),
+            ),
+          );
+        });
     void read();
     const timer = window.setInterval(() => {
       if (connection?.state === "connecting") void read();
@@ -632,8 +643,14 @@ function GooglePanel({ client }: { client: AppClient }) {
       const configured = await client.importGoogleOAuthConfig(path);
       await refresh();
       setMessage(translate("features.views.OperationalViews.079", [configured.clientIdHint]));
-    } catch {
-      setError(translate("features.views.OperationalViews.080"));
+    } catch (importError) {
+      setError(
+        googleUiError(
+          importError,
+          translate("features.views.OperationalViews.080"),
+          translate("features.views.OperationalViews.362"),
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -650,8 +667,14 @@ function GooglePanel({ client }: { client: AppClient }) {
           : translate("features.views.OperationalViews.082"),
       );
       await refresh();
-    } catch {
-      setError(translate("features.views.OperationalViews.083"));
+    } catch (connectError) {
+      setError(
+        googleUiError(
+          connectError,
+          translate("features.views.OperationalViews.083"),
+          translate("features.views.OperationalViews.363"),
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -662,8 +685,14 @@ function GooglePanel({ client }: { client: AppClient }) {
     try {
       await client.updateGoogleCalendar(id, selected, defaultWriteTarget);
       await refresh();
-    } catch {
-      setError(translate("features.views.OperationalViews.084"));
+    } catch (calendarError) {
+      setError(
+        googleUiError(
+          calendarError,
+          translate("features.views.OperationalViews.084"),
+          translate("features.views.OperationalViews.364"),
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -680,8 +709,14 @@ function GooglePanel({ client }: { client: AppClient }) {
           : translate("features.views.OperationalViews.086", [affected]),
       );
       setDisconnectMode(null);
-    } catch {
-      setError(translate("features.views.OperationalViews.087"));
+    } catch (disconnectError) {
+      setError(
+        googleUiError(
+          disconnectError,
+          translate("features.views.OperationalViews.087"),
+          translate("features.views.OperationalViews.365"),
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -691,7 +726,7 @@ function GooglePanel({ client }: { client: AppClient }) {
     <section className="google-panel" aria-labelledby="google-panel-title">
       <div className="section-heading-row">
         <div>
-          <h2 id="google-panel-title">Google Calendar</h2>
+          <h2 id="google-panel-title">{translate("features.views.OperationalViews.375")}</h2>
           <p>{translate("features.views.OperationalViews.088")}</p>
         </div>
         <span className="state-chip" data-state={connection?.state ?? "loading"}>
@@ -699,32 +734,59 @@ function GooglePanel({ client }: { client: AppClient }) {
         </span>
       </div>
       {message ? <StatusMessage tone="success" title={message} /> : null}
-      {error ? <StatusMessage tone="danger" title={error} /> : null}
+      {error ? (
+        <StatusMessage tone="danger" title={error.title}>
+          {error.detail}
+        </StatusMessage>
+      ) : null}
+      {oauthFailure ? (
+        <StatusMessage tone="warning" title={oauthFailure.title}>
+          {oauthFailure.detail}
+        </StatusMessage>
+      ) : null}
       {connection?.state === "feature_disabled" ? (
         <StatusMessage title={translate("features.views.OperationalViews.089")}>
           {translate("features.views.OperationalViews.090")}
         </StatusMessage>
       ) : null}
-      {!connection?.configured && connection?.state !== "feature_disabled" ? (
-        <div className="button-row">
-          <button className="button" disabled={busy} onClick={() => void importConfig()}>
-            {translate("features.views.OperationalViews.091")}
-          </button>
-        </div>
+      {connection?.state === "not_configured" ? (
+        <StatusMessage tone="warning" title={translate("features.views.OperationalViews.368")}>
+          {translate("features.views.OperationalViews.369")}
+        </StatusMessage>
       ) : null}
-      {connection?.configured && !connection.accountId ? (
+      {connection?.state === "configured" && !connection.accountId ? (
         <div className="button-row">
-          <button className="button button--primary" disabled={busy} onClick={() => void connect()}>
+          <button
+            className="button button--primary"
+            type="button"
+            disabled={busy}
+            onClick={() => void connect()}
+          >
             {translate("features.views.OperationalViews.092")}
-          </button>
-          <button className="button" disabled={busy} onClick={() => void importConfig()}>
-            {translate("features.views.OperationalViews.093")}
           </button>
         </div>
       ) : null}
       {connection?.state === "connecting" ? (
         <StatusMessage title={translate("features.views.OperationalViews.094")}>
           {translate("features.views.OperationalViews.095")}
+        </StatusMessage>
+      ) : null}
+      {connection?.state === "auth_required" ? (
+        <StatusMessage
+          tone="warning"
+          title={translate("features.views.OperationalViews.370")}
+          action={
+            <button
+              className="button button--primary"
+              type="button"
+              disabled={busy}
+              onClick={() => void connect()}
+            >
+              {translate("features.views.OperationalViews.372")}
+            </button>
+          }
+        >
+          {translate("features.views.OperationalViews.371")}
         </StatusMessage>
       ) : null}
       {connection?.accountId ? (
@@ -749,12 +811,16 @@ function GooglePanel({ client }: { client: AppClient }) {
                       ? translate("features.views.OperationalViews.098")
                       : translate("features.views.OperationalViews.099")}
                   </small>
+                  <small id={`google-calendar-sync-${calendar.id}`}>
+                    {googleCalendarSyncLabel(calendar)}
+                  </small>
                 </span>
                 <label>
                   <input
                     type="checkbox"
                     checked={calendar.selected}
-                    disabled={busy}
+                    disabled={busy || !calendar.eventReadable}
+                    aria-describedby={`google-calendar-sync-${calendar.id}`}
                     onChange={(event) =>
                       void updateCalendar(
                         calendar.id,
@@ -829,8 +895,88 @@ function GooglePanel({ client }: { client: AppClient }) {
           {translate("features.views.OperationalViews.115")}
         </p>
       </details>
+      {connection?.state !== "feature_disabled" ? (
+        <details>
+          <summary>{translate("features.views.OperationalViews.373")}</summary>
+          <p>{translate("features.views.OperationalViews.374")}</p>
+          <button
+            className="button"
+            type="button"
+            disabled={busy}
+            onClick={() => void importConfig()}
+          >
+            {connection?.configured
+              ? translate("features.views.OperationalViews.093")
+              : translate("features.views.OperationalViews.091")}
+          </button>
+        </details>
+      ) : null}
     </section>
   );
+}
+
+function googleUiError(
+  error: unknown,
+  fallbackTitle: string,
+  fallbackDetail: string,
+): { title: string; detail: string } {
+  if (error instanceof AppClientError) {
+    return {
+      title: error.detail.message,
+      detail: error.detail.recovery,
+    };
+  }
+  return { title: fallbackTitle, detail: fallbackDetail };
+}
+
+function googleOAuthFailureCopy(
+  category: string | null | undefined,
+): { title: string; detail: string } | null {
+  if (!category?.startsWith("oauth_")) return null;
+  switch (category) {
+    case "oauth_callback_timeout":
+    case "oauth_callback_invalid":
+      return {
+        title: translate("features.views.OperationalViews.376"),
+        detail: translate("features.views.OperationalViews.377"),
+      };
+    case "oauth_token_invalid_client":
+    case "oauth_token_redirect_uri":
+      return {
+        title: translate("features.views.OperationalViews.378"),
+        detail: translate("features.views.OperationalViews.379"),
+      };
+    case "oauth_token_network":
+      return {
+        title: translate("features.views.OperationalViews.380"),
+        detail: translate("features.views.OperationalViews.381"),
+      };
+    case "oauth_token_invalid_grant":
+      return {
+        title: translate("features.views.OperationalViews.382"),
+        detail: translate("features.views.OperationalViews.383"),
+      };
+    case "oauth_credential_store_failed":
+      return {
+        title: translate("features.views.OperationalViews.384"),
+        detail: translate("features.views.OperationalViews.385"),
+      };
+    case "oauth_account_persistence_failed":
+      return {
+        title: translate("features.views.OperationalViews.386"),
+        detail: translate("features.views.OperationalViews.387"),
+      };
+    case "oauth_calendar_fetch_failed":
+      return {
+        title: translate("features.views.OperationalViews.388"),
+        detail: translate("features.views.OperationalViews.389"),
+      };
+    default:
+      return {
+        title: translate("features.views.OperationalViews.366"),
+        detail: translate("features.views.OperationalViews.367"),
+      };
+  }
 }
 
 function DataTransferPanel({ client }: { client: AppClient }) {
@@ -1516,7 +1662,7 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
   const [conflicts, setConflicts] = useState<SyncConflictItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ title: string; detail?: string } | null>(null);
   const [activeOperationId, setActiveOperationId] = useState<string | null>(null);
 
   const refresh = async () => {
@@ -1537,7 +1683,12 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
         setConflicts(nextConflicts);
       })
       .catch(() => {
-        if (active) setError(translate("features.views.OperationalViews.241"));
+        if (active) {
+          setError({
+            title: translate("features.views.OperationalViews.241"),
+            detail: translate("features.views.OperationalViews.390"),
+          });
+        }
       });
     return () => {
       active = false;
@@ -1576,7 +1727,13 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
       if (isCancelled(caught)) {
         setMessage(translate("features.views.OperationalViews.245"));
       } else {
-        setError(translate("features.views.OperationalViews.246"));
+        setError(
+          googleUiError(
+            caught,
+            translate("features.views.OperationalViews.246"),
+            translate("features.views.OperationalViews.390"),
+          ),
+        );
       }
     } finally {
       setBusy(false);
@@ -1600,7 +1757,13 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
       if (isCancelled(caught)) {
         setMessage(translate("features.views.OperationalViews.249"));
       } else {
-        setError(translate("features.views.OperationalViews.250"));
+        setError(
+          googleUiError(
+            caught,
+            translate("features.views.OperationalViews.250"),
+            translate("features.views.OperationalViews.390"),
+          ),
+        );
       }
     } finally {
       setBusy(false);
@@ -1631,7 +1794,11 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
         </div>
       </div>
       {message ? <StatusMessage tone="success" title={message} /> : null}
-      {error ? <StatusMessage tone="danger" title={error} /> : null}
+      {error ? (
+        <StatusMessage tone="danger" title={error.title}>
+          {error.detail}
+        </StatusMessage>
+      ) : null}
       {queue.length === 0 ? (
         <StatusMessage title={translate("features.views.OperationalViews.256")} />
       ) : null}
@@ -1704,7 +1871,13 @@ function SyncOperationsPanel({ client }: { client: AppClient }) {
                 if (isCancelled(caught)) {
                   setMessage(translate("features.views.OperationalViews.268"));
                 } else {
-                  setError(translate("features.views.OperationalViews.269"));
+                  setError(
+                    googleUiError(
+                      caught,
+                      translate("features.views.OperationalViews.269"),
+                      translate("features.views.OperationalViews.390"),
+                    ),
+                  );
                 }
               } finally {
                 setBusy(false);
@@ -2020,4 +2193,29 @@ function googleStateLabel(state?: GoogleConnection["state"]): string {
     auth_required: translate("features.views.OperationalViews.336"),
     feature_disabled: translate("features.views.OperationalViews.337"),
   }[state];
+}
+
+function googleCalendarSyncLabel(calendar: GoogleCalendar): string {
+  if (!calendar.eventReadable) {
+    return translate("features.views.OperationalViews.391");
+  }
+  if (calendar.syncState === "unavailable") {
+    switch (calendar.lastErrorCategory) {
+      case "permission":
+        return translate("features.views.OperationalViews.392");
+      case "not_found":
+        return translate("features.views.OperationalViews.393");
+      case "validation":
+        return translate("features.views.OperationalViews.394");
+      default:
+        return translate("features.views.OperationalViews.395");
+    }
+  }
+  return {
+    never: translate("features.views.OperationalViews.396"),
+    syncing: translate("features.views.OperationalViews.397"),
+    synced: translate("features.views.OperationalViews.398"),
+    retry_scheduled: translate("features.views.OperationalViews.399"),
+    auth_required: translate("features.views.OperationalViews.400"),
+  }[calendar.syncState];
 }

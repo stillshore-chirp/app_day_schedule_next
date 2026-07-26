@@ -41,7 +41,7 @@ jobs:
       - name: Activate pnpm
         run: |
           corepack enable
-          corepack prepare pnpm@10.13.1 --activate
+          corepack prepare pnpm@11.17.0 --activate
       - name: Audit JavaScript dependencies
         run: pnpm audit --audit-level moderate
       - name: Verify Rust advisories, licenses and sources

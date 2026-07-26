@@ -59,6 +59,12 @@ requireText(
   ciPath,
   "automatic CI must not build installers",
 );
+requireText(
+  ci,
+  "pnpm verify:patched-dependencies",
+  ciPath,
+  "patched dependency compatibility must be checked after install",
+);
 forbidText(
   ci,
   "macos-15-intel",
@@ -158,6 +164,12 @@ requireText(
   "build_installers",
   e2ePath,
   "installer generation must remain available manually",
+);
+requireText(
+  e2e,
+  "pnpm verify:patched-dependencies",
+  e2ePath,
+  "native validation must check patched dependency compatibility",
 );
 requireText(
   e2e,
