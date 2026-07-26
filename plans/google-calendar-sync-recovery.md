@@ -143,7 +143,8 @@ node scripts/verify-agent-harness.mjs
 | `cargo fmt` / clippy / `cargo test --workspace --all-features` | Pass | Rust 107 + provision binary 1 |
 | frontend format / lint / typecheck / test / a11y / build | Pass | 70 / 7、production build |
 | recurrence v13 migration performance | Pass | synthetic 50,000 rows、30秒budget内 |
-| synthetic native E2E | Pass with infrastructure note | 全3 spec / 14 test Pass後、最終CSSの関連1 test Pass。別のfull再実行でWebDriver画面サイズ取得が1回timeout |
+| synthetic native E2E | Pass | E2E専用SQLx fixtureへ統一後、全3 spec / 14 testとGoogle関連2 testの独立実行がPass |
+| native fixture portability | Pass | OS付属`sqlite3` CLIを廃止。production buildへ登録されないE2E feature限定commandで同じapp DB adapterを使用 |
 | normal macOS debug DMG | Pass | aarch64 debug app / DMG bundle |
 | `rrule` dependency audit | Pass | 0.14、MIT OR Apache-2.0、既存のchrono / chrono-tz / regex / log / thiserrorのみ、parser入力にhard limit |
 | Issue #14 visual baseline review | Pass | normalは独立CI actualがbyte一致。200%は最新CI actualで文字拡大とsynthetic状態を目視確認し、誤って100%だったbaselineを置換 |

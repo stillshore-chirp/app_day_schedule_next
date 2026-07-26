@@ -1,8 +1,6 @@
 import { $, browser, expect } from "@wdio/globals";
 import "@wdio/tauri-service";
-import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
-import path from "node:path";
 
 describe("Day Schedule Next native smoke", () => {
   const title = `E2E予定-${Date.now()}`;
@@ -715,8 +713,6 @@ describe("Day Schedule Next native smoke", () => {
 
   it("shows a protected Google recurrence without implying that sync stopped", async () => {
     if (process.platform !== "darwin") return;
-    const dataDirectory = process.env.DAY_SCHEDULE_TEST_DATA_DIR;
-    if (!dataDirectory) throw new Error("isolated native E2E data directory is missing");
     const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
       today: string;
       timezoneId: string;
@@ -724,30 +720,31 @@ describe("Day Schedule Next native smoke", () => {
     const startUtc = new Date(`${bootstrap.today}T09:00:00`).toISOString();
     const endUtc = new Date(`${bootstrap.today}T10:00:00`).toISOString();
     const compactDate = bootstrap.today.replace(/-/g, "");
-    const databasePath = path.join(dataDirectory, "day-schedule-next.sqlite3");
-    execFileSync("sqlite3", [
-      databasePath,
-      `
-        INSERT INTO schedule_items(
-          id, title, start_at_utc, end_at_utc, time_zone, status, color,
-          sync_status, created_at_utc, updated_at_utc, recurrence_rule,
-          recurrence_supplemental_lines_json
-        ) VALUES (
-          'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-          '複雑なGoogle繰り返し',
-          '${startUtc}',
-          '${endUtc}',
-          '${bootstrap.timezoneId}',
-          'scheduled',
-          '#6F96F4',
-          'read_only',
-          '2026-07-26T00:00:00Z',
-          '2026-07-26T00:00:00Z',
-          'FREQ=DAILY;COUNT=3',
-          '["RDATE;TZID=${bootstrap.timezoneId}:${compactDate}T090000"]'
-        );
-      `,
-    ]);
+    await browser.tauri.execute(
+      ({ core }, draft) => core.invoke("e2e_schedule_read_only_create", { draft }),
+      {
+        title: "複雑なGoogle繰り返し",
+        description: "synthetic fixture",
+        location: "",
+        startUtc,
+        endUtc,
+        timezoneId: bootstrap.timezoneId,
+        allDay: false,
+        allDayStartDate: null,
+        allDayEndDateExclusive: null,
+        status: "scheduled",
+        project: "",
+        category: "synthetic",
+        tags: [],
+        color: "#6F96F4",
+        priority: "normal",
+        recurrenceRule: "FREQ=DAILY;COUNT=3",
+        recurrenceExdates: [],
+        recurrenceSupplementalLines: [`RDATE;TZID=${bootstrap.timezoneId}:${compactDate}T090000`],
+        startNotificationMinutes: null,
+        endNotificationMinutes: null,
+      },
+    );
 
     await browser.refresh();
     await setLogicalWindowSize(1180, 820);
@@ -797,54 +794,7 @@ describe("Day Schedule Next native smoke", () => {
 
   it("shows per-calendar recovery states with synthetic native data", async () => {
     if (process.platform !== "darwin") return;
-    const dataDirectory = process.env.DAY_SCHEDULE_TEST_DATA_DIR;
-    if (!dataDirectory) throw new Error("isolated native E2E data directory is missing");
-    const databasePath = path.join(dataDirectory, "day-schedule-next.sqlite3");
-    execFileSync("sqlite3", [
-      databasePath,
-      `
-        INSERT INTO google_accounts(
-          id, display_label, scopes_json, status, created_at_utc, updated_at_utc
-        ) VALUES (
-          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          'Synthetic Google',
-          '[]',
-          'connected',
-          '2026-07-26T00:00:00Z',
-          '2026-07-26T00:00:00Z'
-        );
-        INSERT INTO google_calendars(
-          id, account_id, remote_calendar_id, display_name, color, time_zone, access_role,
-          selected, default_write_target, sync_state, last_error_category
-        ) VALUES
-        (
-          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          'synthetic-permission-calendar',
-          '同期確認用カレンダー',
-          '#6F96F4',
-          'Asia/Tokyo',
-          'reader',
-          1,
-          0,
-          'unavailable',
-          'permission'
-        ),
-        (
-          'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          'synthetic-free-busy-calendar',
-          '空き時間のみ',
-          '#6F96F4',
-          'Asia/Tokyo',
-          'freeBusyReader',
-          0,
-          0,
-          'never',
-          NULL
-        );
-      `,
-    ]);
+    await browser.tauri.execute(({ core }) => core.invoke("e2e_google_calendar_recovery_seed"));
     await browser.refresh();
     await setLogicalWindowSize(1180, 820);
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();

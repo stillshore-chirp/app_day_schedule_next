@@ -575,6 +575,102 @@ impl Database {
         Ok(schedule)
     }
 
+    #[cfg(feature = "e2e")]
+    pub async fn create_read_only_schedule_fixture(
+        &self,
+        draft: ScheduleDraft,
+    ) -> AppResult<Schedule> {
+        let mut schedule = self.create_schedule(draft).await?;
+        sqlx::query("UPDATE schedule_items SET sync_status = 'read_only' WHERE id = ?")
+            .bind(schedule.id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|error| AppError::database("e2e-read-only-schedule", error))?;
+        schedule.sync_status = SyncStatus::ReadOnly;
+        Ok(schedule)
+    }
+
+    #[cfg(feature = "e2e")]
+    pub async fn seed_google_calendar_recovery_fixture(&self) -> AppResult<()> {
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| AppError::database("e2e-google-fixture-begin", error))?;
+        sqlx::query(
+            "INSERT INTO google_accounts(
+               id, display_label, scopes_json, status, created_at_utc, updated_at_utc
+             ) VALUES (?, ?, '[]', 'connected', ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               display_label = excluded.display_label,
+               status = excluded.status,
+               updated_at_utc = excluded.updated_at_utc",
+        )
+        .bind("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        .bind("Synthetic Google")
+        .bind("2026-07-26T00:00:00Z")
+        .bind("2026-07-26T00:00:00Z")
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("e2e-google-account-fixture", error))?;
+        for (
+            id,
+            remote_calendar_id,
+            display_name,
+            access_role,
+            selected,
+            sync_state,
+            last_error_category,
+        ) in [
+            (
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "synthetic-permission-calendar",
+                "同期確認用カレンダー",
+                "reader",
+                true,
+                "unavailable",
+                Some("permission"),
+            ),
+            (
+                "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "synthetic-free-busy-calendar",
+                "空き時間のみ",
+                "freeBusyReader",
+                false,
+                "never",
+                None,
+            ),
+        ] {
+            sqlx::query(
+                "INSERT INTO google_calendars(
+                   id, account_id, remote_calendar_id, display_name, color, time_zone, access_role,
+                   selected, default_write_target, sync_state, last_error_category
+                 ) VALUES (?, ?, ?, ?, '#6F96F4', 'Asia/Tokyo', ?, ?, 0, ?, ?)
+                 ON CONFLICT(id) DO UPDATE SET
+                   display_name = excluded.display_name,
+                   access_role = excluded.access_role,
+                   selected = excluded.selected,
+                   sync_state = excluded.sync_state,
+                   last_error_category = excluded.last_error_category",
+            )
+            .bind(id)
+            .bind("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+            .bind(remote_calendar_id)
+            .bind(display_name)
+            .bind(access_role)
+            .bind(selected)
+            .bind(sync_state)
+            .bind(last_error_category)
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| AppError::database("e2e-google-calendar-fixture", error))?;
+        }
+        transaction
+            .commit()
+            .await
+            .map_err(|error| AppError::database("e2e-google-fixture-commit", error))
+    }
+
     #[cfg(test)]
     pub async fn update_schedule(
         &self,

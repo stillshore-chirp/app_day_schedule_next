@@ -193,6 +193,19 @@ impl AppService {
         Ok(schedule)
     }
 
+    #[cfg(feature = "e2e")]
+    pub async fn create_read_only_schedule_fixture(
+        &self,
+        draft: ScheduleDraft,
+    ) -> AppResult<Schedule> {
+        self.database.create_read_only_schedule_fixture(draft).await
+    }
+
+    #[cfg(feature = "e2e")]
+    pub async fn seed_google_calendar_recovery_fixture(&self) -> AppResult<()> {
+        self.database.seed_google_calendar_recovery_fixture().await
+    }
+
     pub async fn update_schedule(
         &self,
         id: Uuid,

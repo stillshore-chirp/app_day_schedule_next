@@ -350,6 +350,29 @@ pub async fn schedule_create(
     service.create_schedule(draft).await.map_err(Into::into)
 }
 
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn e2e_schedule_read_only_create(
+    service: State<'_, AppService>,
+    draft: ScheduleDraft,
+) -> CommandResult<Schedule> {
+    service
+        .create_read_only_schedule_fixture(draft)
+        .await
+        .map_err(Into::into)
+}
+
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn e2e_google_calendar_recovery_seed(
+    service: State<'_, AppService>,
+) -> CommandResult<()> {
+    service
+        .seed_google_calendar_recovery_fixture()
+        .await
+        .map_err(Into::into)
+}
+
 #[tauri::command]
 pub async fn schedule_update(
     service: State<'_, AppService>,
