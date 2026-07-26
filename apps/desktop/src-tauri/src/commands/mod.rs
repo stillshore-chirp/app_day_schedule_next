@@ -867,15 +867,6 @@ pub async fn compact_window_open(
     Ok(())
 }
 
-#[cfg(feature = "e2e")]
-#[tauri::command]
-pub fn e2e_compact_window_close(app: AppHandle) -> CommandResult<()> {
-    let Some(window) = app.get_webview_window("compact") else {
-        return Ok(());
-    };
-    window.close().map_err(|_| window_error())
-}
-
 #[tauri::command]
 pub fn main_window_show(app: AppHandle) -> CommandResult<()> {
     let Some(window) = app.get_webview_window("main") else {

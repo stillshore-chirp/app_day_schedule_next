@@ -25,7 +25,11 @@ if (ownsIsolatedDataDirectory) {
 
 export const config: WebdriverIO.Config = {
   runner: "local",
-  specs: ["./tests/e2e/**/*.e2e.ts"],
+  specs: [
+    "./tests/e2e/notification-history.e2e.ts",
+    "./tests/e2e/short-schedule.e2e.ts",
+    "./tests/e2e/native-smoke.e2e.ts",
+  ],
   maxInstances: 1,
   capabilities: [{ browserName: "tauri" }],
   services: [

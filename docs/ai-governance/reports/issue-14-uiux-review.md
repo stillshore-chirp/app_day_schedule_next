@@ -66,12 +66,12 @@
 - Rust: recurrence set / ordinal BYDAY / DST gap・overlap / RDATE-only / pull-token transaction / v13 50,000-row migration fixture
 - Frontend: typed recurrence line contract、複雑なGoogle系列のread-only説明component test
 - Native: calendar recoveryの変更前baselineは[通常](../../evidence/issue-14/native-google-calendar-recovery.png)、[200% text](../../evidence/issue-14/native-google-calendar-recovery-text-200.png)。複雑な系列panelは変更後の[通常](../../evidence/issue-14/native-google-complex-recurrence.png)と[200% text](../../evidence/issue-14/native-google-complex-recurrence-text-200.png)で、警告copy、縦scroll、開始・終了の1列表示を目視確認
-- Native execution: E2E fixtureをOS付属`sqlite3` CLIからE2E feature限定のSQLx commandへ置換した。Compact windowの切替はWDIO公式label API、作成・終了待機はWebDriver handle件数だけを使い、mainへ戻ってからE2E feature限定commandで閉じる。raw handleによる切替・closeは行わない。E2E configだけcompactへWDIO権限を付与し、通常appのcapabilityは変更しない
+- Native execution: E2E fixtureをOS付属`sqlite3` CLIからE2E feature限定のSQLx commandへ置換した。通知・短時間予定specを先に固定し、Native smokeの全main-window assertion後にCompact windowを1回だけ開く。WebDriver handle件数で作成を待ってWDIO公式label APIで切り替え、Windowsで不安定なcompactからmainへの逆方向切替は不要にした。200%文字証跡はfont-size transition後のcomputed値を待ってから撮影する。compactの実起動・表示assertionは省略せず、全3 spec / 15 testがPass。E2E configだけcompactへWDIO権限を付与し、通常appのcapabilityは変更しない
 - Before: [OAuth接続導線だけの状態](../../evidence/issue-13/native-google-connect-after.png)。Afterはcalendar単位の権限・回復状態を同じ設定panelへ追加
 - Visual regression: run `30195380348`で全7 snapshotが4%以内。Today 0.306%、Week 0.464%、Template 0.239%、Compact 1.719%、Conflict 0.443%、Google recovery通常 / 200%は各0.000%
-- E2E isolation: fixture themeを各証跡前にlightへ固定し、Compact windowを閉じてmain windowへ復帰する。通知履歴specではReactの5秒pollをE2E buildだけ停止し、specを唯一のclaim元にしてclock競合を排除する
+- E2E isolation: fixture themeを各証跡前にlightへ固定し、Compact windowのassertionをmain window assertion完了後へ隔離する。通知履歴specではReactの5秒pollをE2E buildだけ停止し、specを唯一のclaim元にしてclock競合を排除する
 - macOS personal: 前回のcount-only確認では一部eventを取り込んだが、標準recurrenceでcalendarがvalidation停止したためFail。最新buildでは通常profileの接続件数が0で、古い検証コピーもOS秘密ストア段階で再試行となったため、Google再接続後の再確認が必要
-- Platform: recurrence fixture portability変更後のrequired run `30201934287`とdependency audit `30201934298`は成功。manual all-platform run `30201938793`はmacOS arm64 / WindowsがE2E・installerまでPassし、macOS x64だけがWDIO label状態とraw handle操作を混在させた最初のCompact close後にwindowを失い、同期を含む後続assertion到達前に失敗した。公式label APIとE2E限定closeへ統一したlocal full runはPassし、最新headのall-platform再実行を待つ
+- Platform: recurrence fixture portability変更後のrequired run `30202700046`とdependency audit `30202700044`は成功。manual run `30202703921`はmacOS arm64がE2E・visual・installer、macOS x64がE2EまでPassした一方、Windowsではcompactからmainへ戻るWDIO公式API内部のwindow列挙がtimeoutし、後続の同期assertion到達前に失敗した。compact assertionをtest末尾へ隔離した最新headでall-platform再実行を待つ
 - PR review: recurrence set変更後headのCI成功後に再確認する
 - Remaining manual boundary: 実Google OAuth / keyringの対話確認はmacOS arm64のみ。macOS x64 / Windowsの実account接続と、生成installerからのinstall / launch / OS permission操作は未確認
 - Publication: synthetic fixtureのみ。個人の予定、account、calendar / event ID、token、pathは含めない。

@@ -143,16 +143,16 @@ node scripts/verify-agent-harness.mjs
 | `cargo fmt` / clippy / `cargo test --workspace --all-features` | Pass | Rust 107 + provision binary 1 |
 | frontend format / lint / typecheck / test / a11y / build | Pass | 70 / 7、production build |
 | recurrence v13 migration performance | Pass | synthetic 50,000 rows、30秒budget内 |
-| synthetic native E2E | Pass | E2E専用SQLx fixtureへ統一し、Compact windowの切替はWDIO公式label API、lifecycle待機はWebDriver handle件数へ限定。全3 spec / 14 testとGoogle関連2 testの独立実行がPass |
+| synthetic native E2E | Pass | E2E専用SQLx fixtureへ統一。Compact windowを全main-window assertion後へ隔離し、200%文字のtransition完了もassertする最新test sequenceで全3 spec / 15 testがPass |
 | native fixture portability | Pass | OS付属`sqlite3` CLIを廃止。production buildへ登録されないE2E feature限定commandで同じapp DB adapterを使用 |
-| native window isolation | Pass | WDIO公式label APIでmainへ戻った後、E2E feature限定commandでcompactを閉じる。raw handleによるwindow切替・closeはせず、件数だけで作成・終了を待つ。E2E configだけcompactへWDIO権限を付与する |
+| native window isolation | Pass | 通知・短時間予定specを先に固定し、Native smoke末尾でCompact windowを1回だけ開く。WebDriver handle件数で作成待機後、WDIO公式label APIで切り替え、逆方向切替を不要にしつつ実windowの表示assertionを維持する |
 | normal macOS debug DMG | Pass | aarch64 debug app / DMG bundle |
 | `rrule` dependency audit | Pass | 0.14、MIT OR Apache-2.0、既存のchrono / chrono-tz / regex / log / thiserrorのみ、parser入力にhard limit |
 | Issue #14 visual baseline review | Pass | normalは独立CI actualがbyte一致。200%は最新CI actualで文字拡大とsynthetic状態を目視確認し、誤って100%だったbaselineを置換 |
 | personal debug DMG / count-only sync / List UI | Fail | 一部eventは表示されたが、選択calendarが標準recurrenceを`validation`扱いして停止したため完了証跡にならない |
 | latest personal count-only revalidation | Blocked | 通常profileは接続0件。古い検証コピーはcredential取得段階で再試行となり、event取得へ進めない。実DB・元backupは変更せず、一時コピーを削除 |
 | PR CI / dependency audit | Pass | recurrence fixture portability変更後のrun `30201348234` / `30201348235` |
-| all-platform native / installer | In progress | run `30201938793`はmacOS arm64 / WindowsがE2E・installerまでPass。macOS x64はcompactを閉じる際にWDIO label状態とraw handle操作を混在させ、以降のwindowを失って製品assertion到達前に失敗。公式label APIとE2E限定closeへ統一し、local full runで検証済み。最新headで再実行する |
+| all-platform native / installer | In progress | run `30202703921`はmacOS arm64がE2E・visual・installer、macOS x64がE2EまでPass。Windowsはcompactからmainへ戻る公式API内部のwindow列挙timeoutで後続assertion前に失敗した。逆方向切替を不要にした最新headで再実行する |
 | PR review state | Pending | 最新headのCI成功後にconversation / review submission / review threadを再確認する |
 
 ## 未実行と残リスク

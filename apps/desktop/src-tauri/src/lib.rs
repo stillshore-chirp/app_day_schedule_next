@@ -152,8 +152,6 @@ pub fn run() {
             commands::google_calendar_update,
             commands::google_disconnect,
             commands::compact_window_open,
-            #[cfg(feature = "e2e")]
-            commands::e2e_compact_window_close,
             commands::main_window_show,
             commands::template_list,
             commands::template_save,
