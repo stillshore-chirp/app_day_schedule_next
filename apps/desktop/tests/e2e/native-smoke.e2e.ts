@@ -63,6 +63,7 @@ describe("Day Schedule Next native smoke", () => {
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
     await persistFixtureTheme("light");
+    await browser.setWindowSize(1440, 920);
     const addButton = $('//header//button[contains(normalize-space(.), "予定")]');
     await addButton.click();
     const titleInput = $('//aside//label[contains(., "タイトル")]/input');
@@ -832,7 +833,7 @@ describe("Day Schedule Next native smoke", () => {
       timeoutMsg: "compact window was not created",
     });
     await browser.tauri.switchWindow("compact");
-    await $(".compact-shell").waitForDisplayed();
+    await $(".compact-header h1").waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-compact.png");
   });
 });
