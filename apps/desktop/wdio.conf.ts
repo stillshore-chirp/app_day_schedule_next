@@ -1,6 +1,6 @@
 import path from "node:path";
-import { mkdir } from "node:fs/promises";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdir, rm } from "node:fs/promises";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import "@wdio/tauri-service";
 
@@ -11,6 +11,17 @@ const ownsIsolatedDataDirectory = !inheritedDataDirectory;
 const isolatedDataDirectory =
   inheritedDataDirectory ?? mkdtempSync(path.join(tmpdir(), "day-schedule-native-e2e-"));
 process.env.DAY_SCHEDULE_TEST_DATA_DIR = isolatedDataDirectory;
+if (ownsIsolatedDataDirectory) {
+  process.once("beforeExit", () => {
+    void rm(isolatedDataDirectory, { recursive: true, force: true }).catch((error: unknown) => {
+      const code =
+        typeof error === "object" && error !== null && "code" in error
+          ? String(error.code)
+          : "unknown";
+      console.warn(`Isolated E2E data cleanup was deferred to the OS (${code}).`);
+    });
+  });
+}
 
 export const config: WebdriverIO.Config = {
   runner: "local",
@@ -40,10 +51,5 @@ export const config: WebdriverIO.Config = {
   mochaOpts: { ui: "bdd", timeout: 180_000 },
   onPrepare: async () => {
     await mkdir(path.resolve("./test-results"), { recursive: true });
-  },
-  onComplete: () => {
-    if (ownsIsolatedDataDirectory) {
-      rmSync(isolatedDataDirectory, { recursive: true, force: true });
-    }
   },
 };

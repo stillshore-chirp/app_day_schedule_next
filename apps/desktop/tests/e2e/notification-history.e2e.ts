@@ -21,7 +21,10 @@ describe("Day Schedule Next notification history", () => {
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     await expect($(".today-heading h1")).toHaveText("今日の予定");
-    const start = new Date(Date.now() + 100);
+    // The E2E build disables the foreground notification runtime, so this spec is
+    // the only poller. Keep the occurrence inside the repository's initial
+    // 30-second discovery window without waiting on platform timer precision.
+    const start = new Date(Date.now() - 5_000);
     const end = new Date(start.getTime() + 60 * 60_000);
     const delivery = await browser.execute(
       async (input) => {
@@ -55,7 +58,6 @@ describe("Day Schedule Next notification history", () => {
             endNotificationMinutes: null,
           },
         });
-        await new Promise((resolve) => setTimeout(resolve, 200));
         const deliveries = await core.invoke<
           Array<{
             deliveryKey: string;

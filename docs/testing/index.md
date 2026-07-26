@@ -85,6 +85,8 @@ pnpm test:e2e
 - 30分予定のoverview marker、detail 1行density、完全なaccessible name、title / timeのcard内geometry
 - 専用一時DBへ500予定を実IPCで投入し、仮想化DOM上限とscroll / dragのmain-thread 16.7ms budgetを各30回測定
 
+`VITE_WDIO=true` のE2E buildでは、通知履歴specとアプリの5秒foreground pollが同じdeliveryを競合してclaimしないよう、Reactの自動notification runtimeだけを停止します。通知履歴specが単独で実IPC pollを行い、delivery key・結果記録・再読込後の表示を確認します。Rustの候補抽出、重複抑止、DST、grace / replayは固定clockのintegration test、OS permission / deliveryはrelease manual matrixを正本とします。
+
 Native E2E はPRごとには起動しません。`Native release validation` workflowで`macos-arm64`、`macos-x64`、`windows-x64`、`all`から対象を選びます。通常の個人利用確認はmacOS arm64、release判断は`all`です。失敗時だけscreenshotとマスク対象を確認したlogを7日間artifactにします。macOS arm64では続けて`scripts/compare-visual-snapshots.swift`を実行し、Today、Week、Template、Compact、Conflictをchannel差32・不一致pixel 4%の許容差で比較します。超過時は赤い差分PNGを確認し、意図した変更だけbaseline更新としてレビューします。
 
 `build_installers=true`を指定した場合だけ、E2E成功後にWebDriver pluginを含まない通常identifierのunsigned debug installerを作り、7日間保持します。

@@ -30,7 +30,13 @@ const navItems: Array<{ view: AppView; label: string; symbol: string }> = [
   { view: "diagnostics", label: messages.navigation.diagnostics, symbol: "▤" },
 ];
 
-export function App({ client }: { client: AppClient }) {
+export function App({
+  client,
+  notificationRuntimeEnabled = true,
+}: {
+  client: AppClient;
+  notificationRuntimeEnabled?: boolean;
+}) {
   const bootstrapQuery = useQuery({ queryKey: ["bootstrap"], queryFn: () => client.bootstrap() });
   const readyReported = useRef(false);
   const refreshBootstrap = useCallback(() => {
@@ -169,7 +175,7 @@ export function App({ client }: { client: AppClient }) {
   const bootstrap = bootstrapQuery.data;
   return (
     <div className="app-shell">
-      <NotificationRuntime client={client} />
+      {notificationRuntimeEnabled ? <NotificationRuntime client={client} /> : null}
       <SyncRuntime client={client} onSettled={refreshBootstrap} />
       <header className="topbar">
         <div className="topbar__brand">

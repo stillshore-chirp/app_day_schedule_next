@@ -37,6 +37,21 @@ describe("Day Schedule Next native smoke", () => {
     });
   };
 
+  const persistFixtureTheme = async (theme: "light" | "mild" | "dark") => {
+    const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
+      settings: Record<string, unknown>;
+    };
+    await browser.tauri.execute(
+      ({ core }, settings) => core.invoke("settings_update", { settings }),
+      { ...bootstrap.settings, theme },
+    );
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === theme, {
+      timeoutMsg: `fixture theme was not set to ${theme}`,
+    });
+  };
+
   it("boots the real Tauri application and reaches the native IPC boundary", async () => {
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
@@ -49,6 +64,7 @@ describe("Day Schedule Next native smoke", () => {
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
+    await persistFixtureTheme("light");
     const addButton = $('//header//button[contains(normalize-space(.), "予定")]');
     await addButton.click();
     const titleInput = $('//aside//label[contains(., "タイトル")]/input');
@@ -159,22 +175,38 @@ describe("Day Schedule Next native smoke", () => {
     await $(
       '//section[@aria-labelledby="template-list-title"]//button[contains(., "新規")]',
     ).click();
-    await $(
+    const templateNameInput = $(
       '//section[@aria-labelledby="template-editor-title"]//label[contains(., "名前")]/input',
-    ).setValue(templateName);
+    );
+    await templateNameInput.setValue(templateName);
+    await expect(templateNameInput).toHaveValue(templateName);
     await $(
       '//section[@aria-labelledby="template-editor-title"]//button[contains(., "ブロック")]',
     ).click();
-    await $(
+    const blockTitleInput = $(
       '//div[contains(@class,"block-editor")]//label[contains(., "タイトル")]/input',
-    ).setValue("E2Eブロック");
+    );
+    await blockTitleInput.waitForDisplayed();
+    await blockTitleInput.setValue("E2Eブロック");
+    await expect(blockTitleInput).toHaveValue("E2Eブロック");
     await $(
       '//section[@aria-labelledby="template-editor-title"]//button[contains(., "テンプレートを保存")]',
     ).click();
+    await browser.waitUntil(
+      async () => {
+        const persisted = (await browser.tauri.execute(({ core }) =>
+          core.invoke("template_list"),
+        )) as Array<{ name: string }>;
+        return persisted.some((template) => template.name === templateName);
+      },
+      { timeoutMsg: "template was not persisted through native IPC" },
+    );
     const templateCard = $(
       `//section[@aria-labelledby="template-list-title"]//*[normalize-space(.)="${templateName}"]`,
     );
-    await templateCard.waitForDisplayed();
+    await templateCard.waitForExist();
+    await templateCard.scrollIntoView({ block: "center" });
+    await expect(templateCard).toBeDisplayed();
     await browser.execute(() =>
       document.querySelector(".template-visual-editor")?.scrollIntoView({ block: "start" }),
     );
@@ -347,8 +379,9 @@ describe("Day Schedule Next native smoke", () => {
       timeoutMsg: "mild theme was not applied to the compact window",
     });
     await browser.saveScreenshot("./test-results/native-mild-compact.png");
-    await browser.tauri.switchWindow("main");
+    await browser.closeWindow();
     await browser.switchToWindow(originalHandle);
+    await browser.tauri.switchWindow("main");
     await $(".app-shell").waitForDisplayed();
 
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
@@ -359,13 +392,13 @@ describe("Day Schedule Next native smoke", () => {
       );
       const select = label?.querySelector("select");
       if (!select) throw new Error("theme select was not found");
-      select.value = "system";
+      select.value = "light";
       select.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    await expect(restoredTheme).toHaveValue("system");
+    await expect(restoredTheme).toHaveValue("light");
     await $('//button[normalize-space(.)="設定を保存"]').click();
-    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "system", {
-      timeoutMsg: "system theme was not restored after mild-theme evidence capture",
+    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "light", {
+      timeoutMsg: "light fixture theme was not restored after mild-theme evidence capture",
     });
   });
 

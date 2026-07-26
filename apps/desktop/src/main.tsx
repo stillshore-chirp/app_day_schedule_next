@@ -29,7 +29,10 @@ async function startApp() {
           {new URLSearchParams(window.location.search).get("window") === "compact" ? (
             <CompactApp client={client} />
           ) : (
-            <App client={client} />
+            <App
+              client={client}
+              notificationRuntimeEnabled={import.meta.env.VITE_WDIO !== "true"}
+            />
           )}
         </QueryClientProvider>
       </StrictMode>,

@@ -135,11 +135,11 @@ node scripts/verify-agent-harness.mjs
 | `cargo test --workspace --all-features` | Pass | 94 + provision binary 1 |
 | frontend test / a11y | Pass | 68 / 7 |
 | synthetic native E2E | Pass | 13 |
-| Issue #14 visual regression | Pass | normal / 200% mismatch 0.000% |
+| Issue #14 visual baseline review | Pass | 独立した2回のmacOS arm64 CI actualがbyte一致。synthetic dataと画面状態を目視確認してbaselineへ昇格 |
 | personal debug DMG / count-only sync / List UI | Pass | token / mapping / active mapped item非0、List非empty |
 
 ## 未実行と残リスク
 
-- Windows build、最新headのCI / review は未完了。
-- 既存5 snapshotのlocal全体比較は、旧baselineと現端末の画素寸法差により未完了。Issue #14の2 snapshotは個別比較済みで、全体比較はCIのmacOS arm64同一環境で確認する。
+- 更新baselineとE2E isolation修正を含む最新headのmacOS arm64 / x64 / Windows x64 CI、installer build、reviewは未完了。
+- 既存5 snapshotのlocal全体比較は、旧baselineと現端末の画素寸法差により未完了。Issue #14の2 snapshotは独立CI actualの一致と目視を確認済みで、全体比較は更新後headのmacOS arm64同一環境で確認する。
 - 実機の一部calendarは未対応形式を含むため、そのcalendar単位で`validation`停止した。previous token / local dataを保持し、他calendarの同期とList表示は完了した。

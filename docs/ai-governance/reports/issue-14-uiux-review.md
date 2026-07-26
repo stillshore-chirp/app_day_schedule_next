@@ -5,7 +5,7 @@
 - Issue / PR: Issue #14 / PR #15
 - Commit: PR latest head
 - Affected state: Settings > Google カレンダー、app header / Compact sync summary
-- Decision: Pending — synthetic native / 200% textとmacOS personal count-only確認はPass。Windows CI/buildとPR reviewの記録前は最終Passにしない
+- Decision: Pending — synthetic native / 200% textとmacOS personal count-only確認はPass。更新baselineを含む最終headの全platform CIとPR reviewの記録前は最終Passにしない
 - P0 / P1 / P2: 0 / 0 / 0（実装・fixture済み範囲）
 
 ## 2. User value and novice simulation
@@ -63,7 +63,8 @@
 - Frontend: Google settings component 6 tests、typed contract、a11y 7 tests
 - Native: 13 tests、[通常のcalendar recovery state](../../evidence/issue-14/native-google-calendar-recovery.png)、[200% text](../../evidence/issue-14/native-google-calendar-recovery-text-200.png)
 - Before: [OAuth接続導線だけの状態](../../evidence/issue-13/native-google-connect-after.png)。Afterはcalendar単位の権限・回復状態を同じ設定panelへ追加
-- Visual regression: Issue #14の2 snapshotはlocal baseline比0.000%（許容4.000%）。既存5 snapshotの全体比較は旧baselineと現端末の画素寸法差があるため、CIのmacOS arm64同一環境で再確認する
+- Visual regression: Issue #14の2 snapshotは独立した2回のmacOS arm64 CI actualがbyte一致し、synthetic dataだけであることと画面状態を目視確認してbaselineへ昇格した。既存5 snapshotを含む最終比較は、更新後headの同一CI環境で再確認する
+- E2E isolation: fixture themeを各証跡前にlightへ固定し、Compact windowを閉じてmain windowへ復帰する。通知履歴specではReactの5秒pollをE2E buildだけ停止し、specを唯一のclaim元にしてclock競合を排除する
 - macOS personal: personal build / debug DMGでtoken、mapping、active mapped itemが非0。Listはempty stateではなく、同期済みcalendarとvalidation calendarを設定画面で区別。個人予定本文と識別子は取得・保存していない
-- Pending: Windows CI/build、PR最新headの全snapshot比較、code review
+- Pending: 更新後headのmacOS arm64 / x64 / Windows x64 CI、全snapshot比較、installer build、code review
 - Publication: synthetic fixtureのみ。個人の予定、account、calendar / event ID、token、pathは含めない。
