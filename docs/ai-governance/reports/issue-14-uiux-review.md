@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-- Issue / PR: Issue #14 / recurrence修正PR pending
+- Issue / PR: Issue #14 / PR #17
 - Implementation commit: pending
 - Affected state: Settings > Google カレンダー、app header / Compact sync summary、複雑なGoogle繰り返し予定の編集panel
 - Decision: In progress — recurrence setの自動fixtureとmacOS native / 200% textはPass。実アカウントcount-only、最新headのCI / reviewは再確認前
