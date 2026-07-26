@@ -8,7 +8,8 @@
 | Retry scheduled | 自動再試行とデータ保持 | previous tokenとlocal data保持 | 手動同期も可能 | timeout / 429 / 5xxから再試行 | 429 / 503 / offline fixture | Pass |
 | Calendar unavailable / permission | Google共有権限の確認案内 | 該当calendarのprevious tokenとlocal data保持 | 権限修正、同期対象解除 | 他calendarは同期継続 | 403 partial-success fixture、component test | Pass |
 | Calendar unavailable / missing | Google側の削除確認案内 | 該当calendarのprevious tokenとlocal data保持 | calendar一覧更新 | 他calendarは同期継続 | 404 classification fixture | Pass |
-| Calendar unavailable / validation | 未対応形式と既存予定保持 | page適用とnew tokenをcommitしない | Google側系列確認 | 対応後に同じtokenから再試行 | RDATE reject fixture、component copy | Pass |
+| Complex recurrence | 予定を通常表示。編集panelで「表示と同期は継続」とGoogle側編集を案内 | primary / supplemental recurrence line / EXDATEとnew tokenを同一transactionで確定 | Google側で系列編集 | 次回差分同期で反映 | recurrence set / round-trip fixture、editor component test、[通常](../../evidence/issue-14/native-google-complex-recurrence.png)、[200%](../../evidence/issue-14/native-google-complex-recurrence-text-200.png) | Pass |
+| Calendar unavailable / validation | 壊れた形式または表現不能な期間型と既存予定保持 | page適用とnew tokenをcommitしない | Google側系列確認 | 修正後に同じtokenから再試行 | invalid recurrence fixture | Pass |
 | Auth required | Google再接続案内 | 全calendarのtoken、mapping、local data保持 | 再接続 | credentialだけ更新して同期再開 | 401 fixture、reauth regression | Pass |
 | Free-busy-only | 予定詳細の読取権限が必要 | event pull対象外 | Google側権限変更 | reader以上で選択可能 | role fixture、disabled checkbox test | Pass |
 | Conflict | ローカル／Google競合 | tokenを成功扱いせずlocal edit保持 | 競合解決 | field-by-field確認後に再同期 | delete-vs-edit / series pending fixture | Pass |

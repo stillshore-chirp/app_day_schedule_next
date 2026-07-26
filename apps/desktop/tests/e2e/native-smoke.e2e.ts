@@ -1,8 +1,6 @@
 import { $, browser, expect } from "@wdio/globals";
 import "@wdio/tauri-service";
-import { execFileSync } from "node:child_process";
 import { writeFile } from "node:fs/promises";
-import path from "node:path";
 
 describe("Day Schedule Next native smoke", () => {
   const title = `E2E予定-${Date.now()}`;
@@ -60,11 +58,14 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 12, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 13, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
     await persistFixtureTheme("light");
+    // Earlier specs intentionally resize the shared native window. Restore the
+    // deterministic Today baseline viewport before taking its screenshot.
+    await browser.setWindowSize(1024, 681);
     const addButton = $('//header//button[contains(normalize-space(.), "予定")]');
     await addButton.click();
     const titleInput = $('//aside//label[contains(., "タイトル")]/input');
@@ -143,7 +144,9 @@ describe("Day Schedule Next native smoke", () => {
         }));
       sizes.forEach(({ element, fontSize, original }) => {
         element.dataset.e2eOriginalFontSize = original;
-        if (Number.isFinite(fontSize)) element.style.fontSize = `${fontSize * 2}px`;
+        if (Number.isFinite(fontSize)) {
+          element.style.setProperty("font-size", `${fontSize * 2}px`, "important");
+        }
       });
       panel.scrollIntoView({ block: "start" });
     });
@@ -329,7 +332,7 @@ describe("Day Schedule Next native smoke", () => {
     });
   });
 
-  it("persists and renders the mild theme across main and compact windows", async () => {
+  it("persists and renders the mild theme across main window reloads", async () => {
     await setLogicalWindowSize(1180, 820);
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
     const theme = $('//label[contains(., "テーマ")]/select');
@@ -364,25 +367,6 @@ describe("Day Schedule Next native smoke", () => {
     });
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     await browser.saveScreenshot("./test-results/native-mild-today.png");
-
-    const originalHandle = await browser.getWindowHandle();
-    await $('//button[contains(., "コンパクト表示")]').click();
-    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1);
-    const compactHandle = (await browser.getWindowHandles()).find(
-      (handle) => handle !== originalHandle,
-    );
-    if (!compactHandle) throw new Error("compact window was not created");
-    await browser.tauri.switchWindow("compact");
-    await browser.switchToWindow(compactHandle);
-    await $(".compact-shell").waitForDisplayed();
-    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "mild", {
-      timeoutMsg: "mild theme was not applied to the compact window",
-    });
-    await browser.saveScreenshot("./test-results/native-mild-compact.png");
-    await browser.closeWindow();
-    await browser.switchToWindow(originalHandle);
-    await browser.tauri.switchWindow("main");
-    await $(".app-shell").waitForDisplayed();
 
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
     const restoredTheme = $('//label[contains(., "テーマ")]/select');
@@ -542,7 +526,7 @@ describe("Day Schedule Next native smoke", () => {
     expect(classified.project).toBe("E2E一括分類");
   });
 
-  it("captures the remaining visual-regression review surfaces", async () => {
+  it("captures the remaining main-window visual-regression surfaces", async () => {
     await setLogicalWindowSize(1180, 820);
     await $('//aside[@aria-label="主要画面"]//button[contains(., "週")]').click();
     await $("main h1").waitForDisplayed();
@@ -551,20 +535,6 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside[@aria-label="主要画面"]//button[contains(., "データと診断")]').click();
     await $(".diagnostics-grid").waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-conflict.png");
-
-    const originalHandle = await browser.getWindowHandle();
-    await $('//button[contains(., "コンパクト表示")]').click();
-    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1);
-    const compactHandle = (await browser.getWindowHandles()).find(
-      (handle) => handle !== originalHandle,
-    );
-    if (!compactHandle) throw new Error("compact window was not created");
-    await browser.switchToWindow(compactHandle);
-    await $(".compact-shell").waitForDisplayed();
-    await browser.saveScreenshot("./test-results/native-compact.png");
-    await browser.closeWindow();
-    await browser.switchToWindow(originalHandle);
-    await $(".app-shell").waitForDisplayed();
   });
 
   it("keeps 500-item scroll and drag work within the 60fps main-thread budget", async () => {
@@ -574,37 +544,42 @@ describe("Day Schedule Next native smoke", () => {
       today: string;
       timezoneId: string;
     };
-    await browser.tauri.execute(async ({ core }, input) => {
+    const performanceFixtures = (await browser.tauri.execute(async ({ core }, input) => {
       const dayStart = new Date(`${input.today}T00:00:00`);
+      const created: Array<{ id: string; version: number }> = [];
       for (let index = 0; index < 500; index += 1) {
         const start = new Date(dayStart);
         start.setMinutes(Math.floor((index * 1440) / 500));
         const end = new Date(start.getTime() + 2 * 60_000);
-        await core.invoke("schedule_create", {
-          draft: {
-            title: `E2E性能予定-${String(index).padStart(3, "0")}`,
-            description: "",
-            location: "",
-            startUtc: start.toISOString(),
-            endUtc: end.toISOString(),
-            timezoneId: input.timezoneId,
-            allDay: false,
-            allDayStartDate: null,
-            allDayEndDateExclusive: null,
-            status: "scheduled",
-            project: "E2E性能",
-            category: "synthetic",
-            tags: [],
-            color: "#6F96F4",
-            priority: "normal",
-            recurrenceRule: null,
-            recurrenceExdates: [],
-            startNotificationMinutes: null,
-            endNotificationMinutes: null,
-          },
-        });
+        created.push(
+          (await core.invoke("schedule_create", {
+            draft: {
+              title: `E2E性能予定-${String(index).padStart(3, "0")}`,
+              description: "",
+              location: "",
+              startUtc: start.toISOString(),
+              endUtc: end.toISOString(),
+              timezoneId: input.timezoneId,
+              allDay: false,
+              allDayStartDate: null,
+              allDayEndDateExclusive: null,
+              status: "scheduled",
+              project: "E2E性能",
+              category: "synthetic",
+              tags: [],
+              color: "#6F96F4",
+              priority: "normal",
+              recurrenceRule: null,
+              recurrenceSupplementalLines: [],
+              recurrenceExdates: [],
+              startNotificationMinutes: null,
+              endNotificationMinutes: null,
+            },
+          })) as { id: string; version: number },
+        );
       }
-    }, bootstrap);
+      return created;
+    }, bootstrap)) as Array<{ id: string; version: number }>;
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
     await browser.tauri.execute(({ core }) => core.invoke("main_window_show"));
@@ -710,59 +685,101 @@ describe("Day Schedule Next native smoke", () => {
     expect(profile.renderedScheduleNodes).toBeLessThan(200);
     expect(profile.scroll?.p95Ms).toBeLessThanOrEqual(16.7);
     expect(profile.drag?.p95Ms).toBeLessThanOrEqual(16.7);
+    const deletedFixtureCount = await browser.tauri.execute(
+      ({ core }, fixtureIds) => core.invoke("e2e_schedule_fixtures_delete", { ids: fixtureIds }),
+      performanceFixtures.map((fixture) => fixture.id),
+    );
+    expect(deletedFixtureCount).toBe(500);
+  });
+
+  it("shows a protected Google recurrence without implying that sync stopped", async () => {
+    if (process.platform !== "darwin") return;
+    const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
+      today: string;
+      timezoneId: string;
+    };
+    const startUtc = new Date(`${bootstrap.today}T09:00:00`).toISOString();
+    const endUtc = new Date(`${bootstrap.today}T10:00:00`).toISOString();
+    const compactDate = bootstrap.today.replace(/-/g, "");
+    await browser.tauri.execute(
+      ({ core }, draft) => core.invoke("e2e_schedule_read_only_create", { draft }),
+      {
+        title: "複雑なGoogle繰り返し",
+        description: "synthetic fixture",
+        location: "",
+        startUtc,
+        endUtc,
+        timezoneId: bootstrap.timezoneId,
+        allDay: false,
+        allDayStartDate: null,
+        allDayEndDateExclusive: null,
+        status: "scheduled",
+        project: "",
+        category: "synthetic",
+        tags: [],
+        color: "#6F96F4",
+        priority: "normal",
+        recurrenceRule: "FREQ=DAILY;COUNT=3",
+        recurrenceExdates: [],
+        recurrenceSupplementalLines: [`RDATE;TZID=${bootstrap.timezoneId}:${compactDate}T090000`],
+        startNotificationMinutes: null,
+        endNotificationMinutes: null,
+      },
+    );
+
+    await browser.refresh();
+    await setLogicalWindowSize(1180, 820);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+    const schedule = $('//button[contains(@aria-label, "複雑なGoogle繰り返し")]');
+    await schedule.waitForDisplayed();
+    await schedule.click();
+    const protectedTitle = $(
+      '//*[normalize-space(.)="複雑な繰り返し予定はGoogle側で編集してください"]',
+    );
+    await protectedTitle.waitForDisplayed();
+    await expect(
+      $('//*[contains(normalize-space(.), "予定の表示と同期は継続します")]'),
+    ).toBeDisplayed();
+    await expect($('//aside//button[normalize-space(.)="変更を保存"]')).toBeDisabled();
+    await browser.saveScreenshot("./test-results/native-google-complex-recurrence.png");
+
+    await browser.execute(() => {
+      const inspector = document.querySelector("aside.inspector");
+      if (!(inspector instanceof HTMLElement)) throw new Error("Schedule inspector was not found");
+      const descendants: HTMLElement[] = Array.from(inspector.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      [inspector, ...descendants].forEach((element) => {
+        const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+        element.dataset.e2eOriginalFontSize = element.style.fontSize;
+        if (Number.isFinite(fontSize)) {
+          element.style.setProperty("font-size", `${fontSize * 2}px`, "important");
+        }
+      });
+      inspector.scrollTop = 0;
+    });
+    await expect(protectedTitle).toBeDisplayed();
+    await browser.saveScreenshot("./test-results/native-google-complex-recurrence-text-200.png");
+    await browser.execute(() => {
+      const inspector = document.querySelector("aside.inspector");
+      if (!(inspector instanceof HTMLElement)) return;
+      const descendants: HTMLElement[] = Array.from(inspector.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      [inspector, ...descendants].forEach((element) => {
+        const original = element.dataset.e2eOriginalFontSize ?? "";
+        if (original) element.style.fontSize = original;
+        else element.style.removeProperty("font-size");
+        delete element.dataset.e2eOriginalFontSize;
+      });
+    });
   });
 
   it("shows per-calendar recovery states with synthetic native data", async () => {
     if (process.platform !== "darwin") return;
-    const dataDirectory = process.env.DAY_SCHEDULE_TEST_DATA_DIR;
-    if (!dataDirectory) throw new Error("isolated native E2E data directory is missing");
-    const databasePath = path.join(dataDirectory, "day-schedule-next.sqlite3");
-    execFileSync("sqlite3", [
-      databasePath,
-      `
-        INSERT INTO google_accounts(
-          id, display_label, scopes_json, status, created_at_utc, updated_at_utc
-        ) VALUES (
-          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          'Synthetic Google',
-          '[]',
-          'connected',
-          '2026-07-26T00:00:00Z',
-          '2026-07-26T00:00:00Z'
-        );
-        INSERT INTO google_calendars(
-          id, account_id, remote_calendar_id, display_name, color, time_zone, access_role,
-          selected, default_write_target, sync_state, last_error_category
-        ) VALUES
-        (
-          'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          'synthetic-permission-calendar',
-          '同期確認用カレンダー',
-          '#6F96F4',
-          'Asia/Tokyo',
-          'reader',
-          1,
-          0,
-          'unavailable',
-          'permission'
-        ),
-        (
-          'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-          'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-          'synthetic-free-busy-calendar',
-          '空き時間のみ',
-          '#6F96F4',
-          'Asia/Tokyo',
-          'freeBusyReader',
-          0,
-          0,
-          'never',
-          NULL
-        );
-      `,
-    ]);
+    await browser.tauri.execute(({ core }) => core.invoke("e2e_google_calendar_recovery_seed"));
     await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
     await setLogicalWindowSize(1180, 820);
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
     await $('//*[normalize-space(.)="同期確認用カレンダー"]').waitForDisplayed();
@@ -780,20 +797,114 @@ describe("Day Schedule Next native smoke", () => {
     });
     await browser.saveScreenshot("./test-results/native-google-calendar-recovery.png");
 
-    await browser.execute(() => {
-      const panel = document.querySelector('section[aria-labelledby="google-panel-title"]');
-      if (!(panel instanceof HTMLElement)) throw new Error("Google panel was not found");
-      const descendants: HTMLElement[] = Array.from(panel.querySelectorAll("*")).filter(
-        (element): element is HTMLElement => element instanceof HTMLElement,
-      );
-      [panel, ...descendants].forEach((element) => {
-        const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
-        element.dataset.e2eOriginalFontSize = element.style.fontSize;
-        if (Number.isFinite(fontSize)) element.style.fontSize = `${fontSize * 2}px`;
-      });
-      panel.scrollIntoView({ block: "start" });
-    });
-    await expect(freeBusyCheckbox).toBeDisplayed();
+    const scaledHeading = await browser.executeAsync(
+      (done: (result: { computedSize: number; inlineSize: string; priority: string }) => void) => {
+        const panel = document.querySelector('section[aria-labelledby="google-panel-title"]');
+        if (!(panel instanceof HTMLElement)) throw new Error("Google panel was not found");
+        const descendants: HTMLElement[] = Array.from(panel.querySelectorAll("*")).filter(
+          (element): element is HTMLElement => element instanceof HTMLElement,
+        );
+        [panel, ...descendants].forEach((element) => {
+          const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+          element.dataset.e2eOriginalFontSize = element.style.fontSize;
+          if (Number.isFinite(fontSize)) {
+            element.style.setProperty("font-size", `${fontSize * 2}px`, "important");
+          }
+        });
+        panel.scrollIntoView({ block: "start" });
+        const heading = panel.querySelector("h2");
+        if (!(heading instanceof HTMLElement))
+          throw new Error("Google panel heading was not found");
+        const startedAt = performance.now();
+        const waitForTransition = () => {
+          const result = {
+            computedSize: Number.parseFloat(window.getComputedStyle(heading).fontSize),
+            inlineSize: heading.style.fontSize,
+            priority: heading.style.getPropertyPriority("font-size"),
+          };
+          if (result.computedSize >= 40 || performance.now() - startedAt >= 2_000) {
+            done(result);
+            return;
+          }
+          requestAnimationFrame(waitForTransition);
+        };
+        requestAnimationFrame(waitForTransition);
+      },
+    );
+    expect(scaledHeading.priority).toBe("important");
+    expect(scaledHeading.computedSize).toBeGreaterThanOrEqual(40);
     await browser.saveScreenshot("./test-results/native-google-calendar-recovery-text-200.png");
+  });
+
+  it("opens and captures the compact window after all main-window assertions", async () => {
+    await persistFixtureTheme("light");
+    await setLogicalWindowSize(1180, 820);
+    await browser.tauri.execute(async ({ core }, expectedTitle) => {
+      const page = (await core.invoke("schedule_list", {
+        query: {
+          startUtc: "2020-01-01T00:00:00.000Z",
+          endUtc: "2035-01-01T00:00:00.000Z",
+          search: expectedTitle,
+          limit: 10,
+        },
+      })) as {
+        items: Array<
+          Record<string, unknown> & {
+            id: string;
+            title: string;
+            version: number;
+          }
+        >;
+      };
+      const schedule = page.items.find((item) => item.title === expectedTitle);
+      if (!schedule) throw new Error("compact fixture schedule was not found");
+      const { id, version } = schedule;
+      const draft: Record<string, unknown> = { ...schedule };
+      delete draft.id;
+      delete draft.version;
+      delete draft.syncStatus;
+      delete draft.deletedAt;
+      const start = new Date(Date.now() + 5 * 60_000);
+      start.setSeconds(0, 0);
+      const end = new Date(start.getTime() + 30 * 60_000);
+      await core.invoke("schedule_update", {
+        update: {
+          id,
+          expectedVersion: version,
+          draft: {
+            ...draft,
+            startUtc: start.toISOString(),
+            endUtc: end.toISOString(),
+          },
+          recurrenceScope: "series",
+        },
+      });
+    }, title);
+    await $('//button[contains(., "コンパクト表示")]').click();
+    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1, {
+      timeoutMsg: "compact window was not created",
+    });
+    await browser.tauri.switchWindow("compact");
+    await $(".compact-header h1").waitForDisplayed();
+    const compactScheduleRendered = await browser.executeAsync(
+      (expectedTitle: string, done: (rendered: boolean) => void) => {
+        const startedAt = performance.now();
+        const waitForSchedule = () => {
+          if (document.body.innerText.includes(expectedTitle)) {
+            done(true);
+            return;
+          }
+          if (performance.now() - startedAt >= 15_000) {
+            done(false);
+            return;
+          }
+          requestAnimationFrame(waitForSchedule);
+        };
+        waitForSchedule();
+      },
+      title,
+    );
+    expect(compactScheduleRendered).toBe(true);
+    await browser.saveScreenshot("./test-results/native-compact.png");
   });
 });

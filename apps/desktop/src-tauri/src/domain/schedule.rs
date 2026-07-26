@@ -156,6 +156,8 @@ pub struct ScheduleDraft {
     pub priority: Priority,
     pub recurrence_rule: Option<String>,
     #[serde(default)]
+    pub recurrence_supplemental_lines: Vec<String>,
+    #[serde(default)]
     pub recurrence_exdates: Vec<DateTime<Utc>>,
     #[serde(default)]
     pub start_notification_minutes: Option<u16>,
@@ -164,6 +166,10 @@ pub struct ScheduleDraft {
 }
 
 impl ScheduleDraft {
+    pub fn is_recurring(&self) -> bool {
+        self.recurrence_rule.is_some() || !self.recurrence_supplemental_lines.is_empty()
+    }
+
     pub fn validate(&mut self) -> AppResult<()> {
         self.title = self.title.trim().to_owned();
         if self.title.is_empty() || self.title.chars().count() > 200 {
@@ -227,6 +233,27 @@ impl ScheduleDraft {
             *rule = rule.trim().to_ascii_uppercase();
             super::validate_recurrence_rule(rule)?;
         }
+        if self.recurrence_supplemental_lines.len() > 64
+            || self.recurrence_supplemental_lines.iter().any(|line| {
+                line.is_empty()
+                    || line.len() > 2_000
+                    || !line.is_ascii()
+                    || line.trim() != line
+                    || line.contains(['\r', '\n'])
+                    || !matches!(
+                        line.split_once(':')
+                            .and_then(|(property, _)| property.split(';').next()),
+                        Some("RRULE") | Some("RDATE") | Some("EXRULE")
+                    )
+            })
+        {
+            return Err(AppError::Validation {
+                message: "繰り返し集合の追加条件が正しくありません。".into(),
+                recovery: "RRULE、RDATE、EXRULEの形式と件数を確認してから保存してください。".into(),
+            });
+        }
+        self.recurrence_supplemental_lines.sort();
+        self.recurrence_supplemental_lines.dedup();
         if self.recurrence_exdates.len() > 10_000 {
             return Err(AppError::Validation {
                 message: "繰り返し予定の例外が多すぎます。".into(),
@@ -235,6 +262,7 @@ impl ScheduleDraft {
         }
         self.recurrence_exdates.sort();
         self.recurrence_exdates.dedup();
+        super::validate_recurrence_set(self)?;
         if self
             .start_notification_minutes
             .is_some_and(|value| value > 10_080)
@@ -501,6 +529,7 @@ mod tests {
             color: "#6F96F4".into(),
             priority: Priority::Normal,
             recurrence_rule: None,
+            recurrence_supplemental_lines: Vec::new(),
             recurrence_exdates: Vec::new(),
             start_notification_minutes: None,
             end_notification_minutes: None,

@@ -21,6 +21,7 @@ function item(id: string, start: string, end: string): Schedule {
     color: "#336699",
     priority: "normal",
     recurrenceRule: null,
+    recurrenceSupplementalLines: [],
     recurrenceExdates: [],
     startNotificationMinutes: null,
     endNotificationMinutes: null,

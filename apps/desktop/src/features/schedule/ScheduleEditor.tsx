@@ -48,6 +48,7 @@ interface FormState {
   allDay: boolean;
   priority: ScheduleDraft["priority"];
   recurrenceRule: string;
+  recurrenceSupplementalLines: string[];
   recurrenceExdates: string[];
   startNotificationMinutes: string;
   endNotificationMinutes: string;
@@ -107,6 +108,7 @@ function toState(
     allDay: schedule?.allDay ?? false,
     priority: schedule?.priority ?? "normal",
     recurrenceRule: schedule?.recurrenceRule ?? "",
+    recurrenceSupplementalLines: schedule?.recurrenceSupplementalLines ?? [],
     recurrenceExdates: schedule?.recurrenceExdates ?? [],
     startNotificationMinutes: schedule?.startNotificationMinutes?.toString() ?? "",
     endNotificationMinutes: schedule?.endNotificationMinutes?.toString() ?? "",
@@ -144,6 +146,8 @@ export function ScheduleEditor({
   const [recurrencePreview, setRecurrencePreview] = useState<RecurrencePreview | null>(null);
   const [recurrenceScope, setRecurrenceScope] = useState<"this" | "following" | "series">("this");
   const readOnly = schedule?.syncStatus === "read_only";
+  const protectedGoogleRecurrence =
+    readOnly && Boolean(schedule?.recurrenceSupplementalLines.length);
   const focusSummary = useQuery({
     queryKey: ["focus-schedule-summary", schedule?.id],
     queryFn: () => client.focusScheduleSummary(schedule?.id ?? ""),
@@ -302,6 +306,7 @@ export function ScheduleEditor({
       color: state.color,
       priority: state.priority,
       recurrenceRule: state.recurrenceRule.trim() || null,
+      recurrenceSupplementalLines: state.recurrenceSupplementalLines,
       recurrenceExdates: state.recurrenceExdates,
       startNotificationMinutes:
         state.startNotificationMinutes === "" ? null : Number(state.startNotificationMinutes),
@@ -352,8 +357,19 @@ export function ScheduleEditor({
 
       <form className="inspector__form" onSubmit={(event) => void submit(event)} noValidate>
         {readOnly ? (
-          <StatusMessage tone="warning" title={translate("features.schedule.ScheduleEditor.014")}>
-            {translate("features.schedule.ScheduleEditor.015")}
+          <StatusMessage
+            tone="warning"
+            title={translate(
+              protectedGoogleRecurrence
+                ? "features.schedule.ScheduleEditor.095"
+                : "features.schedule.ScheduleEditor.014",
+            )}
+          >
+            {translate(
+              protectedGoogleRecurrence
+                ? "features.schedule.ScheduleEditor.096"
+                : "features.schedule.ScheduleEditor.015",
+            )}
           </StatusMessage>
         ) : null}
         <label>
@@ -411,6 +427,7 @@ export function ScheduleEditor({
               value={presetRecurrence(state.recurrenceRule)}
               onChange={(event) => {
                 update("recurrenceRule", event.target.value);
+                update("recurrenceSupplementalLines", []);
                 setRecurrencePreview(null);
               }}
             >
@@ -449,6 +466,7 @@ export function ScheduleEditor({
               value={state.recurrenceRule}
               onChange={(event) => {
                 update("recurrenceRule", event.target.value);
+                update("recurrenceSupplementalLines", []);
                 setRecurrencePreview(null);
               }}
               placeholder="FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH"

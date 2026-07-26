@@ -215,6 +215,9 @@ export const jaMessages = {
   "features.schedule.ScheduleEditor.092": "15分前",
   "features.schedule.ScheduleEditor.093": "30分前",
   "features.schedule.ScheduleEditor.094": "1時間前",
+  "features.schedule.ScheduleEditor.095": "複雑な繰り返し予定はGoogle側で編集してください",
+  "features.schedule.ScheduleEditor.096":
+    " RDATEや複数のRRULEなどの条件を失わないため、このアプリでは変更・削除できません。予定の表示と同期は継続します。 ",
   "features.schedule.Timeline.001": "分単位で調整",
   "features.schedule.Timeline.002": "詳細タイムライン",
   "features.schedule.Timeline.003": "縮小",

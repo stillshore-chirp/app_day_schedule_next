@@ -17,6 +17,7 @@ pub use library::{
 };
 pub use recurrence::{
     RecurrencePreview, expand_recurrence, recurrence_preview, validate_recurrence_rule,
+    validate_recurrence_set,
 };
 pub use schedule::{
     CloseBehavior, Priority, RecurrenceEditScope, Schedule, ScheduleClassificationPatch,

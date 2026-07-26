@@ -19,6 +19,7 @@ const draft: ScheduleDraft = {
   color: "#336699",
   priority: "normal",
   recurrenceRule: null,
+  recurrenceSupplementalLines: [],
   recurrenceExdates: [],
   startNotificationMinutes: null,
   endNotificationMinutes: null,

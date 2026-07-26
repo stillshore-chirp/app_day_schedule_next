@@ -39,7 +39,29 @@ const scheduleDraftFields = {
   tags: z.array(z.string().max(50)).max(20),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   priority: prioritySchema,
-  recurrenceRule: z.string().trim().min(6).max(500).nullable(),
+  recurrenceRule: z
+    .string()
+    .trim()
+    .min(6)
+    .max(500)
+    .regex(/^[\x20-\x7e]+$/)
+    .nullable(),
+  recurrenceSupplementalLines: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .max(2_000)
+        .refine(
+          (line) =>
+            line.trim() === line &&
+            /^[\x20-\x7e]+$/.test(line) &&
+            !/[\r\n]/.test(line) &&
+            /^(RRULE|RDATE|EXRULE)(;[^:]*)?:/.test(line),
+        ),
+    )
+    .max(64)
+    .default([]),
   recurrenceExdates: z
     .array(z.iso.datetime({ offset: true }))
     .max(10_000)

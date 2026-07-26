@@ -306,6 +306,7 @@ pub fn recurrence_preview_get(
         color: "#6F96F4".into(),
         priority: Priority::Normal,
         recurrence_rule: Some(request.recurrence_rule),
+        recurrence_supplemental_lines: Vec::new(),
         recurrence_exdates: Vec::new(),
         start_notification_minutes: None,
         end_notification_minutes: None,
@@ -347,6 +348,41 @@ pub async fn schedule_create(
     draft: ScheduleDraft,
 ) -> CommandResult<Schedule> {
     service.create_schedule(draft).await.map_err(Into::into)
+}
+
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn e2e_schedule_read_only_create(
+    service: State<'_, AppService>,
+    draft: ScheduleDraft,
+) -> CommandResult<Schedule> {
+    service
+        .create_read_only_schedule_fixture(draft)
+        .await
+        .map_err(Into::into)
+}
+
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn e2e_schedule_fixtures_delete(
+    service: State<'_, AppService>,
+    ids: Vec<Uuid>,
+) -> CommandResult<u64> {
+    service
+        .delete_schedule_fixtures(ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn e2e_google_calendar_recovery_seed(
+    service: State<'_, AppService>,
+) -> CommandResult<()> {
+    service
+        .seed_google_calendar_recovery_fixture()
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]

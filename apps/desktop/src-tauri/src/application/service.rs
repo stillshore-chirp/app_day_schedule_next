@@ -162,7 +162,7 @@ impl AppService {
         let timezone = timezone_id.parse::<Tz>().unwrap_or(chrono_tz::UTC);
         let settings = self.database.settings().await?;
         Ok(Bootstrap {
-            schema_version: 12,
+            schema_version: 13,
             app_version: env!("CARGO_PKG_VERSION").into(),
             today: self
                 .clock
@@ -191,6 +191,24 @@ impl AppService {
         let schedule = self.database.create_schedule(draft).await?;
         self.record_event("info", "schedule", "created", None).await;
         Ok(schedule)
+    }
+
+    #[cfg(feature = "e2e")]
+    pub async fn create_read_only_schedule_fixture(
+        &self,
+        draft: ScheduleDraft,
+    ) -> AppResult<Schedule> {
+        self.database.create_read_only_schedule_fixture(draft).await
+    }
+
+    #[cfg(feature = "e2e")]
+    pub async fn delete_schedule_fixtures(&self, ids: Vec<Uuid>) -> AppResult<u64> {
+        self.database.delete_schedule_fixtures(ids).await
+    }
+
+    #[cfg(feature = "e2e")]
+    pub async fn seed_google_calendar_recovery_fixture(&self) -> AppResult<()> {
+        self.database.seed_google_calendar_recovery_fixture().await
     }
 
     pub async fn update_schedule(

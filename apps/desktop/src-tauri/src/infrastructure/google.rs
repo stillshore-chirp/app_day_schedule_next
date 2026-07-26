@@ -2184,7 +2184,7 @@ async fn set_master_exdate(
         .map_err(|error| AppError::database("sync-recurrence-master-read", error))?
         .ok_or_else(|| AppError::database("sync-recurrence-master-missing", "missing"))?;
     let mut master = row_to_schedule(&master_row)?;
-    if master.draft.recurrence_rule.is_none() {
+    if !master.draft.is_recurring() {
         return Err(validation(
             "Google再発例外の親予定が繰り返し系列ではありません。",
             "同期トークンは更新していません。対象カレンダーを再同期してください。",
@@ -2381,7 +2381,7 @@ async fn apply_remote_event_independent(
             return Ok(());
         }
         if cancelled {
-            if local.draft.recurrence_rule.is_some() {
+            if local.draft.is_recurring() {
                 let linked_pending: bool = sqlx::query_scalar(
                     "SELECT EXISTS(SELECT 1 FROM schedule_items s JOIN sync_outbox o ON o.entity_id = s.id WHERE s.recurrence_series_id = ? AND o.completed_at_utc IS NULL)",
                 )
@@ -2430,7 +2430,9 @@ async fn apply_remote_event_independent(
         }
         let mut draft = remote_event_to_draft_in_timezone(&event, calendar_timezone_id)?;
         draft.validate()?;
-        let read_only = !matches!(access_role, "owner" | "writer") || event_is_read_only(&event);
+        let read_only = !matches!(access_role, "owner" | "writer")
+            || event_is_read_only(&event)
+            || !draft.recurrence_supplemental_lines.is_empty();
         let updated = Schedule {
             id: local.id,
             draft,
@@ -2474,7 +2476,9 @@ async fn apply_remote_event_independent(
     } else {
         Uuid::new_v4()
     };
-    let read_only = !matches!(access_role, "owner" | "writer") || event_is_read_only(&event);
+    let read_only = !matches!(access_role, "owner" | "writer")
+        || event_is_read_only(&event)
+        || !draft.recurrence_supplemental_lines.is_empty();
     let schedule = Schedule {
         id,
         draft,
@@ -2837,11 +2841,12 @@ fn remote_event_to_draft_in_timezone(
         .filter(|value| value.starts_with("RRULE:"))
         .copied()
         .collect::<Vec<_>>();
-    if rule_lines.len() > 1
-        || recurrence_lines
-            .iter()
-            .any(|value| !value.starts_with("RRULE:") && !value.starts_with("EXDATE"))
-    {
+    if recurrence_lines.iter().any(|value| {
+        !value.starts_with("RRULE:")
+            && !value.starts_with("RDATE")
+            && !value.starts_with("EXRULE:")
+            && !value.starts_with("EXDATE")
+    }) {
         return Err(validation(
             "このGoogle繰り返し設定には未対応の要素があります。",
             "予定を変更せず同期を停止しました。Google側の系列を確認してください。",
@@ -2850,6 +2855,14 @@ fn remote_event_to_draft_in_timezone(
     let recurrence_rule = rule_lines
         .first()
         .map(|value| value.trim_start_matches("RRULE:").to_owned());
+    let first_rule = rule_lines.first().copied();
+    let recurrence_supplemental_lines = recurrence_lines
+        .iter()
+        .filter(|value| {
+            !value.starts_with("EXDATE") && first_rule.is_none_or(|first| **value != first)
+        })
+        .map(|value| (*value).to_owned())
+        .collect::<Vec<_>>();
     let mut recurrence_exdates = Vec::new();
     for line in recurrence_lines
         .iter()
@@ -2874,6 +2887,7 @@ fn remote_event_to_draft_in_timezone(
         color: "#6F96F4".into(),
         priority: Priority::Normal,
         recurrence_rule,
+        recurrence_supplemental_lines,
         recurrence_exdates,
         start_notification_minutes: None,
         end_notification_minutes: None,
@@ -2926,8 +2940,8 @@ fn parse_google_exdate_line(
                 );
             }
             if value.ends_with('Z') {
-                return DateTime::parse_from_str(value, "%Y%m%dT%H%M%SZ")
-                    .map(|value| value.with_timezone(&Utc))
+                return chrono::NaiveDateTime::parse_from_str(value, "%Y%m%dT%H%M%SZ")
+                    .map(|value| Utc.from_utc_datetime(&value))
                     .map_err(|_| {
                         validation(
                             "Google繰り返し例外の時刻が正しくありません。",
@@ -3058,8 +3072,14 @@ fn apply_owned_fields(event: &mut Value, schedule: &Schedule, event_id: &str) ->
             serde_json::json!({ "dateTime": schedule.draft.end_utc.to_rfc3339(), "timeZone": schedule.draft.timezone_id }),
         );
     }
-    if let Some(rule) = &schedule.draft.recurrence_rule {
-        let mut recurrence = vec![format!("RRULE:{rule}")];
+    if schedule.draft.is_recurring() {
+        let mut recurrence = schedule
+            .draft
+            .recurrence_rule
+            .as_ref()
+            .map(|rule| vec![format!("RRULE:{rule}")])
+            .unwrap_or_default();
+        recurrence.extend(schedule.draft.recurrence_supplemental_lines.iter().cloned());
         if !schedule.draft.recurrence_exdates.is_empty() {
             recurrence.push(format!(
                 "EXDATE:{}",
@@ -3741,6 +3761,7 @@ mod tests {
             color: "#6F96F4".into(),
             priority: Priority::Normal,
             recurrence_rule: None,
+            recurrence_supplemental_lines: Vec::new(),
             recurrence_exdates: Vec::new(),
             start_notification_minutes: None,
             end_notification_minutes: None,
@@ -4130,12 +4151,195 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_recurrence_parts_are_rejected_instead_of_silently_dropped() {
-        let mut event = remote_event("unsupported-recurrence", "Unsupported recurrence");
-        event["recurrence"] =
-            serde_json::json!(["RRULE:FREQ=DAILY;COUNT=3", "RDATE:20260723T000000Z"]);
+    fn google_recurrence_set_parts_are_imported_without_silent_loss() {
+        let mut event = remote_event("recurrence-set", "Recurrence set");
+        event["recurrence"] = serde_json::json!([
+            "RRULE:FREQ=DAILY;COUNT=3",
+            "RDATE;TZID=UTC:20260723T000000",
+            "EXRULE:FREQ=WEEKLY;BYDAY=SU",
+            "EXDATE:20260721T000000Z"
+        ]);
 
-        assert!(remote_event_to_draft(&event).is_err());
+        let mut draft = remote_event_to_draft(&event).unwrap();
+        draft.validate().unwrap();
+
+        assert_eq!(draft.recurrence_rule.as_deref(), Some("FREQ=DAILY;COUNT=3"));
+        assert_eq!(
+            draft.recurrence_supplemental_lines,
+            [
+                "EXRULE:FREQ=WEEKLY;BYDAY=SU",
+                "RDATE;TZID=UTC:20260723T000000"
+            ]
+        );
+        assert_eq!(
+            draft.recurrence_exdates,
+            [Utc.with_ymd_and_hms(2026, 7, 21, 0, 0, 0).unwrap()]
+        );
+
+        let schedule = Schedule {
+            id: Uuid::new_v4(),
+            draft,
+            sync_status: SyncStatus::ReadOnly,
+            version: 1,
+            deleted_at: None,
+        };
+        let mut encoded = serde_json::json!({});
+        apply_owned_fields(&mut encoded, &schedule, "recurrence-set").unwrap();
+        assert_eq!(
+            encoded["recurrence"],
+            serde_json::json!([
+                "RRULE:FREQ=DAILY;COUNT=3",
+                "EXRULE:FREQ=WEEKLY;BYDAY=SU",
+                "RDATE;TZID=UTC:20260723T000000",
+                "EXDATE:20260721T000000Z"
+            ])
+        );
+    }
+
+    #[test]
+    fn google_ordinal_byday_rule_is_imported() {
+        let mut event = remote_event("ordinal-byday", "Ordinal weekday");
+        event["recurrence"] = serde_json::json!(["RRULE:FREQ=MONTHLY;COUNT=3;BYDAY=-1MO;WKST=SU"]);
+
+        let mut draft = remote_event_to_draft(&event).unwrap();
+        draft.validate().unwrap();
+    }
+
+    #[tokio::test]
+    async fn complex_google_recurrence_commits_the_event_and_next_sync_token() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, None).await;
+        let mut event = remote_event("complex-recurrence", "Complex recurrence");
+        event["recurrence"] = serde_json::json!([
+            "RRULE:FREQ=DAILY;COUNT=3",
+            "RRULE:FREQ=MONTHLY;COUNT=2;BYDAY=-1MO;WKST=SU",
+            "RDATE;TZID=UTC:20260723T000000",
+            "EXRULE:FREQ=WEEKLY;BYDAY=SU",
+            "EXDATE:20260721T000000Z"
+        ]);
+        let (api_root, server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [event],
+                "nextSyncToken": "complex-recurrence-token"
+            }),
+        )])
+        .await;
+
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &api_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+
+        let stored: (String, String, String, String, String) = sqlx::query_as(
+            "SELECT s.sync_status, s.recurrence_rule, s.recurrence_supplemental_lines_json, c.sync_state, c.sync_token FROM schedule_items s JOIN sync_mappings m ON m.schedule_item_id = s.id JOIN google_calendars c ON c.id = m.calendar_id WHERE m.calendar_id = ? AND m.remote_event_id = 'complex-recurrence'",
+        )
+        .bind(calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+
+        assert_eq!(stored.0, "read_only");
+        assert_eq!(stored.1, "FREQ=DAILY;COUNT=3");
+        assert_eq!(
+            serde_json::from_str::<Vec<String>>(&stored.2).unwrap(),
+            [
+                "EXRULE:FREQ=WEEKLY;BYDAY=SU",
+                "RDATE;TZID=UTC:20260723T000000",
+                "RRULE:FREQ=MONTHLY;COUNT=2;BYDAY=-1MO;WKST=SU"
+            ]
+        );
+        assert_eq!(stored.3, "synced");
+        assert_eq!(stored.4, "complex-recurrence-token");
+    }
+
+    #[tokio::test]
+    async fn unrepresentable_recurrence_preserves_the_previous_token_and_events() {
+        let database = Database::open_memory().await.unwrap();
+        let calendar_id = seed_calendar(&database, None).await;
+        let (initial_root, initial_server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [remote_event("preserved-event", "Preserved event")],
+                "nextSyncToken": "preserved-token"
+            }),
+        )])
+        .await;
+        pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: None,
+                api_root: &initial_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await
+        .unwrap();
+        initial_server.await.unwrap();
+
+        let mut event = remote_event("period-rdate", "Period RDATE");
+        event["recurrence"] = serde_json::json!([
+            "RRULE:FREQ=DAILY;COUNT=2",
+            "RDATE;VALUE=PERIOD:20260723T000000Z/20260723T020000Z"
+        ]);
+        let (invalid_root, invalid_server) = spawn_http_sequence(vec![MockHttpResponse::json(
+            "200 OK",
+            serde_json::json!({
+                "items": [event],
+                "nextSyncToken": "must-not-commit"
+            }),
+        )])
+        .await;
+        let result = pull_one_calendar_at(
+            &database,
+            &Client::new(),
+            "synthetic-access-token",
+            CalendarPullRequest {
+                local_calendar_id: &calendar_id,
+                remote_calendar_id: "synthetic-calendar",
+                access_role: "owner",
+                initial_sync_token: Some("preserved-token"),
+                api_root: &invalid_root,
+            },
+            &OperationCancellation::default(),
+        )
+        .await;
+        invalid_server.await.unwrap();
+
+        let calendar: (String, String) =
+            sqlx::query_as("SELECT sync_state, sync_token FROM google_calendars WHERE id = ?")
+                .bind(&calendar_id)
+                .fetch_one(&database.pool)
+                .await
+                .unwrap();
+        let active_mapped_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM schedule_items s JOIN sync_mappings m ON m.schedule_item_id = s.id WHERE m.calendar_id = ? AND s.deleted_at_utc IS NULL",
+        )
+        .bind(calendar_id)
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+
+        assert!(matches!(result, Err(AppError::Validation { .. })));
+        assert_eq!(calendar, ("unavailable".into(), "preserved-token".into()));
+        assert_eq!(active_mapped_count, 1);
     }
 
     #[tokio::test]

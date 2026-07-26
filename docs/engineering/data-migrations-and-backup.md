@@ -93,3 +93,10 @@ Rules:
 - v11以前からのmigrationでは、既存`sync_token`があるcalendarを`synced`、ないcalendarを`never`へbackfillする。token、mapping、選択、既定書込先は変更しない。
 - error categoryには予定本文、calendar / event ID、HTTP body、tokenを保存しない。
 - fresh DBのdefault / constraint testと、v11→v12でtoken・完了時刻を保持するmigration testを必須とする。
+
+## 11. Recurrence set compatibility
+
+- schema version 13 は`schedule_items.recurrence_supplemental_lines_json`を追加し、primary RRULE / EXDATEでは表せない追加RRULE、RDATE、legacy EXRULEをJSON arrayで保持する。
+- v12以前からのmigrationは既存`recurrence_rule`、`recurrence_exdates_json`、schedule、mapping、tokenを変更せず、補助lineを空arrayでbackfillする。
+- forward-only migrationとし、v13 DBを古いbinaryで開いて補助lineを捨てるdowngradeを許可しない。
+- fresh DB、v12 upgrade、JSON array constraint、既存recurrence保持、50,000 schedule rowsのmigration budget testを必須とする。
