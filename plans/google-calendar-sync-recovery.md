@@ -143,16 +143,16 @@ node scripts/verify-agent-harness.mjs
 | `cargo fmt` / clippy / `cargo test --workspace --all-features` | Pass | Rust 107 + provision binary 1 |
 | frontend format / lint / typecheck / test / a11y / build | Pass | 70 / 7、production build |
 | recurrence v13 migration performance | Pass | synthetic 50,000 rows、30秒budget内 |
-| synthetic native E2E | Pass | E2E専用SQLx fixtureへ統一し、Compact windowをWebDriver handleだけで往復後、全3 spec / 14 testとGoogle関連2 testの独立実行がPass |
+| synthetic native E2E | Pass | E2E専用SQLx fixtureへ統一し、Compact windowをWDIO公式label APIだけで往復後、全3 spec / 14 testとGoogle関連2 testの独立実行がPass |
 | native fixture portability | Pass | OS付属`sqlite3` CLIを廃止。production buildへ登録されないE2E feature限定commandで同じapp DB adapterを使用 |
-| native window isolation | Pass | Tauri service独自のactive-window状態を変更せず、WebDriver handleでcompactを閉じてmainへ復帰。後続のrecurrence / notification / short-scheduleを同一full runで完走 |
+| native window isolation | Pass | WDIO公式label APIでmainへ戻った後、E2E feature限定commandでcompactを閉じる。E2E configだけcompactへWDIO権限を付与し、後続のrecurrence / notification / short-scheduleを同一full runで完走 |
 | normal macOS debug DMG | Pass | aarch64 debug app / DMG bundle |
 | `rrule` dependency audit | Pass | 0.14、MIT OR Apache-2.0、既存のchrono / chrono-tz / regex / log / thiserrorのみ、parser入力にhard limit |
 | Issue #14 visual baseline review | Pass | normalは独立CI actualがbyte一致。200%は最新CI actualで文字拡大とsynthetic状態を目視確認し、誤って100%だったbaselineを置換 |
 | personal debug DMG / count-only sync / List UI | Fail | 一部eventは表示されたが、選択calendarが標準recurrenceを`validation`扱いして停止したため完了証跡にならない |
 | latest personal count-only revalidation | Blocked | 通常profileは接続0件。古い検証コピーはcredential取得段階で再試行となり、event取得へ進めない。実DB・元backupは変更せず、一時コピーを削除 |
 | PR CI / dependency audit | Pass | recurrence fixture portability変更後のrun `30201348234` / `30201348235` |
-| all-platform native / installer | In progress | run `30201398101`はmacOS arm64 / WindowsがPass。macOS x64はcompact復帰後のTauri service direct-eval timeoutで製品assertion到達前に失敗し、WebDriver handleだけを使う修正をlocal full runで検証済み。最新headで再実行する |
+| all-platform native / installer | In progress | run `30201938793`はmacOS arm64 / WindowsがE2E・installerまでPass。macOS x64はcompactを閉じる際にWDIO label状態とraw handle操作を混在させ、以降のwindowを失って製品assertion到達前に失敗。公式label APIとE2E限定closeへ統一し、local full runで検証済み。最新headで再実行する |
 | PR review state | Pending | 最新headのCI成功後にconversation / review submission / review threadを再確認する |
 
 ## 未実行と残リスク

@@ -35,6 +35,15 @@ describe("Day Schedule Next native smoke", () => {
     });
   };
 
+  const closeCompactWindowAndReturnToMain = async () => {
+    await browser.tauri.switchWindow("main");
+    await browser.tauri.execute(({ core }) => core.invoke("e2e_compact_window_close"));
+    await browser.waitUntil(async () => !(await browser.tauri.listWindows()).includes("compact"), {
+      timeoutMsg: "compact window was not closed",
+    });
+    await $(".app-shell").waitForDisplayed();
+  };
+
   const persistFixtureTheme = async (theme: "light" | "mild" | "dark") => {
     const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
       settings: Record<string, unknown>;
@@ -363,22 +372,17 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     await browser.saveScreenshot("./test-results/native-mild-today.png");
 
-    const originalHandle = await browser.getWindowHandle();
     await $('//button[contains(., "コンパクト表示")]').click();
-    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1);
-    const compactHandle = (await browser.getWindowHandles()).find(
-      (handle) => handle !== originalHandle,
-    );
-    if (!compactHandle) throw new Error("compact window was not created");
-    await browser.switchToWindow(compactHandle);
+    await browser.waitUntil(async () => (await browser.tauri.listWindows()).includes("compact"), {
+      timeoutMsg: "compact window was not created",
+    });
+    await browser.tauri.switchWindow("compact");
     await $(".compact-shell").waitForDisplayed();
     await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "mild", {
       timeoutMsg: "mild theme was not applied to the compact window",
     });
     await browser.saveScreenshot("./test-results/native-mild-compact.png");
-    await browser.closeWindow();
-    await browser.switchToWindow(originalHandle);
-    await $(".app-shell").waitForDisplayed();
+    await closeCompactWindowAndReturnToMain();
 
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
     const restoredTheme = $('//label[contains(., "テーマ")]/select');
@@ -548,19 +552,14 @@ describe("Day Schedule Next native smoke", () => {
     await $(".diagnostics-grid").waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-conflict.png");
 
-    const originalHandle = await browser.getWindowHandle();
     await $('//button[contains(., "コンパクト表示")]').click();
-    await browser.waitUntil(async () => (await browser.getWindowHandles()).length > 1);
-    const compactHandle = (await browser.getWindowHandles()).find(
-      (handle) => handle !== originalHandle,
-    );
-    if (!compactHandle) throw new Error("compact window was not created");
-    await browser.switchToWindow(compactHandle);
+    await browser.waitUntil(async () => (await browser.tauri.listWindows()).includes("compact"), {
+      timeoutMsg: "compact window was not created",
+    });
+    await browser.tauri.switchWindow("compact");
     await $(".compact-shell").waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-compact.png");
-    await browser.closeWindow();
-    await browser.switchToWindow(originalHandle);
-    await $(".app-shell").waitForDisplayed();
+    await closeCompactWindowAndReturnToMain();
   });
 
   it("keeps 500-item scroll and drag work within the 60fps main-thread budget", async () => {
