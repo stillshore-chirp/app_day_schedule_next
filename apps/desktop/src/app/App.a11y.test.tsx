@@ -18,6 +18,7 @@ afterEach(() => {
     search: "",
     createRange: null,
     referenceMinute: 480,
+    templateFocusPending: false,
   });
 });
 

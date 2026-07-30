@@ -10,6 +10,7 @@ import { DayOverview } from "./DayOverview";
 import { NowDock } from "./NowDock";
 import { ScheduleEditor } from "./ScheduleEditor";
 import { Timeline } from "./Timeline";
+import { resolveDisplayedTemplate } from "./template-selection";
 import { useScheduleActions, useSchedules } from "./use-schedules";
 
 interface TodayViewProps {
@@ -31,11 +32,16 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     referenceMinute,
     setReferenceMinute,
     setActiveView,
+    openTemplateEditor,
   } = useUiStore();
   const schedulesQuery = useSchedules(client, selectedDate, search);
   const quickBlocksQuery = useQuery({
     queryKey: ["quick-blocks"],
     queryFn: () => client.listQuickBlocks(),
+  });
+  const templatesQuery = useQuery({
+    queryKey: ["templates"],
+    queryFn: () => client.listTemplates(),
   });
   const alarmsQuery = useQuery({
     queryKey: ["free-alarms"],
@@ -84,6 +90,10 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     [quickBlocksQuery.data, selectedDate],
   );
   const schedules = [...(schedulesQuery.data?.items ?? []), ...quickSchedules];
+  const displayedTemplate = resolveDisplayedTemplate(
+    templatesQuery.data ?? [],
+    bootstrap.settings.lastTemplateId,
+  );
   const quickBlockIds = new Set((quickBlocksQuery.data ?? []).map((item) => item.id));
   const selected = schedules.find((item) => item.id === selectedScheduleId) ?? null;
   const busy = actions.create.isPending || actions.update.isPending || actions.remove.isPending;
@@ -230,40 +240,33 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             {translate("features.schedule.TodayView.016")}
           </StatusMessage>
         ) : null}
-        {!schedulesQuery.isLoading && schedules.length === 0 ? (
-          <section className="empty-state">
-            <span className="empty-state__icon" aria-hidden="true">
-              ＋
-            </span>
-            <h2>{translate("features.schedule.TodayView.017")}</h2>
-            <p>{translate("features.schedule.TodayView.018")}</p>
-            <button className="button button--primary" type="button" onClick={() => openCreate()}>
-              {translate("features.schedule.TodayView.019")}
-            </button>
-          </section>
-        ) : (
-          <>
-            <DayOverview
-              schedules={schedules}
-              selectedDate={selectedDate}
-              selectedId={selectedScheduleId}
-              onSelect={choose}
-              referenceMinute={referenceMinute}
-              onReferenceChange={setReferenceMinute}
-            />
-            <Timeline
-              schedules={schedules}
-              selectedDate={selectedDate}
-              selectedId={selectedScheduleId}
-              onSelect={choose}
-              snapMinutes={bootstrap.settings.snapMinutes}
-              onCreate={() => openCreate()}
-              onCreateRange={(startUtc, endUtc) => openCreate({ startUtc, endUtc })}
-              onAdjust={(schedule, startUtc, endUtc) => adjustSchedule(schedule, startUtc, endUtc)}
-              referenceMinute={referenceMinute}
-            />
-          </>
-        )}
+        <DayOverview
+          schedules={schedules}
+          scheduleState={schedulesQuery.isLoading ? "loading" : "ready"}
+          selectedDate={selectedDate}
+          selectedId={selectedScheduleId}
+          onSelect={choose}
+          onCreateSchedule={() => openCreate()}
+          template={displayedTemplate}
+          templateState={
+            templatesQuery.isLoading ? "loading" : templatesQuery.isError ? "error" : "ready"
+          }
+          onRetryTemplate={() => void templatesQuery.refetch()}
+          onEditTemplate={openTemplateEditor}
+          referenceMinute={referenceMinute}
+          onReferenceChange={setReferenceMinute}
+        />
+        <Timeline
+          schedules={schedules}
+          selectedDate={selectedDate}
+          selectedId={selectedScheduleId}
+          onSelect={choose}
+          snapMinutes={bootstrap.settings.snapMinutes}
+          onCreate={() => openCreate()}
+          onCreateRange={(startUtc, endUtc) => openCreate({ startUtc, endUtc })}
+          onAdjust={(schedule, startUtc, endUtc) => adjustSchedule(schedule, startUtc, endUtc)}
+          referenceMinute={referenceMinute}
+        />
       </main>
       {editorMode !== "closed" ? (
         <ScheduleEditor
