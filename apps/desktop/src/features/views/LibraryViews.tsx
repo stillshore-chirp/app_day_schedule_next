@@ -1,5 +1,5 @@
 import { appLocale, translate } from "../../shared/i18n/messages";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   dayTemplateDraftSchema,
@@ -14,6 +14,7 @@ import {
 } from "../../shared/contracts";
 import type { AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
+import { useUiStore } from "../../app/ui-store";
 import { ViewTitle } from "./CalendarViews";
 
 const WEEKDAYS = [
@@ -45,6 +46,7 @@ export function TemplatesView({
   settings: Settings;
 }) {
   const queryClient = useQueryClient();
+  const { templateFocusPending, consumeTemplateFocus } = useUiStore();
   const [templates, setTemplates] = useState<DayTemplate[]>([]);
   const [quickBlocks, setQuickBlocks] = useState<QuickBlock[]>([]);
   const [selected, setSelected] = useState<DayTemplate | null>(null);
@@ -65,15 +67,23 @@ export function TemplatesView({
   const [applyDate, setApplyDate] = useState(() => localDateInput(new Date()));
   const [applyMode, setApplyMode] = useState<"add" | "replace">("add");
   const [preview, setPreview] = useState<TemplatePreview | null>(null);
+  const selectionSaveQueue = useRef(Promise.resolve());
 
-  const refresh = async () => {
+  const refresh = async (preferredTemplateId = selected?.id ?? null) => {
     const [nextTemplates, nextQuickBlocks] = await Promise.all([
       client.listTemplates(),
       client.listQuickBlocks(),
     ]);
     setTemplates(nextTemplates);
     setQuickBlocks(nextQuickBlocks);
-    if (!selected && nextTemplates[0]) chooseTemplate(nextTemplates[0], false);
+    const nextSelected =
+      nextTemplates.find((template) => template.id === preferredTemplateId) ??
+      nextTemplates[0] ??
+      null;
+    setSelected(nextSelected);
+    setDraft(nextSelected ? toTemplateDraft(nextSelected) : emptyTemplate());
+    queryClient.setQueryData(["templates"], nextTemplates);
+    return nextTemplates;
   };
 
   useEffect(() => {
@@ -83,6 +93,7 @@ export function TemplatesView({
         if (!active) return;
         setTemplates(nextTemplates);
         setQuickBlocks(nextQuickBlocks);
+        queryClient.setQueryData(["templates"], nextTemplates);
         const initial =
           nextTemplates.find((template) => template.id === settings.lastTemplateId) ??
           nextTemplates[0];
@@ -95,16 +106,34 @@ export function TemplatesView({
     return () => {
       active = false;
     };
-  }, [client, settings.lastTemplateId]);
+  }, [client, queryClient, settings.lastTemplateId]);
+
+  useEffect(() => {
+    if (!templateFocusPending) return;
+    const timeout = window.setTimeout(() => {
+      document.getElementById("template-editor-title")?.focus();
+      consumeTemplateFocus();
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [consumeTemplateFocus, templateFocusPending]);
+
+  const persistTemplateSelection = (templateId: string) => {
+    selectionSaveQueue.current = selectionSaveQueue.current.then(async () => {
+      try {
+        await client.updateSettings({ ...settings, lastTemplateId: templateId });
+        await queryClient.invalidateQueries({ queryKey: ["bootstrap"] });
+      } catch {
+        setError(translate("features.views.LibraryViews.153"));
+      }
+    });
+  };
 
   const chooseTemplate = (template: DayTemplate, persist = true) => {
     setSelected(template);
     setDraft(toTemplateDraft(template));
     setDeleteTarget(null);
     setError(null);
-    if (persist && settings.lastTemplateId !== template.id) {
-      void client.updateSettings({ ...settings, lastTemplateId: template.id });
-    }
+    if (persist) persistTemplateSelection(template.id);
   };
 
   const saveTemplate = async () => {
@@ -120,8 +149,9 @@ export function TemplatesView({
         ...(selected ? { id: selected.id, expectedVersion: selected.version } : {}),
         draft: parsed.data,
       });
-      await refresh();
+      await refresh(saved.id);
       chooseTemplate(saved);
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
       setMessage(translate("features.views.LibraryViews.010"));
     } catch {
       setError(translate("features.views.LibraryViews.011"));
@@ -136,7 +166,8 @@ export function TemplatesView({
       await client.deleteTemplate({ id: template.id, expectedVersion: template.version });
       setSelected(null);
       setDraft(emptyTemplate());
-      await refresh();
+      await refresh(null);
+      await queryClient.invalidateQueries({ queryKey: ["templates"] });
       setMessage(translate("features.views.LibraryViews.012"));
     } catch {
       setError(translate("features.views.LibraryViews.013"));
@@ -234,10 +265,8 @@ export function TemplatesView({
     const ids = movedIds(templates, id, direction);
     if (!ids) return;
     await client.reorderTemplates(ids);
-    const next = await client.listTemplates();
-    setTemplates(next);
-    const current = next.find((item) => item.id === selected?.id);
-    if (current) chooseTemplate(current, false);
+    await refresh(selected?.id ?? null);
+    await queryClient.invalidateQueries({ queryKey: ["templates"] });
   };
 
   const moveQuickBlock = async (id: string, direction: -1 | 1) => {
@@ -383,7 +412,7 @@ export function TemplatesView({
           ))}
         </section>
         <section className="library-editor" aria-labelledby="template-editor-title">
-          <h2 id="template-editor-title">
+          <h2 id="template-editor-title" tabIndex={-1}>
             {selected
               ? translate("features.views.LibraryViews.036")
               : translate("features.views.LibraryViews.037")}
@@ -837,7 +866,7 @@ export function TemplatesView({
                 onClick={() =>
                   void client
                     .deleteQuickBlock({ id: item.id, expectedVersion: item.version })
-                    .then(refresh)
+                    .then(() => refresh())
                 }
               >
                 {translate("features.views.LibraryViews.105")}

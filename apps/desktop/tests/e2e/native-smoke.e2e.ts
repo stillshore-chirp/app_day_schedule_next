@@ -90,6 +90,170 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-list.png");
   });
 
+  it("compares schedules with a read-only template across normal, empty, narrow, and 200% text states", async () => {
+    await setLogicalWindowSize(1180, 820);
+    const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
+      settings: Record<string, unknown>;
+      today: string;
+      timezoneId: string;
+    };
+    const template = (await browser.tauri.execute(
+      ({ core }, draft) => core.invoke("template_save", { input: { draft } }),
+      {
+        name: "比較用テンプレート",
+        description: "synthetic native evidence",
+        color: "#6F96F4",
+        weekdaysMask: 127,
+        blocks: [
+          {
+            title: "朝の準備",
+            startMinute: 420,
+            durationMinutes: 45,
+            color: "#F4B96F",
+            project: "synthetic",
+            category: "evidence",
+          },
+          {
+            title: "集中作業",
+            startMinute: 540,
+            durationMinutes: 90,
+            color: "#6F96F4",
+            project: "synthetic",
+            category: "evidence",
+          },
+          {
+            title: "短い確認",
+            startMinute: 625,
+            durationMinutes: 10,
+            color: "#68B984",
+            project: "synthetic",
+            category: "evidence",
+          },
+          {
+            title: "翌日の準備",
+            startMinute: 1439,
+            durationMinutes: 60,
+            color: "#B784E8",
+            project: "synthetic",
+            category: "evidence",
+          },
+        ],
+      },
+    )) as { id: string };
+    await browser.tauri.execute(
+      ({ core }, settings) => core.invoke("settings_update", { settings }),
+      { ...bootstrap.settings, lastTemplateId: template.id },
+    );
+    await browser.tauri.execute(
+      async ({ core }, input) => {
+        const dayStart = new Date(`${input.today}T00:00:00`);
+        const drafts = [
+          { title: "午前の予定", startMinute: 540, durationMinutes: 60, color: "#6F96F4" },
+          { title: "重なる予定", startMinute: 595, durationMinutes: 45, color: "#68B984" },
+          { title: "日跨ぎ予定", startMinute: 1410, durationMinutes: 60, color: "#F4B96F" },
+        ];
+        for (const fixture of drafts) {
+          const start = new Date(dayStart);
+          start.setMinutes(fixture.startMinute);
+          const end = new Date(start.getTime() + fixture.durationMinutes * 60_000);
+          await core.invoke("schedule_create", {
+            draft: {
+              title: fixture.title,
+              description: "synthetic native evidence",
+              location: "",
+              startUtc: start.toISOString(),
+              endUtc: end.toISOString(),
+              timezoneId: input.timezoneId,
+              allDay: false,
+              allDayStartDate: null,
+              allDayEndDateExclusive: null,
+              status: "scheduled",
+              project: "synthetic",
+              category: "evidence",
+              tags: [],
+              color: fixture.color,
+              priority: "normal",
+              recurrenceRule: null,
+              recurrenceSupplementalLines: [],
+              recurrenceExdates: [],
+              startNotificationMinutes: null,
+              endNotificationMinutes: null,
+            },
+          });
+        }
+      },
+      { today: bootstrap.today, timezoneId: bootstrap.timezoneId },
+    );
+
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+    await $('//h3[normalize-space(.)="比較用テンプレート"]').waitForDisplayed();
+    await $(".overview-template-block").waitForDisplayed();
+    const laneOverflows = await browser.execute(() =>
+      Array.from(document.querySelectorAll<HTMLElement>(".overview-lane__track")).flatMap(
+        (track, laneIndex) => {
+          const trackBounds = track.getBoundingClientRect();
+          return Array.from(
+            track.querySelectorAll<HTMLElement>(".overview-event, .overview-template-block"),
+          )
+            .filter((block) => block.getBoundingClientRect().bottom > trackBounds.bottom + 1)
+            .map((block) => {
+              const blockBounds = block.getBoundingClientRect();
+              return {
+                laneIndex,
+                title: block.getAttribute("title"),
+                trackHeight: trackBounds.height,
+                trackInlineMinHeight: track.style.minHeight,
+                trackComputedMinHeight: window.getComputedStyle(track).minHeight,
+                blockTop: blockBounds.top - trackBounds.top,
+                blockHeight: blockBounds.height,
+                overflowPixels: blockBounds.bottom - trackBounds.bottom,
+              };
+            });
+        },
+      ),
+    );
+    expect(laneOverflows).toEqual([]);
+    await browser.saveScreenshot("./test-results/native-today-dual-strip.png");
+
+    const nextDay = $('//header//button[@aria-label="次の日"]');
+    await nextDay.click();
+    await nextDay.click();
+    await $('//*[normalize-space(.)="今日の予定はありません"]').waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-today-dual-strip-empty.png");
+    await $('//header//button[normalize-space(.)="今日"]').click();
+    await $(".overview-template-block").waitForDisplayed();
+
+    await setLogicalWindowSize(720, 820);
+    await browser.saveScreenshot("./test-results/native-today-dual-strip-narrow.png");
+
+    await setLogicalWindowSize(1180, 820);
+    await browser.execute(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    await browser.waitUntil(
+      async () =>
+        browser.execute(
+          () => Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) >= 32,
+        ),
+      { timeoutMsg: "root text size did not reach 200%" },
+    );
+    await browser.pause(100);
+    await browser.saveScreenshot("./test-results/native-today-dual-strip-text-200.png");
+    await browser.execute(() => {
+      document.documentElement.style.fontSize = "";
+    });
+
+    await $('//button[normalize-space(.)="テンプレートを編集"]').click();
+    await $("#template-editor-title").waitForDisplayed();
+    await browser.waitUntil(
+      async () => browser.execute(() => document.activeElement?.id === "template-editor-title"),
+      { timeoutMsg: "template editor heading did not receive focus from Today" },
+    );
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+  });
+
   it("keeps primary navigation usable at the minimum supported window width", async () => {
     await setLogicalWindowSize(720, 720);
     await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();

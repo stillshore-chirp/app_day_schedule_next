@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Schedule } from "../../shared/contracts";
-import { layoutOverview } from "./overview-layout";
+import {
+  assignOverviewLevels,
+  layoutOverview,
+  layoutSchedulesForDay,
+  minuteToPercent,
+} from "./overview-layout";
 
 function item(id: string, start: string, end: string): Schedule {
   return {
@@ -47,9 +52,9 @@ describe("layoutOverview", () => {
       date,
     );
     expect(result.map((value) => [value.level, value.levelCount])).toEqual([
-      [0, 3],
-      [1, 3],
-      [2, 3],
+      [0, 2],
+      [1, 2],
+      [0, 2],
     ]);
   });
 
@@ -63,5 +68,40 @@ describe("layoutOverview", () => {
       date,
     );
     expect(result.map((value) => value.levelCount)).toEqual([1, 1]);
+  });
+
+  it("clamps cross-midnight schedules to the selected day", () => {
+    const date = new Date(2026, 6, 20);
+    const result = layoutSchedulesForDay(
+      [item("overnight", localIso(19, 23), localIso(20, 1))],
+      date,
+    );
+    expect(result.map(({ startMinute, endMinute }) => [startMinute, endMinute])).toEqual([[0, 60]]);
+  });
+
+  it("maps minute boundaries to a shared deterministic percentage", () => {
+    expect([0, 1, 720, 1439, 1440].map(minuteToPercent)).toEqual([
+      0,
+      100 / 1440,
+      50,
+      (1439 / 1440) * 100,
+      100,
+    ]);
+  });
+
+  it("uses stable order and key tie-breaks for identical intervals", () => {
+    const result = assignOverviewLevels(
+      [
+        { key: "c", value: "c", startMinute: 60, endMinute: 120, stableOrder: 2 },
+        { key: "b", value: "b", startMinute: 60, endMinute: 120, stableOrder: 1 },
+        { key: "a", value: "a", startMinute: 60, endMinute: 120, stableOrder: 1 },
+      ],
+      5,
+    );
+    expect(result.map((item) => [item.key, item.level, item.levelCount])).toEqual([
+      ["a", 0, 3],
+      ["b", 1, 3],
+      ["c", 2, 3],
+    ]);
   });
 });
