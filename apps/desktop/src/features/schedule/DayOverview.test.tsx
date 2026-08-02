@@ -206,11 +206,14 @@ describe("DayOverview", () => {
     expect(scheduleTrack?.style.minHeight).toBe("135px");
   });
 
-  it("uses the explicit edit action as the only template navigation control", async () => {
+  it("keeps the explicit edit action below the template lane so it cannot narrow its track", async () => {
     const user = userEvent.setup();
     const { props } = renderOverview();
 
-    await user.click(screen.getByRole("button", { name: "テンプレートを編集" }));
+    const editButton = screen.getByRole("button", { name: "テンプレートを編集" });
+    expect(editButton.closest(".overview__template-action")).not.toBeNull();
+    expect(editButton.closest(".overview-lane__heading")).toBeNull();
+    await user.click(editButton);
     expect(props.onEditTemplate).toHaveBeenCalledOnce();
   });
 

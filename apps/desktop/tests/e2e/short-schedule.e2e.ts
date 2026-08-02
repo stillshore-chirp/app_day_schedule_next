@@ -1,9 +1,140 @@
 import { $, browser, expect } from "@wdio/globals";
 import "@wdio/tauri-service";
 
+const setLogicalWindowSize = async (width: number, height: number) => {
+  await browser.setWindowSize(width, height);
+  const initialViewport = await browser.execute(() => ({
+    height: window.innerHeight,
+    width: window.innerWidth,
+  }));
+  if (initialViewport.width < width - 2 || initialViewport.height < height - 2) {
+    const widthScale = width / Math.max(1, initialViewport.width);
+    const heightScale = height / Math.max(1, initialViewport.height);
+    await browser.setWindowSize(Math.ceil(width * widthScale), Math.ceil(height * heightScale));
+  }
+  const requiredViewportWidth = Math.min(width, 720);
+  await browser.waitUntil(
+    async () => {
+      const viewport = await browser.execute(() => ({ width: window.innerWidth }));
+      return viewport.width >= requiredViewportWidth - 2;
+    },
+    { timeoutMsg: `viewport width did not reach ${requiredViewportWidth}px` },
+  );
+};
+
 describe("Day Schedule Next short schedule layout", () => {
+  it("starts with an icon sidebar and keeps the template action out of the overview lanes", async () => {
+    await setLogicalWindowSize(1180, 820);
+    await $(".app-shell").waitForDisplayed();
+    const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
+      settings: Record<string, unknown>;
+    };
+    await browser.tauri.execute(
+      ({ core }, settings) => core.invoke("settings_update", { settings }),
+      { ...bootstrap.settings, theme: "light" },
+    );
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "light", {
+      timeoutMsg: "fixture theme was not set to light",
+    });
+    await browser.execute(() => localStorage.removeItem("day-schedule-next.sidebar-expanded"));
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    const shell = $(".app-shell");
+    await $('aside[aria-label="主要画面"] button[aria-label="今日"]').click();
+    await $(".overview").waitForDisplayed();
+    await browser.execute(() => {
+      const workspace = document.querySelector(".workspace-main");
+      if (workspace instanceof HTMLElement) workspace.scrollTop = 0;
+    });
+    const expandSidebar = $('button[aria-label="サイドバーを展開"]');
+    await $(".overview__template-action .button").waitForDisplayed();
+
+    await expect(shell).toHaveAttribute("data-sidebar", "collapsed");
+    await expect(expandSidebar).toHaveAttribute("aria-expanded", "false");
+    const collapsedLayout = await browser.execute(() => {
+      const sidebar = document.querySelector(".sidebar");
+      const firstNavigationLabel = document.querySelector(".sidebar__label");
+      const scheduleTrack = document.querySelector(".overview-lane__track");
+      const templateTrack = document.querySelector(".overview-lane__track--template");
+      const editAction = document.querySelector(".overview__template-action .button");
+      if (!(sidebar instanceof HTMLElement)) throw new Error("sidebar was not found");
+      if (!(firstNavigationLabel instanceof HTMLElement))
+        throw new Error("sidebar label was not found");
+      if (!(scheduleTrack instanceof HTMLElement)) throw new Error("schedule track was not found");
+      if (!(templateTrack instanceof HTMLElement)) throw new Error("template track was not found");
+      if (!(editAction instanceof HTMLElement))
+        throw new Error("template edit action was not found");
+      return {
+        sidebarWidth: sidebar.getBoundingClientRect().width,
+        navigationLabelDisplay: getComputedStyle(firstNavigationLabel).display,
+        scheduleTrackWidth: scheduleTrack.getBoundingClientRect().width,
+        templateTrackWidth: templateTrack.getBoundingClientRect().width,
+        editActionIsBelowTracks: editAction.closest(".overview__template-action") !== null,
+        editActionIsInLaneHeading: editAction.closest(".overview-lane__heading") !== null,
+      };
+    });
+    expect(collapsedLayout.sidebarWidth).toBeCloseTo(76, 0);
+    expect(collapsedLayout.navigationLabelDisplay).toBe("none");
+    expect(collapsedLayout.scheduleTrackWidth).toBeCloseTo(collapsedLayout.templateTrackWidth, 0);
+    expect(collapsedLayout.editActionIsBelowTracks).toBe(true);
+    expect(collapsedLayout.editActionIsInLaneHeading).toBe(false);
+    await browser.saveScreenshot("./test-results/native-sidebar-collapsed-overview.png");
+
+    await expandSidebar.click();
+    await expect(shell).toHaveAttribute("data-sidebar", "expanded");
+    await expect($('button[aria-label="サイドバーを格納"]')).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await $('button[aria-label="サイドバーを格納"]').click();
+    await expect(shell).toHaveAttribute("data-sidebar", "collapsed");
+
+    await setLogicalWindowSize(720, 720);
+    const narrowLayout = await browser.execute(() => {
+      const sidebar = document.querySelector(".sidebar");
+      const scheduleTrack = document.querySelector(".overview-lane__track");
+      const templateTrack = document.querySelector(".overview-lane__track--template");
+      const editAction = document.querySelector(".overview__template-action .button");
+      if (!(sidebar instanceof HTMLElement)) throw new Error("sidebar was not found");
+      if (!(scheduleTrack instanceof HTMLElement)) throw new Error("schedule track was not found");
+      if (!(templateTrack instanceof HTMLElement)) throw new Error("template track was not found");
+      if (!(editAction instanceof HTMLElement))
+        throw new Error("template edit action was not found");
+      return {
+        sidebarWidth: sidebar.getBoundingClientRect().width,
+        scheduleTrackWidth: scheduleTrack.getBoundingClientRect().width,
+        templateTrackWidth: templateTrack.getBoundingClientRect().width,
+        editActionIsInLaneHeading: editAction.closest(".overview-lane__heading") !== null,
+      };
+    });
+    expect(narrowLayout.sidebarWidth).toBeCloseTo(76, 0);
+    expect(narrowLayout.scheduleTrackWidth).toBeCloseTo(narrowLayout.templateTrackWidth, 0);
+    expect(narrowLayout.editActionIsInLaneHeading).toBe(false);
+    await browser.saveScreenshot("./test-results/native-sidebar-collapsed-narrow.png");
+
+    await setLogicalWindowSize(1180, 820);
+    await browser.execute(() => {
+      document.documentElement.style.setProperty("font-size", "200%", "important");
+    });
+    await browser.waitUntil(
+      async () =>
+        (await browser.execute(() =>
+          Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+        )) >= 31,
+      { timeoutMsg: "root font size did not reach 200%" },
+    );
+    await expect(expandSidebar).toBeDisplayed();
+    await expect($(".overview__template-action .button")).toBeDisplayed();
+    await browser.saveScreenshot("./test-results/native-sidebar-collapsed-text-200.png");
+    await browser.execute(() => {
+      document.documentElement.style.removeProperty("font-size");
+    });
+  });
+
   it("keeps a 30-minute schedule identifiable in overview and detail", async () => {
-    await browser.setWindowSize(1180, 820);
+    await setLogicalWindowSize(1180, 820);
     await $(".app-shell").waitForDisplayed();
 
     const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {

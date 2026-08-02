@@ -51,8 +51,9 @@ export const jaMessages = {
   "app.App.013": "予定を検索",
   "app.App.014": " ＋ 予定 ",
   "app.App.015": "主要画面",
-  "app.App.016": " ▱ コンパクト表示 ",
   "app.App.017": "確認が必要なGoogleカレンダーがあります",
+  "app.App.018": "サイドバーを展開",
+  "app.App.019": "サイドバーを格納",
   "app.CompactApp.001": " 予定を開いています… ",
   "app.CompactApp.002": "コンパクト表示を開けませんでした",
   "app.CompactApp.003":
