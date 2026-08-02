@@ -5,6 +5,10 @@ import { layoutSchedulesForDay, minuteToPercent } from "./overview-layout";
 import { layoutTemplateBlocks } from "./template-overview-layout";
 
 const MAX_VISIBLE_LEVELS = 8;
+const OVERVIEW_BLOCK_HEIGHT = 60;
+const OVERVIEW_BLOCK_GAP = 6;
+const OVERVIEW_SINGLE_LEVEL_HEIGHT = 115;
+const OVERVIEW_MULTI_LEVEL_PADDING = 8;
 
 interface DayOverviewProps {
   schedules: Schedule[];
@@ -27,7 +31,21 @@ function minuteToTime(minute: number): string {
 }
 
 function laneHeight(levelCount: number): number {
-  return 18 + Math.min(Math.max(1, levelCount), MAX_VISIBLE_LEVELS) * 28;
+  const visibleLevelCount = Math.min(Math.max(1, levelCount), MAX_VISIBLE_LEVELS);
+  if (visibleLevelCount === 1) return OVERVIEW_SINGLE_LEVEL_HEIGHT;
+  return (
+    OVERVIEW_MULTI_LEVEL_PADDING * 2 +
+    visibleLevelCount * OVERVIEW_BLOCK_HEIGHT +
+    (visibleLevelCount - 1) * OVERVIEW_BLOCK_GAP
+  );
+}
+
+function blockTop(level: number, levelCount: number): number {
+  const visibleLevelCount = Math.min(Math.max(1, levelCount), MAX_VISIBLE_LEVELS);
+  if (visibleLevelCount === 1) {
+    return (OVERVIEW_SINGLE_LEVEL_HEIGHT - OVERVIEW_BLOCK_HEIGHT) / 2;
+  }
+  return OVERVIEW_MULTI_LEVEL_PADDING + level * (OVERVIEW_BLOCK_HEIGHT + OVERVIEW_BLOCK_GAP);
 }
 
 export function DayOverview({
@@ -57,6 +75,8 @@ export function DayOverview({
   const hiddenTemplateCount = templateItems.filter(
     (item) => item.level >= MAX_VISIBLE_LEVELS,
   ).length;
+  const scheduleLaneHeight = laneHeight(scheduleLevelCount);
+  const templateLaneHeight = laneHeight(templateLevelCount);
 
   return (
     <section className="overview" aria-labelledby="overview-title">
@@ -91,7 +111,7 @@ export function DayOverview({
           <div
             className="overview-lane__track"
             aria-label={translate("features.schedule.DayOverview.010")}
-            style={{ minHeight: laneHeight(scheduleLevelCount) }}
+            style={{ height: scheduleLaneHeight, minHeight: scheduleLaneHeight }}
           >
             {scheduleItems
               .filter((item) => item.level < MAX_VISIBLE_LEVELS)
@@ -116,13 +136,16 @@ export function DayOverview({
                     style={{
                       left: `${minuteToPercent(startMinute)}%`,
                       width: `${Math.max(0.8, minuteToPercent(endMinute) - minuteToPercent(startMinute))}%`,
-                      top: 9 + level * 28,
+                      top: blockTop(level, levelCount),
+                      height: OVERVIEW_BLOCK_HEIGHT,
                       zIndex: levelCount - level,
                       backgroundColor: schedule.color,
                     }}
                     onClick={() => onSelect(schedule)}
                   >
-                    <span>{schedule.title}</span>
+                    <span>
+                      <b>{schedule.title}</b>
+                    </span>
                   </button>
                 );
               })}
@@ -172,7 +195,7 @@ export function DayOverview({
             className="overview-lane__track overview-lane__track--template"
             role={templateState === "ready" && templateItems.length > 0 ? "list" : undefined}
             aria-label={translate("features.schedule.DayOverview.017")}
-            style={{ minHeight: laneHeight(templateLevelCount) }}
+            style={{ height: templateLaneHeight, minHeight: templateLaneHeight }}
           >
             {templateState === "loading" ? (
               <div className="overview-lane__state" role="status">
@@ -226,7 +249,8 @@ export function DayOverview({
                           style={{
                             left: `${minuteToPercent(startMinute)}%`,
                             width: `${Math.max(0.8, minuteToPercent(endMinute) - minuteToPercent(startMinute))}%`,
-                            top: 9 + level * 28,
+                            top: blockTop(level, levelCount),
+                            height: OVERVIEW_BLOCK_HEIGHT,
                             zIndex: levelCount - level,
                             backgroundColor: block.color,
                           }}

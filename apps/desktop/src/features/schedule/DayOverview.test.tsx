@@ -112,6 +112,21 @@ describe("DayOverview", () => {
     expect(templateBlock.style.width).toBe(scheduleBlock.style.width);
   });
 
+  it("makes both schedule strips 2.5 times taller without spending vertical space on headings", () => {
+    const { container } = renderOverview();
+
+    const tracks = Array.from(container.querySelectorAll<HTMLElement>(".overview-lane__track"));
+    expect(tracks.map((track) => [track.style.height, track.style.minHeight])).toEqual([
+      ["115px", "115px"],
+      ["115px", "115px"],
+    ]);
+
+    const scheduleBlock = screen.getByRole("button", { name: /30分の短時間予定/ });
+    const templateBlock = screen.getByRole("listitem", { name: /集中作業/ });
+    expect(scheduleBlock.style.height).toBe("60px");
+    expect(templateBlock.style.height).toBe("60px");
+  });
+
   it("keeps every visible overlap level inside its own lane height", () => {
     const oneHour = {
       ...schedule,
@@ -127,7 +142,8 @@ describe("DayOverview", () => {
     const { container } = renderOverview({ schedules: [oneHour, overlapping] });
 
     const scheduleTrack = container.querySelector<HTMLElement>(".overview-lane__track");
-    expect(scheduleTrack?.style.minHeight).toBe("74px");
+    expect(scheduleTrack?.style.height).toBe("142px");
+    expect(scheduleTrack?.style.minHeight).toBe("142px");
   });
 
   it("uses the explicit edit action as the only template navigation control", async () => {

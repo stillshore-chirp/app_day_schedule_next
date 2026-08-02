@@ -190,6 +190,23 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     await $('//h3[normalize-space(.)="比較用テンプレート"]').waitForDisplayed();
     await $(".overview-template-block").waitForDisplayed();
+    const stripGeometry = await browser.execute(() => ({
+      blockHeights: Array.from(
+        document.querySelectorAll<HTMLElement>(".overview-event, .overview-template-block"),
+      ).map((block) => block.getBoundingClientRect().height),
+      overviewHeight:
+        document.querySelector<HTMLElement>(".overview")?.getBoundingClientRect().height ?? 0,
+      trackHeights: Array.from(document.querySelectorAll<HTMLElement>(".overview-lane__track")).map(
+        (track) => track.getBoundingClientRect().height,
+      ),
+    }));
+    await writeFile(
+      "./test-results/native-today-overview-geometry.json",
+      `${JSON.stringify(stripGeometry, null, 2)}\n`,
+      "utf8",
+    );
+    expect(stripGeometry.blockHeights.every((height) => Math.abs(height - 60) <= 1)).toBe(true);
+    expect(stripGeometry.trackHeights.every((height) => height >= 115)).toBe(true);
     const laneOverflows = await browser.execute(() =>
       Array.from(document.querySelectorAll<HTMLElement>(".overview-lane__track")).flatMap(
         (track, laneIndex) => {
@@ -204,8 +221,11 @@ describe("Day Schedule Next native smoke", () => {
                 laneIndex,
                 title: block.getAttribute("title"),
                 trackHeight: trackBounds.height,
+                trackInlineHeight: track.style.height,
                 trackInlineMinHeight: track.style.minHeight,
+                trackComputedHeight: window.getComputedStyle(track).height,
                 trackComputedMinHeight: window.getComputedStyle(track).minHeight,
+                trackComputedMaxHeight: window.getComputedStyle(track).maxHeight,
                 blockTop: blockBounds.top - trackBounds.top,
                 blockHeight: blockBounds.height,
                 overflowPixels: blockBounds.bottom - trackBounds.bottom,
