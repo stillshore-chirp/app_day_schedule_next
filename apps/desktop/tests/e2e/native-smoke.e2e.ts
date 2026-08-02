@@ -190,10 +190,20 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     await $('//h3[normalize-space(.)="比較用テンプレート"]').waitForDisplayed();
     await $(".overview-template-block").waitForDisplayed();
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() =>
+          Array.from(document.querySelectorAll<HTMLElement>(".overview-lane__track")).every(
+            (track) => track.getBoundingClientRect().height >= 135,
+          ),
+        ),
+      { timeoutMsg: "overview lanes did not settle to the overlap height" },
+    );
     const stripGeometry = await browser.execute(() => {
       const blocks = Array.from(
         document.querySelectorAll<HTMLElement>(".overview-event, .overview-template-block"),
       );
+      const overviewTicks = Array.from(document.querySelectorAll<HTMLElement>(".overview-tick"));
       const trackDetails = Array.from(
         document.querySelectorAll<HTMLElement>(".overview-lane__track"),
       ).map((track) => {
@@ -223,10 +233,16 @@ describe("Day Schedule Next native smoke", () => {
       });
       return {
         blockHeights: blocks.map((block) => block.getBoundingClientRect().height),
+        overviewTickCount: overviewTicks.length,
+        overviewTickLabels: overviewTicks.map((tick) => tick.textContent),
         overviewHeight:
           document.querySelector<HTMLElement>(".overview")?.getBoundingClientRect().height ?? 0,
         trackHeights: trackDetails.map((track) => track.height),
         trackDetails,
+        trackBackgrounds: trackDetails.map((_, index) => {
+          const track = document.querySelectorAll<HTMLElement>(".overview-lane__track")[index];
+          return track ? window.getComputedStyle(track).backgroundImage : "";
+        }),
         visibleLabels: blocks.map((block) => ({
           index: block.dataset.overviewIndex,
           start: block.querySelector<HTMLElement>("[class$='__start']")?.textContent,
@@ -240,6 +256,15 @@ describe("Day Schedule Next native smoke", () => {
       "utf8",
     );
     expect(stripGeometry.blockHeights.every((height) => Math.abs(height - 60) <= 1)).toBe(true);
+    expect(stripGeometry.overviewTickCount).toBe(25);
+    expect(stripGeometry.overviewTickLabels).toEqual(
+      Array.from({ length: 25 }, (_, hour) => String(hour).padStart(2, "0")),
+    );
+    expect(
+      stripGeometry.trackBackgrounds.every(
+        (background) => (background.match(/repeating-linear-gradient/g) ?? []).length >= 2,
+      ),
+    ).toBe(true);
     expect(stripGeometry.trackHeights.every((height) => height >= 76)).toBe(true);
     expect(
       stripGeometry.visibleLabels.every(({ index, start, title }) => index && start && title),

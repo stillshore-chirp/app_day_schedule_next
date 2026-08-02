@@ -576,26 +576,20 @@ button:disabled {
 .overview-lane__track {
   position: relative;
   align-self: start;
-  background:
+  background-image:
     repeating-linear-gradient(
       to right,
-      transparent 0 calc(12.5% - 1px),
-      color-mix(in srgb, var(--border) 70%, transparent) calc(12.5% - 1px) 12.5%
+      transparent 0 calc(4.1666667% - 1px),
+      color-mix(in srgb, var(--border) 70%, transparent) calc(4.1666667% - 1px) 4.1666667%
     ),
-    repeating-linear-gradient(135deg, transparent 0 10px, rgb(100 116 139 / 5%) 10px 11px),
-    var(--surface-soft);
+    repeating-linear-gradient(135deg, transparent 0 10px, rgb(100 116 139 / 5%) 10px 11px);
+  background-color: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: 9px;
 }
 
 .overview-lane__track--template {
-  background:
-    repeating-linear-gradient(
-      to right,
-      transparent 0 calc(12.5% - 1px),
-      color-mix(in srgb, var(--border) 70%, transparent) calc(12.5% - 1px) 12.5%
-    ),
-    color-mix(in srgb, var(--accent) 3%, var(--surface-soft));
+  background-color: color-mix(in srgb, var(--accent) 3%, var(--surface-soft));
 }
 
 .overview-lane__state {
