@@ -5,7 +5,7 @@
 - Issue: #21
 - Branch: `codex/issue-21-taller-schedule-bars`
 - Owner: Codex
-- Status: in-progress
+- Status: completed
 - Updated: 2026-08-02
 
 ## 目標
@@ -19,9 +19,9 @@
 
 ## 完了条件
 
-- [ ] 上下トラック115px、内部ブロック60pxをcomponent/native testで固定する。
-- [ ] 通常・空・重複・720px・200% textで意味と操作が失われない。
-- [ ] UI/UX証跡、非ドラフトPR、CI、review確認を完了する。
+- [x] 上下トラック115px、内部ブロック60pxをcomponent/native testで固定する。
+- [x] 通常・空・重複・720px・200% textで意味と操作が失われない。
+- [x] UI/UX証跡、非ドラフトPR、CI、review確認を完了する。
 
 ## 不変条件とリスク
 
@@ -37,13 +37,13 @@
 |       P0 | 高さ契約のtest追加 | 115px / 60pxと重複時overflowなしを固定   | component / native E2E        | completed |
 |       P0 | 2レーン再配置      | 見出しを左レールに置きカード高を再配分   | native screenshot / geometry  | completed |
 |       P1 | 文書・証跡         | 利用方法とstate/counter reviewが追跡可能 | docs / security scan          | completed |
-|       P1 | PR・CI・review     | 最新headが統合可能                       | GitHub checks / reviewThreads | pending   |
+|       P1 | PR・CI・review     | 最新headが統合可能                       | GitHub checks / reviewThreads | completed |
 
 ## 再開情報
 
-- Current state: 実装、frontend/Rust/native gate、macOS screenshotを完了。PR/CI/review待ち。
-- Last completed slice: native 14/14とToday visual baseline 0.000%。
-- Next smallest action: 文書最終化、commit/push、PR、CI/review確認。
+- Current state: 実装、frontend/Rust/native gate、macOS screenshot、非ドラフトPR、CI、review確認を完了。
+- Last completed slice: 最新headのCI成功とreview submission 0件・未解決review thread 0件の確認。
+- Next smallest action: PR #22 のマージ判断。
 - Blocking fact: なし。
 - Resume command: `pnpm --dir apps/desktop test -- DayOverview.test.tsx`
 
@@ -68,4 +68,4 @@ node scripts/verify-agent-harness.mjs
 
 ## 未実行と残リスク
 
-- Windows native visual / NarratorはmacOS hostでは未実行。CI/reviewはpush後に確認する。
+- Windows native visual / NarratorはmacOS hostでは未実行。release validationの残リスクとして維持する。
