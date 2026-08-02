@@ -57,3 +57,13 @@ node scripts/security-scan-text.mjs
 ```
 
 検証できない場合は理由と残リスクを報告します。
+
+## 8. デスクトップアプリ本体の完了証跡
+
+デスクトップアプリのユーザー向け変更では、実装・CI・レビューだけでなく、最新の検証済みコミットから生成したアプリ本体または installer の手渡し状態を確認します。詳細な手順と blocker は `AGENTS.md` の完了ゲートを正本とし、ここでは判断理由だけを固定します。
+
+- build artifact は source commit、version、identifier、architecture、checksum と対応させる。
+- macOS の個人用更新は DMG 検証、読み取り専用 mount、旧版の recoverable 退避、安全な置換、起動 smoke を伴う。
+- OAuth secret、token、Keychain、個人データ、個人パスを公開証跡へ含めない。
+- Windows、署名/notarization、OAuth、native E2E、install の未実行は「未検証」として残リスクにする。
+- build 成功、CI 成功、install 済み、launch 済みを別々の状態として報告する。
