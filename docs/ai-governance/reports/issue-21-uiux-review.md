@@ -2,7 +2,7 @@
 
 ## 1. Summary
 
-- Issue / PR: Issue #21 / PR作成前
+- Issue / PR: Issue #21 / PR #22
 - Commit: 本PRの最新head
 - Affected screen / window / state: Today overview、empty、normal、overlap、cross-midnight、720px、200% text
 - OS: macOS / Windows共通CSS。native証跡はmacOS arm64
