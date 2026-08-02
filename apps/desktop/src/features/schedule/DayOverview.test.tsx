@@ -86,16 +86,71 @@ describe("DayOverview", () => {
 
   it("keeps schedule selection while template blocks remain read-only information", async () => {
     const user = userEvent.setup();
-    const { props } = renderOverview();
+    const { container, props } = renderOverview();
 
     const event = screen.getByRole("button", { name: /30分の短時間予定/ });
-    expect(event).toHaveAttribute("data-density", "micro");
+    expect(event).toHaveAttribute("data-overview-index", "1");
+    expect(event).toHaveAttribute("aria-label", "30分の短時間予定 09:00から09:30");
+    expect(event.querySelector(".overview-event__index")).toHaveTextContent("1");
+    expect(event.querySelector(".overview-event__start")).toHaveTextContent("09:00");
+    expect(event.querySelector(".overview-event__title")).toHaveTextContent("30分の短時間予定");
     await user.click(event);
     expect(props.onSelect).toHaveBeenCalledWith(schedule);
 
     const templateBlock = screen.getByRole("listitem", { name: /集中作業 09:00–10:00/ });
     expect(templateBlock.tagName).toBe("DIV");
+    expect(templateBlock).toHaveAttribute("data-overview-index", "1");
+    expect(templateBlock).toHaveAttribute("aria-label", "集中作業 09:00–10:00");
+    expect(templateBlock.querySelector(".overview-template-block__index")).toHaveTextContent("1");
+    expect(templateBlock.querySelector(".overview-template-block__start")).toHaveTextContent(
+      "09:00",
+    );
+    expect(templateBlock.querySelector(".overview-template-block__title")).toHaveTextContent(
+      "集中作業",
+    );
+    expect(container.querySelectorAll('[data-density="micro"]')).toHaveLength(0);
     expect(screen.queryByRole("button", { name: /集中作業/ })).toBeNull();
+  });
+
+  it("numbers each lane independently in stable start-time order", () => {
+    const laterSchedule = {
+      ...schedule,
+      id: "00000000-0000-4000-8000-000000000012",
+      title: "午後の予定",
+      startUtc: new Date(2026, 6, 20, 13).toISOString(),
+      endUtc: new Date(2026, 6, 20, 14).toISOString(),
+    };
+    const laterBlock = {
+      ...template.blocks[0]!,
+      id: "00000000-0000-4000-8000-000000000023",
+      title: "午後の型",
+      startMinute: 13 * 60,
+    };
+    const { container } = renderOverview({
+      schedules: [laterSchedule, schedule],
+      template: { ...template, blocks: [laterBlock, template.blocks[0]!] },
+    });
+
+    expect(
+      Array.from(container.querySelectorAll<HTMLElement>(".overview-event")).map((event) => [
+        event.dataset.overviewIndex,
+        event.querySelector(".overview-event__title")?.textContent,
+      ]),
+    ).toEqual([
+      ["1", "30分の短時間予定"],
+      ["2", "午後の予定"],
+    ]);
+    expect(
+      Array.from(container.querySelectorAll<HTMLElement>(".overview-template-block")).map(
+        (block) => [
+          block.dataset.overviewIndex,
+          block.querySelector(".overview-template-block__title")?.textContent,
+        ],
+      ),
+    ).toEqual([
+      ["1", "集中作業"],
+      ["2", "午後の型"],
+    ]);
   });
 
   it("uses identical horizontal geometry for identical minute intervals in both lanes", () => {
@@ -117,8 +172,8 @@ describe("DayOverview", () => {
 
     const tracks = Array.from(container.querySelectorAll<HTMLElement>(".overview-lane__track"));
     expect(tracks.map((track) => [track.style.height, track.style.minHeight])).toEqual([
-      ["115px", "115px"],
-      ["115px", "115px"],
+      ["76px", "76px"],
+      ["76px", "76px"],
     ]);
 
     const scheduleBlock = screen.getByRole("button", { name: /30分の短時間予定/ });
@@ -142,8 +197,8 @@ describe("DayOverview", () => {
     const { container } = renderOverview({ schedules: [oneHour, overlapping] });
 
     const scheduleTrack = container.querySelector<HTMLElement>(".overview-lane__track");
-    expect(scheduleTrack?.style.height).toBe("142px");
-    expect(scheduleTrack?.style.minHeight).toBe("142px");
+    expect(scheduleTrack?.style.height).toBe("135px");
+    expect(scheduleTrack?.style.minHeight).toBe("135px");
   });
 
   it("uses the explicit edit action as the only template navigation control", async () => {

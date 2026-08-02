@@ -1,0 +1,95 @@
+{
+  "blockHeights": [
+    60,
+    60,
+    60,
+    60,
+    60,
+    60,
+    60,
+    60
+  ],
+  "overviewHeight": 384,
+  "trackDetails": [
+    {
+      "blockHeights": [
+        60,
+        60,
+        60,
+        60
+      ],
+      "height": 135,
+      "levelGaps": [
+        3
+      ],
+      "levelTops": [
+        7,
+        9,
+        70
+      ]
+    },
+    {
+      "blockHeights": [
+        60,
+        60,
+        60,
+        60
+      ],
+      "height": 135,
+      "levelGaps": [
+        3
+      ],
+      "levelTops": [
+        7,
+        9,
+        70
+      ]
+    }
+  ],
+  "trackHeights": [
+    135,
+    135
+  ],
+  "visibleLabels": [
+    {
+      "index": "1",
+      "start": "09:00",
+      "title": "午前の予定"
+    },
+    {
+      "index": "2",
+      "start": "09:55",
+      "title": "重なる予定"
+    },
+    {
+      "index": "3",
+      "start": "13:45",
+      "title": "E2E予定-1785645788224"
+    },
+    {
+      "index": "4",
+      "start": "23:30",
+      "title": "日跨ぎ予定"
+    },
+    {
+      "index": "1",
+      "start": "07:00",
+      "title": "朝の準備"
+    },
+    {
+      "index": "2",
+      "start": "09:00",
+      "title": "集中作業"
+    },
+    {
+      "index": "3",
+      "start": "10:25",
+      "title": "短い確認"
+    },
+    {
+      "index": "4",
+      "start": "23:59",
+      "title": "翌日の準備"
+    }
+  ]
+}

@@ -190,23 +190,65 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     await $('//h3[normalize-space(.)="比較用テンプレート"]').waitForDisplayed();
     await $(".overview-template-block").waitForDisplayed();
-    const stripGeometry = await browser.execute(() => ({
-      blockHeights: Array.from(
+    const stripGeometry = await browser.execute(() => {
+      const blocks = Array.from(
         document.querySelectorAll<HTMLElement>(".overview-event, .overview-template-block"),
-      ).map((block) => block.getBoundingClientRect().height),
-      overviewHeight:
-        document.querySelector<HTMLElement>(".overview")?.getBoundingClientRect().height ?? 0,
-      trackHeights: Array.from(document.querySelectorAll<HTMLElement>(".overview-lane__track")).map(
-        (track) => track.getBoundingClientRect().height,
-      ),
-    }));
+      );
+      const trackDetails = Array.from(
+        document.querySelectorAll<HTMLElement>(".overview-lane__track"),
+      ).map((track) => {
+        const trackBounds = track.getBoundingClientRect();
+        const levelTops = Array.from(
+          new Set(
+            Array.from(
+              track.querySelectorAll<HTMLElement>(".overview-event, .overview-template-block"),
+            ).map((block) => Math.round(block.getBoundingClientRect().top - trackBounds.top)),
+          ),
+        ).sort((left, right) => left - right);
+        return {
+          height: trackBounds.height,
+          blockHeights: Array.from(
+            track.querySelectorAll<HTMLElement>(".overview-event, .overview-template-block"),
+          ).map((block) => block.getBoundingClientRect().height),
+          levelTops,
+          levelGaps: levelTops
+            .map((top, index) => {
+              const previousLevelTop = levelTops
+                .slice(0, index)
+                .find((candidate) => top - candidate >= 50);
+              return previousLevelTop === undefined ? null : top - previousLevelTop - 60;
+            })
+            .filter((gap): gap is number => gap !== null),
+        };
+      });
+      return {
+        blockHeights: blocks.map((block) => block.getBoundingClientRect().height),
+        overviewHeight:
+          document.querySelector<HTMLElement>(".overview")?.getBoundingClientRect().height ?? 0,
+        trackHeights: trackDetails.map((track) => track.height),
+        trackDetails,
+        visibleLabels: blocks.map((block) => ({
+          index: block.dataset.overviewIndex,
+          start: block.querySelector<HTMLElement>("[class$='__start']")?.textContent,
+          title: block.querySelector<HTMLElement>("[class$='__title']")?.textContent,
+        })),
+      };
+    });
     await writeFile(
       "./test-results/native-today-overview-geometry.json",
       `${JSON.stringify(stripGeometry, null, 2)}\n`,
       "utf8",
     );
     expect(stripGeometry.blockHeights.every((height) => Math.abs(height - 60) <= 1)).toBe(true);
-    expect(stripGeometry.trackHeights.every((height) => height >= 115)).toBe(true);
+    expect(stripGeometry.trackHeights.every((height) => height >= 76)).toBe(true);
+    expect(
+      stripGeometry.visibleLabels.every(({ index, start, title }) => index && start && title),
+    ).toBe(true);
+    expect(
+      stripGeometry.trackDetails
+        .flatMap((track) => track.levelGaps)
+        .every((gap) => gap >= 2 && gap < 6),
+    ).toBe(true);
     const laneOverflows = await browser.execute(() =>
       Array.from(document.querySelectorAll<HTMLElement>(".overview-lane__track")).flatMap(
         (track, laneIndex) => {

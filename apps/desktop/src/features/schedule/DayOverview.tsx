@@ -6,9 +6,9 @@ import { layoutTemplateBlocks } from "./template-overview-layout";
 
 const MAX_VISIBLE_LEVELS = 8;
 const OVERVIEW_BLOCK_HEIGHT = 60;
-const OVERVIEW_BLOCK_GAP = 6;
-const OVERVIEW_SINGLE_LEVEL_HEIGHT = 115;
-const OVERVIEW_MULTI_LEVEL_PADDING = 8;
+const OVERVIEW_BLOCK_GAP = 3;
+const OVERVIEW_SINGLE_LEVEL_HEIGHT = 76;
+const OVERVIEW_MULTI_LEVEL_PADDING = 6;
 
 interface DayOverviewProps {
   schedules: Schedule[];
@@ -115,9 +115,7 @@ export function DayOverview({
           >
             {scheduleItems
               .filter((item) => item.level < MAX_VISIBLE_LEVELS)
-              .map(({ schedule, startMinute, endMinute, level, levelCount, key }) => {
-                const durationMinutes = endMinute - startMinute;
-                const density = durationMinutes <= 45 ? "micro" : "regular";
+              .map(({ schedule, startMinute, endMinute, level, levelCount, key }, index) => {
                 const accessibleLabel = translate("features.schedule.DayOverview.005", [
                   schedule.title,
                   formatTime(schedule.startUtc),
@@ -131,7 +129,7 @@ export function DayOverview({
                     aria-label={accessibleLabel}
                     aria-pressed={selectedId === schedule.id}
                     title={accessibleLabel}
-                    data-density={density}
+                    data-overview-index={index + 1}
                     data-sync={schedule.syncStatus}
                     style={{
                       left: `${minuteToPercent(startMinute)}%`,
@@ -143,8 +141,10 @@ export function DayOverview({
                     }}
                     onClick={() => onSelect(schedule)}
                   >
-                    <span>
-                      <b>{schedule.title}</b>
+                    <span className="overview-event__content" aria-hidden="true">
+                      <span className="overview-event__index">{index + 1}</span>
+                      <span className="overview-event__start">{minuteToTime(startMinute)}</span>
+                      <b className="overview-event__title">{schedule.title}</b>
                     </span>
                   </button>
                 );
@@ -224,15 +224,10 @@ export function DayOverview({
               ? templateItems
                   .filter((item) => item.level < MAX_VISIBLE_LEVELS)
                   .map(
-                    ({
-                      block,
-                      startMinute,
-                      endMinute,
-                      continuesNextDay,
-                      level,
-                      levelCount,
-                      key,
-                    }) => {
+                    (
+                      { block, startMinute, endMinute, continuesNextDay, level, levelCount, key },
+                      index,
+                    ) => {
                       const timeRange = `${minuteToTime(startMinute)}–${minuteToTime(endMinute)}`;
                       const accessibleLabel = continuesNextDay
                         ? translate("features.schedule.DayOverview.023", [block.title, timeRange])
@@ -244,7 +239,7 @@ export function DayOverview({
                           role="listitem"
                           aria-label={accessibleLabel}
                           title={accessibleLabel}
-                          data-density={endMinute - startMinute <= 45 ? "micro" : "regular"}
+                          data-overview-index={index + 1}
                           data-continues-next-day={continuesNextDay ? "true" : undefined}
                           style={{
                             left: `${minuteToPercent(startMinute)}%`,
@@ -255,9 +250,12 @@ export function DayOverview({
                             backgroundColor: block.color,
                           }}
                         >
-                          <span>
-                            <b>{block.title}</b>
-                            <small>{timeRange}</small>
+                          <span className="overview-template-block__content" aria-hidden="true">
+                            <span className="overview-template-block__index">{index + 1}</span>
+                            <span className="overview-template-block__start">
+                              {minuteToTime(startMinute)}
+                            </span>
+                            <b className="overview-template-block__title">{block.title}</b>
                           </span>
                           {continuesNextDay ? (
                             <strong className="overview-template-continuation" aria-hidden="true">
