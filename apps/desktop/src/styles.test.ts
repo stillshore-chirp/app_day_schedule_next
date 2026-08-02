@@ -90,4 +90,15 @@ describe("mild theme contrast", () => {
       /\.compact-header h1,\s*\.compact-current h2,\s*\.compact-next h2,\s*\.compact-agenda h2\s*{[^}]*color: var\(--text\);/s,
     );
   });
+
+  it("clips overview titles without hiding them or adding an ellipsis", () => {
+    const overviewStyles = stylesheet.slice(
+      stylesheet.indexOf(".overview-event,"),
+      stylesheet.indexOf(".overview-event[data-sync"),
+    );
+    expect(overviewStyles).toContain("text-overflow: clip;");
+    expect(overviewStyles).not.toContain("text-overflow: ellipsis;");
+    expect(overviewStyles).not.toContain("display: none;");
+    expect(overviewStyles).toContain("@container (max-width: 140px)");
+  });
 });
