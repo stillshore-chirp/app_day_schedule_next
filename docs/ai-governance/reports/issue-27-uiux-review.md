@@ -3,8 +3,8 @@
 ## 1. Summary
 
 - Issue: [#27](https://github.com/stillshore-chirp/app_day_schedule_next/issues/27)
-- PR: 未作成（この作業ではローカル実装と検証まで）
-- Commit: 未作成
+- PR: [#28](https://github.com/stillshore-chirp/app_day_schedule_next/pull/28)
+- Commit: PR #28 head（UI/UXレビュー対象）
 - Affected screen / window / state: Today overview、実予定レーン、テンプレートレーン、normal / empty / overlap / cross-midnight / narrow / 200% text
 - OS: macOS native WebView evidence; Windows は未実行
 - Decision: Pass（ローカル変更範囲）
@@ -92,4 +92,4 @@
 | `pnpm install --frozen-lockfile` / wrapper scripts | local pnpm 11.9.0 tried to fetch required 11.17.0 and registry access failed | package-manager-specific local reproduction remains unverified | run with repository-pinned pnpm in CI |
 | Full native smoke | unrelated later Google recurrence scenario timed out after the target overview scenario had passed | broader native regression remains partly unverified | rerun full suite in clean CI/native environment |
 | Windows native / screen reader | local host is macOS | platform font, scaling, and AT differences | confirm Windows CI/manual matrix |
-| Commit / PR / CI / post-CI review | no explicit publish request in this turn | branch is not yet externally reviewed | publish only after authorization |
+| Commit / PR / CI / post-CI review | PR #28 is open; CI and post-CI review are pending | branch is externally reviewable but not yet CI-cleared | check CI and review threads after the latest head |
