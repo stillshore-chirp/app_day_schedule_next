@@ -1,0 +1,127 @@
+{
+  "blockHeights": [
+    60,
+    60,
+    60,
+    60,
+    60,
+    60,
+    60,
+    60
+  ],
+  "overviewHeight": 384,
+  "overviewTickCount": 25,
+  "overviewTickLabels": [
+    "00",
+    "01",
+    "02",
+    "03",
+    "04",
+    "05",
+    "06",
+    "07",
+    "08",
+    "09",
+    "10",
+    "11",
+    "12",
+    "13",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "20",
+    "21",
+    "22",
+    "23",
+    "24"
+  ],
+  "trackBackgrounds": [
+    "repeating-linear-gradient(to right, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) calc(4.166667% - 1px), color(srgb 0.831373 0.862745 0.909804 / 0.7) calc(4.166667% - 1px), color(srgb 0.831373 0.862745 0.909804 / 0.7) 4.166667%), repeating-linear-gradient(135deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 10px, rgba(100, 116, 139, 0.05) 10px, rgba(100, 116, 139, 0.05) 11px)",
+    "repeating-linear-gradient(to right, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) calc(4.166667% - 1px), color(srgb 0.831373 0.862745 0.909804 / 0.7) calc(4.166667% - 1px), color(srgb 0.831373 0.862745 0.909804 / 0.7) 4.166667%), repeating-linear-gradient(135deg, rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 10px, rgba(100, 116, 139, 0.05) 10px, rgba(100, 116, 139, 0.05) 11px)"
+  ],
+  "trackDetails": [
+    {
+      "blockHeights": [
+        60,
+        60,
+        60,
+        60
+      ],
+      "height": 135,
+      "levelGaps": [
+        3
+      ],
+      "levelTops": [
+        7,
+        9,
+        70
+      ]
+    },
+    {
+      "blockHeights": [
+        60,
+        60,
+        60,
+        60
+      ],
+      "height": 135,
+      "levelGaps": [
+        3
+      ],
+      "levelTops": [
+        7,
+        9,
+        70
+      ]
+    }
+  ],
+  "trackHeights": [
+    135,
+    135
+  ],
+  "visibleLabels": [
+    {
+      "index": "1",
+      "start": "09:00",
+      "title": "午前の予定"
+    },
+    {
+      "index": "2",
+      "start": "09:55",
+      "title": "重なる予定"
+    },
+    {
+      "index": "3",
+      "start": "15:55",
+      "title": "E2E予定-1785653615128"
+    },
+    {
+      "index": "4",
+      "start": "23:30",
+      "title": "日跨ぎ予定"
+    },
+    {
+      "index": "1",
+      "start": "07:00",
+      "title": "朝の準備"
+    },
+    {
+      "index": "2",
+      "start": "09:00",
+      "title": "集中作業"
+    },
+    {
+      "index": "3",
+      "start": "10:25",
+      "title": "短い確認"
+    },
+    {
+      "index": "4",
+      "start": "23:59",
+      "title": "翌日の準備"
+    }
+  ]
+}

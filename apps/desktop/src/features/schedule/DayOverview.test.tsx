@@ -81,7 +81,12 @@ describe("DayOverview", () => {
     expect(screen.getByRole("heading", { name: "今日の予定" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "集中日の型" })).toBeVisible();
     expect(container.querySelectorAll(".overview-axis")).toHaveLength(1);
-    expect(container.querySelectorAll(".overview-tick")).toHaveLength(9);
+    expect(container.querySelectorAll(".overview-tick")).toHaveLength(25);
+    expect(
+      Array.from(container.querySelectorAll<HTMLElement>(".overview-tick")).map(
+        (tick) => tick.textContent,
+      ),
+    ).toEqual(Array.from({ length: 25 }, (_, hour) => String(hour).padStart(2, "0")));
   });
 
   it("keeps schedule selection while template blocks remain read-only information", async () => {

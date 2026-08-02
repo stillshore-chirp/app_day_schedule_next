@@ -91,7 +91,7 @@ export function DayOverview({
       </div>
 
       <div className="overview-axis" aria-hidden="true">
-        {[0, 3, 6, 9, 12, 15, 18, 21, 24].map((hour) => (
+        {Array.from({ length: 25 }, (_, hour) => hour).map((hour) => (
           <span className="overview-tick" key={hour} style={{ left: `${(hour / 24) * 100}%` }}>
             {String(hour).padStart(2, "0")}
           </span>
