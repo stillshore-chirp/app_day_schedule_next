@@ -5,7 +5,7 @@
 - Issue: https://github.com/stillshore-chirp/app_day_schedule_next/issues/23
 - Branch: `codex/issue-23-overview-bar-density`
 - Owner: Codex
-- Status: implementation complete; PR/CI/review gate pending
+- Status: complete; PR/CI/review gate passed
 - Updated: 2026-08-02
 
 ## 目標
@@ -43,7 +43,7 @@ Today overview の実予定レーンとテンプレートレーンの各バー�
 
 - Current state: Issue #23 acceptance criteria と現行の Issue #21 実装を確認済み。
 - Last completed slice: React/CSS、component/a11y/native E2E、visual baseline、証跡文書を更新し、PR #24を作成。
-- Next smallest action: PR #24の最新CIとreviewThreadsを確認する。
+- Next smallest action: なし。Windows native evidenceのみ残るプラットフォームリスクとして報告する。
 - Blocking fact: なし。
 - Resume command: `git status --short --branch && pnpm --dir apps/desktop test -- DayOverview`
 
@@ -62,5 +62,6 @@ node scripts/verify-agent-harness.mjs
 
 ## 未実行と残リスク
 
-- Windows native verification、CI、post-CI reviewThreadsはPR #24で確認する。
+- Windows native verificationはmacOSホスト外のため未実行。CSS/HTMLにOS固有分岐はなく、残るプラットフォームリスクとして報告する。
+- PR #24のQuality gate、Native smoke、post-CI reviewThreads確認は完了。
 - `pnpm install --frozen-lockfile` はローカルのpnpmバージョン不一致とregistry制約のため未実行。CIのpinned runtimeを正とする。

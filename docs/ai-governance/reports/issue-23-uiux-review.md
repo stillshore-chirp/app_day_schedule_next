@@ -4,10 +4,10 @@
 
 - Issue: [#23](https://github.com/stillshore-chirp/app_day_schedule_next/issues/23)
 - PR: [#24](https://github.com/stillshore-chirp/app_day_schedule_next/pull/24) (non-Draft)
-- Commit: `75927d5dc92b44d6c8b371f74040567a889d0f12`
+- Commit: `f5b8b40f4175ac848f558d81dbbbc875ef690663`
 - Affected screen / window / state: Today overview、実予定レーン、テンプレートレーン、normal / overlap / cross-midnight / empty / narrow / 200% text / forced colors
 - OS: macOS native evidence、Windows は CI/native workflowで確認
-- Decision: Pass pending final CI and review-thread gate
+- Decision: Pass; required CI succeeded and no review threads remain
 - P0 / P1 / P2 counts: 0 / 0 / 0
 
 ## 2. User value
@@ -93,7 +93,7 @@
 
 - Completion blockers searched: duration-based micro hiding、ellipsis、gap 6px、single-level 115px、overlap boundary、selection/focus/pending/current line、accessible name、720px、200% text
 - Findings: implementation initially had micro hiding and ellipsis; both removed. gap reduced to3px, single-level lane to76px while block remains60px
-- Missing evidence: latest CI and post-CI review threads are final-gate items
+- Remaining platform risk: Windows native screenshot/evidence was not available on the macOS host; the implementation uses standard CSS container queries and semantic HTML without OS-specific branches
 
 ## 12. Findings
 
@@ -129,4 +129,4 @@
 |---|---|---|---|
 | `pnpm install --frozen-lockfile` wrapper command | local `pnpm` is fallback 11.9.0 while package metadata requires 11.17.0; it also attempted registry access | package-manager-specific local reproduction remains unverified | use the repository-pinned pnpm in CI or a matching local Corepack runtime |
 | Windows native evidence | local host is macOS | platform font/container query difference | confirm required native workflow CI |
-| CI and post-CI review threads | PR #24 is open; remote gate is still running | remote gate unknown | inspect latest checks and GraphQL reviewThreads after CI completes |
+| CI and post-CI review threads | pass | required checks succeeded; GraphQL reviewThreads and PR comments are empty | no follow-up required |
