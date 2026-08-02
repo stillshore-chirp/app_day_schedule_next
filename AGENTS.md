@@ -329,8 +329,20 @@ README は入口に保ち、詳細仕様を重複させません。
 - CI result
 - Code review result
 - Remaining risks
+- デスクトップ変更では最新アプリ本体の更新・artifact証跡・install/launch smoke、または未実行理由
 
 CI が失敗中・pending・未確認、または対応必要な review が残る場合は「完了」と表現しません。
+
+### 15.1 デスクトップアプリ本体の更新と手渡し
+
+ユーザーに見えるデスクトップアプリの変更を完了扱いにする場合、最新の検証済みコミットから対象 OS のアプリ本体または installer も生成し、利用者が確認できる状態まで更新します。コード変更だけで完了扱いにしません。
+
+1. source commit、version、bundle identifier、architecture を artifact と対応付けます。
+2. artifact の checksum を取得し、macOS DMG は `hdiutil verify` と読み取り専用 mount で中身を検査します。
+3. 個人用 macOS アプリを更新する場合は、アプリを終了し、検証済み DMG の `.app` を staging へコピーし、既存 `/Applications/Day Schedule Next.app` を recoverable な Trash へ退避してから置き換えます。上書きや削除で旧版を失わないようにします。
+4. 置換後に対象アプリを起動し、実行中の path、version、architecture、最低限の launch smoke を確認します。Windows では NSIS/current-user installer の対象手順に置き換えます。
+5. OAuth client secret、token、個人予定、Keychain export、個人ホームパスを log、artifact、Issue、PR、screenshot に出しません。OAuth build が未承認または対象 OS が実行できない場合は、生成・install・OAuth・native check を行わず、その未実行理由と残リスクを明示します。
+6. 最終回答には artifact path、source commit、version、identifier、architecture、checksum、install path、launch smoke、署名/notarization状態、未実行の platform check を記載します。build 成功だけを install/launch 済みと報告しません。
 
 ---
 
@@ -344,4 +356,5 @@ CI が失敗中・pending・未確認、または対応必要な review が残�
 - macOS / Windows の影響範囲を判断し、必要な platform 検証を行う。
 - 既知の P0、データ損失、秘密漏洩、未報告の重大問題がない。
 - 未実行項目、既知制約、OS 制約、実ユーザー未検証を正確に報告する。
+- デスクトップアプリに影響する作業では、最新の検証済みコミットに対応するアプリ本体または installer を更新・検証し、その証跡または未実行理由を残す。
 - 慎重なメンテナが現実的にマージできる品質である。
