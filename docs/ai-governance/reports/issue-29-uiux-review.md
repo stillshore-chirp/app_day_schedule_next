@@ -3,7 +3,7 @@
 ## 1. Summary
 
 - Issue: [#29](https://github.com/stillshore-chirp/app_day_schedule_next/issues/29)
-- PR: 作成後に更新
+- PR: [#30](https://github.com/stillshore-chirp/app_day_schedule_next/pull/30)
 - Commit: PR head（UI/UXレビュー対象）
 - Affected screen / window / state: main window sidebar、Today overview、collapsed / expanded / restored / empty / normal / narrow / 200% text
 - OS: macOS native WebView evidence; Windows は未実行
