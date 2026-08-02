@@ -56,6 +56,7 @@ Day Schedule Next を「出荷可能」と呼ぶための最終ゲートです�
 - window state、topmost、tray、shortcut、notification、keyring、OAuth loopback。
 - high DPI / multi-monitor の実機または明示未実行。
 - artifact が commit / version と対応する。
+- ユーザー向けデスクトップ変更では、最新の検証済みコミットからアプリ本体または installer を生成し、artifact checksum、対象OS、install path、launch smoke を記録する。実行できない場合は未実行理由と残リスクを記録する。
 
 ## RG-09 Documentation
 
