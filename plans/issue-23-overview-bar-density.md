@@ -42,8 +42,8 @@ Today overview の実予定レーンとテンプレートレーンの各バー�
 ## 再開情報
 
 - Current state: Issue #23 acceptance criteria と現行の Issue #21 実装を確認済み。
-- Last completed slice: React/CSS、component/a11y/native E2E、visual baseline、証跡文書を更新。
-- Next smallest action: 最終ローカル検証後にコミット、push、非Draft PR、CI、reviewThreadsを確認する。
+- Last completed slice: React/CSS、component/a11y/native E2E、visual baseline、証跡文書を更新し、PR #24を作成。
+- Next smallest action: PR #24の最新CIとreviewThreadsを確認する。
 - Blocking fact: なし。
 - Resume command: `git status --short --branch && pnpm --dir apps/desktop test -- DayOverview`
 
@@ -62,5 +62,5 @@ node scripts/verify-agent-harness.mjs
 
 ## 未実行と残リスク
 
-- Windows native verification、CI、post-CI reviewThreadsはPR後に確認する。
+- Windows native verification、CI、post-CI reviewThreadsはPR #24で確認する。
 - `pnpm install --frozen-lockfile` はローカルのpnpmバージョン不一致とregistry制約のため未実行。CIのpinned runtimeを正とする。

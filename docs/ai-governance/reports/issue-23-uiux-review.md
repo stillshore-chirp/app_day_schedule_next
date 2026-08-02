@@ -2,8 +2,9 @@
 
 ## 1. Summary
 
-- Issue / PR: [#23](https://github.com/stillshore-chirp/app_day_schedule_next/issues/23) / to be created
-- Commit: implementation commit to be recorded after verification
+- Issue: [#23](https://github.com/stillshore-chirp/app_day_schedule_next/issues/23)
+- PR: [#24](https://github.com/stillshore-chirp/app_day_schedule_next/pull/24) (non-Draft)
+- Commit: `75927d5dc92b44d6c8b371f74040567a889d0f12`
 - Affected screen / window / state: Today overview、実予定レーン、テンプレートレーン、normal / overlap / cross-midnight / empty / narrow / 200% text / forced colors
 - OS: macOS native evidence、Windows は CI/native workflowで確認
 - Decision: Pass pending final CI and review-thread gate
@@ -103,7 +104,7 @@
 ## 13. Evidence
 
 - Before screenshots: [`issue-21/native-today-after.png`](../../evidence/issue-21/native-today-after.png)、[`issue-21/native-today-narrow-after.png`](../../evidence/issue-21/native-today-narrow-after.png)、[`issue-21/native-today-text-200-after.png`](../../evidence/issue-21/native-today-text-200-after.png) at pre-#23 `origin/main`
-- After screenshots: `../../evidence/issue-23/native-today-after.png`、`native-today-empty-after.png`、`native-today-narrow-after.png`、`native-today-text-200-after.png`、`native-short-schedule-after.png` after native run
+- After screenshots: [`native-today-after.png`](../../evidence/issue-23/native-today-after.png)、[`native-today-empty-after.png`](../../evidence/issue-23/native-today-empty-after.png)、[`native-today-narrow-after.png`](../../evidence/issue-23/native-today-narrow-after.png)、[`native-today-text-200-after.png`](../../evidence/issue-23/native-today-text-200-after.png)、[`native-short-schedule-after.png`](../../evidence/issue-23/native-short-schedule-after.png) after native run
 - Trace / video: native geometry JSON and WebdriverIO assertions
 - Tests: DayOverview component, styles, a11y, short schedule E2E, native smoke, visual snapshot comparison
 - Native manual checks: macOS arm64 native WebView via Tauri E2E; Windows delegated to CI matrix
@@ -128,4 +129,4 @@
 |---|---|---|---|
 | `pnpm install --frozen-lockfile` wrapper command | local `pnpm` is fallback 11.9.0 while package metadata requires 11.17.0; it also attempted registry access | package-manager-specific local reproduction remains unverified | use the repository-pinned pnpm in CI or a matching local Corepack runtime |
 | Windows native evidence | local host is macOS | platform font/container query difference | confirm required native workflow CI |
-| CI and post-CI review threads | PR not yet created | remote gate unknown | push, create non-Draft PR, inspect checks and GraphQL reviewThreads |
+| CI and post-CI review threads | PR #24 is open; remote gate is still running | remote gate unknown | inspect latest checks and GraphQL reviewThreads after CI completes |
