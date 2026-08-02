@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { addDays } from "date-fns";
@@ -30,6 +30,8 @@ const navItems: Array<{ view: AppView; label: string; symbol: string }> = [
   { view: "diagnostics", label: messages.navigation.diagnostics, symbol: "▤" },
 ];
 
+const sidebarExpandedStorageKey = "day-schedule-next.sidebar-expanded";
+
 export function App({
   client,
   notificationRuntimeEnabled = true,
@@ -37,6 +39,9 @@ export function App({
   client: AppClient;
   notificationRuntimeEnabled?: boolean;
 }) {
+  const [sidebarExpanded, setSidebarExpanded] = useState(
+    () => localStorage.getItem(sidebarExpandedStorageKey) === "true",
+  );
   const bootstrapQuery = useQuery({ queryKey: ["bootstrap"], queryFn: () => client.bootstrap() });
   const readyReported = useRef(false);
   const refreshBootstrap = useCallback(() => {
@@ -174,7 +179,7 @@ export function App({
 
   const bootstrap = bootstrapQuery.data;
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-sidebar={sidebarExpanded ? "expanded" : "collapsed"}>
       {notificationRuntimeEnabled ? <NotificationRuntime client={client} /> : null}
       <SyncRuntime client={client} onSettled={refreshBootstrap} />
       <header className="topbar">
@@ -235,16 +240,39 @@ export function App({
         </div>
       </header>
       <aside className="sidebar" aria-label={translate("app.App.015")}>
-        <nav>
+        <div className="sidebar__header">
+          <button
+            className="icon-button sidebar-toggle"
+            type="button"
+            aria-controls="primary-navigation"
+            aria-expanded={sidebarExpanded}
+            aria-label={translate(sidebarExpanded ? "app.App.019" : "app.App.018")}
+            title={translate(sidebarExpanded ? "app.App.019" : "app.App.018")}
+            onClick={() => {
+              setSidebarExpanded((expanded) => {
+                const nextExpanded = !expanded;
+                localStorage.setItem(sidebarExpandedStorageKey, String(nextExpanded));
+                return nextExpanded;
+              });
+            }}
+          >
+            <span aria-hidden="true">{sidebarExpanded ? "‹" : "›"}</span>
+          </button>
+        </div>
+        <nav id="primary-navigation">
           {navItems.map((item) => (
             <button
               key={item.view}
               type="button"
               aria-current={activeView === item.view ? "page" : undefined}
+              aria-label={item.label}
+              title={sidebarExpanded ? undefined : item.label}
               onClick={() => setActiveView(item.view)}
             >
-              <span aria-hidden="true">{item.symbol}</span>
-              {item.label}
+              <span className="sidebar__icon" aria-hidden="true">
+                {item.symbol}
+              </span>
+              <span className="sidebar__label">{item.label}</span>
               {item.view === "diagnostics" && bootstrap.sync.conflictCount > 0 ? (
                 <strong className="count-badge">{bootstrap.sync.conflictCount}</strong>
               ) : null}
@@ -254,9 +282,14 @@ export function App({
         <button
           className="compact-button"
           type="button"
+          aria-label={translate("actions.openCompact")}
+          title={sidebarExpanded ? undefined : translate("actions.openCompact")}
           onClick={() => void client.openCompactWindow()}
         >
-          {translate("app.App.016")}
+          <span className="compact-button__icon" aria-hidden="true">
+            ▱
+          </span>
+          <span className="sidebar__label">{translate("actions.openCompact")}</span>
         </button>
       </aside>
       <div className="app-content">

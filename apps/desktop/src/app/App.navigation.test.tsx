@@ -15,6 +15,43 @@ afterEach(() => {
 });
 
 describe("App time-tool navigation", () => {
+  it("starts with an icon-only sidebar and preserves an explicit expanded choice", async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container, unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <App client={new MemoryAppClient()} />
+      </QueryClientProvider>,
+    );
+
+    const toggle = await screen.findByRole("button", { name: "サイドバーを展開" });
+    expect(container.querySelector(".app-shell")).toHaveAttribute("data-sidebar", "collapsed");
+    const sidebar = screen.getByLabelText("主要画面");
+    expect(within(sidebar).getByRole("button", { name: "今日" })).toHaveAttribute("title", "今日");
+
+    await user.click(toggle);
+
+    expect(container.querySelector(".app-shell")).toHaveAttribute("data-sidebar", "expanded");
+    expect(screen.getByRole("button", { name: "サイドバーを格納" })).toBeVisible();
+    expect(within(sidebar).getByRole("button", { name: "今日" })).not.toHaveAttribute("title");
+    expect(localStorage.getItem("day-schedule-next.sidebar-expanded")).toBe("true");
+
+    unmount();
+    const restoredQueryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const restored = render(
+      <QueryClientProvider client={restoredQueryClient}>
+        <App client={new MemoryAppClient()} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("button", { name: "サイドバーを格納" });
+    expect(restored.container.querySelector(".app-shell")).toHaveAttribute(
+      "data-sidebar",
+      "expanded",
+    );
+  });
+
   it("opens timers and stopwatch as separate navigation destinations", async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

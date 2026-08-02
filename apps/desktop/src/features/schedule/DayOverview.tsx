@@ -90,6 +90,16 @@ export function DayOverview({
         </span>
       </div>
 
+      {templateState === "ready" ? (
+        <div className="overview__template-action">
+          <button className="button button--subtle" type="button" onClick={onEditTemplate}>
+            {template
+              ? translate("features.schedule.DayOverview.015")
+              : translate("features.schedule.DayOverview.016")}
+          </button>
+        </div>
+      ) : null}
+
       <div className="overview-axis" aria-hidden="true">
         {Array.from({ length: 25 }, (_, hour) => hour).map((hour) => (
           <span className="overview-tick" key={hour} style={{ left: `${(hour / 24) * 100}%` }}>
@@ -183,13 +193,6 @@ export function DayOverview({
                 {template?.name ?? translate("features.schedule.DayOverview.014")}
               </h3>
             </div>
-            {templateState === "ready" ? (
-              <button className="button button--subtle" type="button" onClick={onEditTemplate}>
-                {template
-                  ? translate("features.schedule.DayOverview.015")
-                  : translate("features.schedule.DayOverview.016")}
-              </button>
-            ) : null}
           </div>
           <div
             className="overview-lane__track overview-lane__track--template"

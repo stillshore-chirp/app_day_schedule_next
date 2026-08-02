@@ -223,14 +223,20 @@ button:disabled {
 }
 
 .app-shell {
+  --sidebar-width: 76px;
+
   display: grid;
   grid-template:
     "topbar topbar" 72px
     "sidebar content" minmax(0, 1fr) /
-    220px minmax(0, 1fr);
+    var(--sidebar-width) minmax(0, 1fr);
   height: 100%;
   color: var(--text);
   background: var(--canvas);
+}
+
+.app-shell[data-sidebar="expanded"] {
+  --sidebar-width: 220px;
 }
 
 .topbar {
@@ -273,6 +279,7 @@ button:disabled {
   color: var(--on-accent);
   background: linear-gradient(145deg, var(--brand-start), var(--brand-end));
   border-radius: 12px;
+  font-size: 16px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   box-shadow: 0 5px 14px var(--brand-shadow);
@@ -356,8 +363,20 @@ button:disabled {
   flex-direction: column;
   min-height: 0;
   padding: 16px 12px;
+  overflow-y: auto;
   background: var(--surface);
   border-right: 1px solid var(--border);
+}
+
+.sidebar__header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.sidebar-toggle {
+  min-height: 38px;
+  font-size: 18px;
 }
 
 .sidebar nav {
@@ -393,11 +412,41 @@ button:disabled {
   font-weight: 700;
 }
 
-.sidebar nav button > span {
+.sidebar__icon,
+.compact-button__icon {
   display: inline-grid;
+  flex: 0 0 22px;
   width: 22px;
   place-items: center;
-  font-size: 1.15rem;
+  font-size: 18px;
+}
+
+.sidebar__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell[data-sidebar="collapsed"] .sidebar nav button,
+.app-shell[data-sidebar="collapsed"] .compact-button {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 8px;
+}
+
+.app-shell[data-sidebar="collapsed"] .sidebar__label {
+  display: none;
+}
+
+.app-shell[data-sidebar="collapsed"] .count-badge {
+  position: absolute;
+  top: 2px;
+  inset-inline-end: 2px;
+}
+
+.app-shell[data-sidebar="collapsed"] .sidebar nav button {
+  position: relative;
 }
 
 .count-badge {
@@ -469,6 +518,12 @@ button:disabled {
 
 .overview > .section-heading--compact h2 {
   margin: 0;
+}
+
+.overview__template-action {
+  display: flex;
+  align-items: center;
+  margin: 0 10px 8px;
 }
 
 .section-heading {
@@ -552,13 +607,6 @@ button:disabled {
   display: grid;
   gap: 2px;
   min-width: 0;
-}
-
-.overview-lane__heading .button {
-  min-height: 32px;
-  margin-top: auto;
-  padding: 5px 9px;
-  white-space: normal;
 }
 
 .overview-lane__heading h3 {
@@ -2541,21 +2589,6 @@ tbody tr:focus {
     grid-template-columns: repeat(3, minmax(140px, 1fr));
   }
 
-  .app-shell {
-    grid-template-columns: 76px minmax(0, 1fr);
-  }
-
-  .sidebar nav button,
-  .compact-button {
-    justify-content: center;
-    font-size: 0;
-  }
-
-  .sidebar nav button > span,
-  .compact-button::first-letter {
-    font-size: 1.2rem;
-  }
-
   .topbar {
     grid-template-columns: auto 1fr auto;
     gap: 10px;
@@ -2604,8 +2637,8 @@ tbody tr:focus {
     margin-inline: 8px;
   }
 
-  .overview-lane__heading .button {
-    min-height: 32px;
+  .overview > .section-heading--compact {
+    align-items: flex-start;
   }
 
   .reference-time-control {
