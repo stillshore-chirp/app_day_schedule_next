@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Ticket } from "../../shared/contracts";
 import { appLocale, translate } from "../../shared/i18n/messages";
@@ -29,6 +29,7 @@ export function TicketSchedulePlanner({
   > | null>(null);
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
+  const [focusState, setFocusState] = useState<"idle" | "starting" | "started">("idle");
   const linksQuery = useQuery({
     queryKey: ["ticket-schedules", ticket.id],
     queryFn: () => client.ticketSchedules(ticket.id),
@@ -37,6 +38,13 @@ export function TicketSchedulePlanner({
     queryKey: ["ticket-planning-summary", ticket.id],
     queryFn: async () => (await client.ticketPlanningSummaries([ticket.id]))[0],
   });
+  const focusHistoryQuery = useQuery({
+    queryKey: ["ticket-focus-history", ticket.id],
+    queryFn: () => client.ticketFocusHistory(ticket.id, 20),
+  });
+  useEffect(() => {
+    setDuration(ticket.estimateMinutes === null ? "" : String(ticket.estimateMinutes));
+  }, [ticket.id, ticket.estimateMinutes]);
   const durationMinutes = Number(duration);
   const canSave =
     localStart.length > 0 &&
@@ -114,6 +122,41 @@ export function TicketSchedulePlanner({
     }
   }
 
+  async function startFocus(scheduleId: string, reopen: boolean) {
+    setFocusState("starting");
+    setError("");
+    try {
+      const currentFocus = await client.currentFocus();
+      if (currentFocus.phase !== "idle") {
+        throw new AppClientError({
+          code: "focus_active",
+          message: translate("features.tickets.TicketSchedulePlanner.037"),
+          recovery: translate("features.tickets.TicketSchedulePlanner.038"),
+          retryable: true,
+          diagnosticId: null,
+        });
+      }
+      if (reopen) {
+        await client.reopenTicket(crypto.randomUUID(), ticket.id, ticket.version);
+        await queryClient.invalidateQueries({ queryKey: ["tickets"] });
+      }
+      await client.focusCommand("start", scheduleId);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ticket-focus-history", ticket.id] }),
+        queryClient.invalidateQueries({ queryKey: ["ticket-planning-summary", ticket.id] }),
+        queryClient.invalidateQueries({ queryKey: ["ticket-planning-summaries"] }),
+      ]);
+      setFocusState("started");
+    } catch (caught) {
+      setFocusState("idle");
+      setError(
+        caught instanceof AppClientError
+          ? `${caught.detail.message} ${caught.detail.recovery}`
+          : translate("features.tickets.TicketSchedulePlanner.021"),
+      );
+    }
+  }
+
   return (
     <section className="ticket-planner" aria-labelledby={`ticket-planner-${ticket.id}`}>
       <div className="ticket-planner__heading">
@@ -132,6 +175,34 @@ export function TicketSchedulePlanner({
           ])}
         </p>
       </div>
+      <dl className="ticket-focus-metrics">
+        <div>
+          <dt>{translate("features.tickets.TicketSchedulePlanner.022")}</dt>
+          <dd>
+            {summaryQuery.data?.estimateMinutes ??
+              translate("features.tickets.TicketSchedulePlanner.023")}
+          </dd>
+        </div>
+        <div>
+          <dt>{translate("features.tickets.TicketSchedulePlanner.024")}</dt>
+          <dd>{Math.round((summaryQuery.data?.actualFocusSeconds ?? 0) / 60)}</dd>
+        </div>
+        <div>
+          <dt>{translate("features.tickets.TicketSchedulePlanner.025")}</dt>
+          <dd>
+            {summaryQuery.data?.remainingMinutes ??
+              translate("features.tickets.TicketSchedulePlanner.023")}
+          </dd>
+        </div>
+        <div>
+          <dt>{translate("features.tickets.TicketSchedulePlanner.026")}</dt>
+          <dd>
+            {summaryQuery.data?.varianceMinutes ??
+              translate("features.tickets.TicketSchedulePlanner.023")}
+          </dd>
+        </div>
+      </dl>
+      <p className="field-help">{translate("features.tickets.TicketSchedulePlanner.027")}</p>
       <div className="ticket-planner__form">
         <label>
           {translate("features.tickets.TicketSchedulePlanner.008")}
@@ -225,9 +296,69 @@ export function TicketSchedulePlanner({
             >
               {translate("features.tickets.TicketSchedulePlanner.020")}
             </button>
+            {ticket.completedAt === null ? (
+              <button
+                className="button button--subtle"
+                type="button"
+                disabled={focusState === "starting"}
+                onClick={() => void startFocus(link.schedule.id, false)}
+              >
+                {translate("features.tickets.TicketSchedulePlanner.028")}
+              </button>
+            ) : (
+              <span className="ticket-planner__focus-actions">
+                <button
+                  className="button button--subtle"
+                  type="button"
+                  disabled={focusState === "starting"}
+                  onClick={() => void startFocus(link.schedule.id, false)}
+                >
+                  {translate("features.tickets.TicketSchedulePlanner.029")}
+                </button>
+                <button
+                  className="button button--subtle"
+                  type="button"
+                  disabled={focusState === "starting"}
+                  onClick={() => void startFocus(link.schedule.id, true)}
+                >
+                  {translate("features.tickets.TicketSchedulePlanner.030")}
+                </button>
+              </span>
+            )}
           </li>
         ))}
       </ul>
+      {focusState === "started" ? (
+        <p className="success-text" role="status">
+          {translate("features.tickets.TicketSchedulePlanner.031")}
+        </p>
+      ) : null}
+      <section aria-labelledby={`ticket-focus-history-${ticket.id}`}>
+        <h4 id={`ticket-focus-history-${ticket.id}`}>
+          {translate("features.tickets.TicketSchedulePlanner.032")}
+        </h4>
+        {focusHistoryQuery.data?.length ? (
+          <ol className="ticket-focus-history">
+            {focusHistoryQuery.data.map((item) => (
+              <li key={item.sessionId}>
+                <time>{new Date(item.startedAt).toLocaleString(appLocale)}</time>
+                <span>
+                  {translate("features.tickets.TicketSchedulePlanner.033", [
+                    Math.round(item.workSeconds / 60),
+                  ])}
+                </span>
+                <span>
+                  {item.endedAt
+                    ? translate("features.tickets.TicketSchedulePlanner.034")
+                    : translate("features.tickets.TicketSchedulePlanner.035")}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p>{translate("features.tickets.TicketSchedulePlanner.036")}</p>
+        )}
+      </section>
     </section>
   );
 }

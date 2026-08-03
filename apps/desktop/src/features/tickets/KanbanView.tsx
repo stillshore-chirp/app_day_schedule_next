@@ -1031,6 +1031,12 @@ function TicketCard({
               planning?.totalPlannedMinutes ?? 0,
             ])}
           </span>
+          <span>
+            {translate("features.tickets.KanbanView.focusSummary", [
+              Math.round((planning?.actualFocusSeconds ?? 0) / 60),
+              planning?.remainingMinutes ?? translate("features.tickets.KanbanView.notSet"),
+            ])}
+          </span>
           {planning?.nextScheduledAt ? (
             <span>
               {translate("features.tickets.KanbanView.nextSchedule", [

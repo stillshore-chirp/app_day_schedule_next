@@ -55,10 +55,24 @@ pub struct TicketScheduleLink {
 #[serde(rename_all = "camelCase")]
 pub struct TicketPlanningSummary {
     pub ticket_id: Uuid,
+    pub estimate_minutes: Option<u64>,
     pub schedule_count: u64,
     pub future_planned_minutes: u64,
     pub total_planned_minutes: u64,
     pub next_scheduled_at: Option<DateTime<Utc>>,
+    pub actual_focus_seconds: u64,
+    pub remaining_minutes: Option<u64>,
+    pub variance_minutes: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TicketFocusHistoryItem {
+    pub session_id: Uuid,
+    pub schedule_id: Option<Uuid>,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    pub work_seconds: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

@@ -193,6 +193,9 @@
 - elapsed time は monotonic clock を基本にし、wall clock change で壊れない。
 - timer completion は run ID ごとに永続化し、同じ run の再観測・再起動で delivery を重複生成しない。
 - timer / stopwatch の状態は SQLite に保持するが、Google Calendar 同期対象にはしない。
+- Focus開始時に選択Scheduleの有効なTicket関連を同一transactionでスナップショット化する。以後の関連解除、付け替え、archive、delete、Schedule削除で過去実績を移動しない。
+- Ticket実績は既存Focus履歴の`working`秒だけを集計し、pauseとbreakを除外する。帰属行へdurationを複製しない。
+- Focus開始・終了はTicketの列や完了状態を暗黙に変更しない。Doneから開始する場合は、完了維持または明示再開を選択する。
 
 ## 12. Backup / restore / legacy import
 

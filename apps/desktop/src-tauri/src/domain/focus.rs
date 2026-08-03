@@ -72,6 +72,7 @@ pub struct FocusState {
     pub accumulated_seconds: u64,
     pub cycle: u32,
     pub linked_schedule_id: Option<Uuid>,
+    pub linked_ticket_id: Option<Uuid>,
 }
 
 impl FocusState {
@@ -83,6 +84,7 @@ impl FocusState {
             accumulated_seconds: 0,
             cycle: 0,
             linked_schedule_id: None,
+            linked_ticket_id: None,
         }
     }
 }

@@ -3713,6 +3713,54 @@ tbody tr:focus {
   font-size: 0.82rem;
 }
 
+.ticket-focus-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.ticket-focus-metrics > div {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.ticket-focus-metrics dt {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.ticket-focus-metrics dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.ticket-planner__focus-actions,
+.ticket-focus-history,
+.ticket-focus-history > li {
+  display: flex;
+  gap: 8px;
+}
+
+.ticket-planner__focus-actions {
+  flex-wrap: wrap;
+}
+
+.ticket-focus-history {
+  flex-direction: column;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ticket-focus-history > li {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
 .ticket-planner__form,
 .schedule-ticket-link__form,
 .unplaced-ticket-form {
@@ -3821,5 +3869,9 @@ tbody tr:focus {
   .schedule-ticket-link__form,
   .unplaced-ticket-form {
     grid-template-columns: 1fr;
+  }
+
+  .ticket-focus-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

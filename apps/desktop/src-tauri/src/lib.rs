@@ -125,6 +125,7 @@ pub fn run() {
             commands::ticket_schedule_list,
             commands::schedule_ticket_link_get,
             commands::ticket_planning_summaries_get,
+            commands::ticket_focus_history_list,
             commands::history_undo,
             commands::history_redo,
             commands::settings_update,

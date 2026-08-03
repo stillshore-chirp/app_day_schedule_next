@@ -20,7 +20,7 @@ use super::Database;
 const BACKUP_GENERATIONS: usize = 10;
 const PENDING_RESTORE_NAME: &str = ".restore-pending.sqlite3";
 const PENDING_RESTORE_HASH_NAME: &str = ".restore-pending.sha256";
-pub const CURRENT_SCHEMA_VERSION: u32 = 15;
+pub const CURRENT_SCHEMA_VERSION: u32 = 16;
 
 #[derive(Debug, Clone)]
 pub struct PreparedMigrationBackup {
@@ -578,9 +578,10 @@ mod tests {
 
     use super::*;
     use crate::domain::{
-        AssignTicketScheduleRequest, TicketChecklistItemDraft, TicketDraft, TicketPatch,
-        TicketPriority, TicketScheduleSource,
+        AssignTicketScheduleRequest, FocusPhase, TicketChecklistItemDraft, TicketDraft,
+        TicketPatch, TicketPriority, TicketScheduleSource,
     };
+    use crate::infrastructure::FocusRecord;
 
     #[test]
     fn replacement_displaces_existing_destination_before_rename() {
@@ -717,6 +718,21 @@ mod tests {
             )
             .await
             .unwrap();
+        let focus = FocusRecord {
+            id: Uuid::new_v4(),
+            schedule_item_id: Some(link.schedule.id),
+            ticket_id: None,
+            phase: FocusPhase::Working,
+            previous_phase: None,
+            started_at: Utc::now(),
+            accumulated_seconds: 0,
+            cycle: 0,
+        };
+        database.insert_focus(&focus).await.unwrap();
+        database
+            .end_focus(focus.id, Utc::now() + chrono::Duration::minutes(10), 600)
+            .await
+            .unwrap();
         let backup = database.create_backup("manual", "test").await.unwrap();
         database
             .update_ticket(
@@ -749,6 +765,10 @@ mod tests {
         assert_eq!(restored_links.len(), 1);
         assert_eq!(restored_links[0].id, link.id);
         assert_eq!(restored_links[0].schedule.id, link.schedule.id);
+        let focus_history = restored.ticket_focus_history(created.id, 10).await.unwrap();
+        assert_eq!(focus_history.len(), 1);
+        assert_eq!(focus_history[0].session_id, focus.id);
+        assert_eq!(focus_history[0].work_seconds, 600);
     }
 
     #[tokio::test]

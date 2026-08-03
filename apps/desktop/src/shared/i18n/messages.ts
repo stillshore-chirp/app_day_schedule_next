@@ -695,6 +695,17 @@ export const jaMessages = {
   "features.views.OperationalViews.073": " 休憩後に次の作業を自動開始 ",
   "features.views.OperationalViews.074": " Focus通知を有効にする ",
   "features.views.OperationalViews.075": "保存中…",
+  "features.views.OperationalViews.401": "このFocus実績はTicket「{0}」へ帰属します。",
+  "features.views.OperationalViews.402":
+    "選択した予定はTicket未関連です。このFocus実績は未帰属になります。",
+  "features.views.OperationalViews.403":
+    "予定を選ばずに開始すると、このFocus実績は未帰属になります。",
+  "features.views.OperationalViews.404": "帰属先Ticket: {0}（開始時点で固定）",
+  "features.views.OperationalViews.405": "関連済みTicket",
+  "features.views.OperationalViews.406": "このFocus実績はTicket未帰属です。",
+  "features.views.OperationalViews.407": "Focus実績を保存しました",
+  "features.views.OperationalViews.408":
+    "Ticketは自動完了していません。完了にする場合はTickets画面で対象を確認して明示的にDoneへ移動してください。",
   "features.views.OperationalViews.076": "設定を保存",
   "features.views.OperationalViews.077": "Google接続状態を取得できませんでした。",
   "features.views.OperationalViews.078": "独自のGoogle OAuth Desktop app JSONを選択",
@@ -1333,6 +1344,8 @@ export const jaMessages = {
   "features.tickets.KanbanView.deletePlanningImpact":
     "関連予定 {0}件（今後{1}分）は残り、関連だけ解除されます。",
   "features.tickets.KanbanView.planningSummary": "予定 {0}件 / 今後{1}分 / 合計{2}分",
+  "features.tickets.KanbanView.focusSummary": "実績 {0}分 / 残り {1}分",
+  "features.tickets.KanbanView.notSet": "未設定",
   "features.tickets.KanbanView.nextSchedule": "次回 {0}",
   "features.tickets.TicketSchedulePlanner.001": "次の予定なし",
   "features.tickets.TicketSchedulePlanner.002":
@@ -1358,9 +1371,31 @@ export const jaMessages = {
   "features.tickets.TicketSchedulePlanner.016": "予定を保存できません",
   "features.tickets.TicketSchedulePlanner.017": "予定を作成し、チケットへ関連付けました。",
   "features.tickets.TicketSchedulePlanner.018":
-    "Focus実績との比較はIssue #35で対応します。ここでは予定時間だけを表示しています。",
+    "予定の関連解除や付け替えをしても、開始済みFocusの帰属先は変わりません。",
   "features.tickets.TicketSchedulePlanner.019": "関連予定",
   "features.tickets.TicketSchedulePlanner.020": "関連を解除",
+  "features.tickets.TicketSchedulePlanner.021":
+    "Focusを開始できませんでした。現在のFocus状態を確認してください。",
+  "features.tickets.TicketSchedulePlanner.022": "見積（分）",
+  "features.tickets.TicketSchedulePlanner.023": "未設定",
+  "features.tickets.TicketSchedulePlanner.024": "Focus実績（分）",
+  "features.tickets.TicketSchedulePlanner.025": "残り（分）",
+  "features.tickets.TicketSchedulePlanner.026": "実績差（分）",
+  "features.tickets.TicketSchedulePlanner.027":
+    "実績はFocus開始時の関連先へ固定されます。休憩と一時停止は含みません。過去の未帰属実績を後から割り当てる操作は現在未対応です。",
+  "features.tickets.TicketSchedulePlanner.028": "この予定でFocus開始",
+  "features.tickets.TicketSchedulePlanner.029": "完了のままFocus開始",
+  "features.tickets.TicketSchedulePlanner.030": "再開してFocus開始",
+  "features.tickets.TicketSchedulePlanner.031":
+    "Focusを開始しました。Ticketの状態は自動変更されません。",
+  "features.tickets.TicketSchedulePlanner.032": "Focus実績履歴",
+  "features.tickets.TicketSchedulePlanner.033": "実績 {0}分",
+  "features.tickets.TicketSchedulePlanner.034": "終了",
+  "features.tickets.TicketSchedulePlanner.035": "進行中",
+  "features.tickets.TicketSchedulePlanner.036": "このTicketへ帰属したFocus実績はまだありません。",
+  "features.tickets.TicketSchedulePlanner.037": "別のFocusセッションが継続中です。",
+  "features.tickets.TicketSchedulePlanner.038":
+    "Focus画面で現在のセッションを終了してから、この予定で開始してください。",
   "shared.time.001": "{0}分",
   "shared.time.002": "{0}時間",
   "shared.time.003": "{0}時間{1}分",

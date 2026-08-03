@@ -35,6 +35,7 @@ import {
   type TicketBoard,
   type TicketDraft,
   type TicketHistoryItem,
+  type TicketFocusHistoryItem,
   type TicketMoveRequest,
   type TicketQuery,
   type TicketUpdateRequest,
@@ -208,6 +209,8 @@ export class MemoryAppClient implements AppClient {
   private ticketOperations = new Map<string, string>();
   private ticketScheduleLinks: TicketScheduleLink[] = [];
   private ticketScheduleOperations = new Map<string, string>();
+  private ticketFocusHistoryItems: Array<TicketFocusHistoryItem & { ticketId: string }> = [];
+  private activeFocusSessionId: string | null = null;
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
   private templates: DayTemplate[] = [
@@ -233,6 +236,7 @@ export class MemoryAppClient implements AppClient {
     accumulatedSeconds: 0,
     cycle: 0,
     linkedScheduleId: null,
+    linkedTicketId: null,
   };
   private timers: Timer[] = [];
   private timerRunAnchors = new Map<string, { startedAt: number; elapsedAtStart: number }>();
@@ -247,7 +251,7 @@ export class MemoryAppClient implements AppClient {
   async bootstrap(): Promise<Bootstrap> {
     const now = new Date();
     return {
-      schemaVersion: 15,
+      schemaVersion: 16,
       appVersion: "0.1.0-test",
       today: now.toISOString().slice(0, 10),
       timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo",
@@ -738,10 +742,14 @@ export class MemoryAppClient implements AppClient {
   async ticketPlanningSummaries(ticketIds: string[]): Promise<TicketPlanningSummary[]> {
     const now = Date.now();
     return ticketIds.map((ticketId) => {
-      const links = this.ticketScheduleLinks.filter(
+      const allLinks = this.ticketScheduleLinks.filter((link) => link.ticketId === ticketId);
+      const links = allLinks.filter(
         (link) => link.ticketId === ticketId && link.unlinkedAt === null,
       );
+      const historical = [...new Map(allLinks.map((link) => [link.schedule.id, link])).values()];
       const future = links.filter((link) => Date.parse(link.schedule.endUtc) > now);
+      const ticket = this.tickets.find((candidate) => candidate.id === ticketId);
+      const estimate = ticket?.estimateMinutes ?? null;
       const minutes = (link: TicketScheduleLink, futureOnly: boolean) =>
         Math.max(
           0,
@@ -755,16 +763,34 @@ export class MemoryAppClient implements AppClient {
         );
       return {
         ticketId,
-        scheduleCount: links.length,
+        estimateMinutes: estimate,
+        scheduleCount: historical.length,
         futurePlannedMinutes: future.reduce((total, link) => total + minutes(link, true), 0),
-        totalPlannedMinutes: links.reduce((total, link) => total + minutes(link, false), 0),
+        totalPlannedMinutes: historical.reduce((total, link) => total + minutes(link, false), 0),
         nextScheduledAt:
           future
             .map((link) => link.schedule.startUtc)
             .filter((start) => Date.parse(start) >= now)
             .sort()[0] ?? null,
+        actualFocusSeconds: 0,
+        remainingMinutes: estimate,
+        varianceMinutes: estimate === null ? null : -estimate,
       };
     });
+  }
+
+  async ticketFocusHistory(ticketId: string): Promise<TicketFocusHistoryItem[]> {
+    return structuredClone(
+      this.ticketFocusHistoryItems
+        .filter((item) => item.ticketId === ticketId)
+        .map((item) => ({
+          sessionId: item.sessionId,
+          scheduleId: item.scheduleId,
+          startedAt: item.startedAt,
+          endedAt: item.endedAt,
+          workSeconds: item.workSeconds,
+        })),
+    );
   }
 
   private async ticketScheduleLinkById(id: string): Promise<TicketScheduleLink> {
@@ -814,12 +840,31 @@ export class MemoryAppClient implements AppClient {
   ): Promise<FocusState> {
     const now = new Date();
     if (command === "start" || command === "resume") {
+      const scheduleId = linkedScheduleId ?? this.focus.linkedScheduleId;
+      const activeLink = scheduleId
+        ? this.ticketScheduleLinks.find(
+            (link) => link.schedule.id === scheduleId && link.unlinkedAt === null,
+          )
+        : undefined;
+      if (command === "start" && this.focus.phase === "idle" && activeLink) {
+        this.activeFocusSessionId = crypto.randomUUID();
+        this.ticketFocusHistoryItems.unshift({
+          ticketId: activeLink.ticketId,
+          sessionId: this.activeFocusSessionId,
+          scheduleId: scheduleId ?? null,
+          startedAt: now.toISOString(),
+          endedAt: null,
+          workSeconds: 0,
+        });
+      }
       this.focus = {
         ...this.focus,
         phase: "working",
         startedAt: now.toISOString(),
         endsAt: new Date(now.getTime() + this.settings.focusWorkMinutes * 60_000).toISOString(),
-        linkedScheduleId: linkedScheduleId ?? this.focus.linkedScheduleId,
+        linkedScheduleId: scheduleId,
+        linkedTicketId:
+          command === "start" ? (activeLink?.ticketId ?? null) : this.focus.linkedTicketId,
       };
     } else if (command === "pause") {
       this.focus = { ...this.focus, phase: "paused", endsAt: null };
@@ -832,6 +877,11 @@ export class MemoryAppClient implements AppClient {
         cycle: this.focus.cycle + 1,
       };
     } else {
+      const history = this.ticketFocusHistoryItems.find(
+        (item) => item.sessionId === this.activeFocusSessionId,
+      );
+      if (history) history.endedAt = now.toISOString();
+      this.activeFocusSessionId = null;
       this.focus = {
         phase: "idle",
         startedAt: null,
@@ -839,6 +889,7 @@ export class MemoryAppClient implements AppClient {
         accumulatedSeconds: 0,
         cycle: this.focus.cycle,
         linkedScheduleId: null,
+        linkedTicketId: null,
       };
     }
     return structuredClone(this.focus);
@@ -1068,7 +1119,7 @@ export class MemoryAppClient implements AppClient {
   async diagnostics(): Promise<DiagnosticsSnapshot> {
     return {
       appVersion: "0.1.0-test",
-      schemaVersion: 15,
+      schemaVersion: 16,
       databaseState: "ready",
       scheduleCount: this.schedules.filter((item) => item.deletedAt === null).length,
       deletedCount: this.schedules.filter((item) => item.deletedAt !== null).length,
@@ -1273,6 +1324,8 @@ export class MemoryAppClient implements AppClient {
     this.ticketHistoryItems = [];
     this.ticketOperations.clear();
     this.ticketScheduleLinks = [];
+    this.ticketFocusHistoryItems = [];
+    this.activeFocusSessionId = null;
     this.ticketScheduleOperations.clear();
     this.templates = this.templates
       .filter((item) => item.isBuiltin)
@@ -1313,6 +1366,7 @@ export class MemoryAppClient implements AppClient {
       accumulatedSeconds: 0,
       cycle: 0,
       linkedScheduleId: null,
+      linkedTicketId: null,
     };
     return count;
   }
@@ -1381,7 +1435,7 @@ export class MemoryAppClient implements AppClient {
       id: crypto.randomUUID(),
       fileName: "synthetic-backup.sqlite3",
       sizeBytes: 0,
-      schemaVersion: 15,
+      schemaVersion: 16,
       appVersion: "demo",
       verified: true,
       createdAt: new Date().toISOString(),

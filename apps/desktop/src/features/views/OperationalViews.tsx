@@ -11,6 +11,7 @@ import type {
   BackupRecord,
   FocusState,
   FocusHistoryReport,
+  TicketScheduleLink,
   Schedule,
   GoogleCalendar,
   GoogleConnection,
@@ -40,6 +41,9 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [history, setHistory] = useState<FocusHistoryReport | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [selectedTicketLink, setSelectedTicketLink] = useState<TicketScheduleLink | null>(null);
+  const [attributedTicketTitle, setAttributedTicketTitle] = useState<string | null>(null);
+  const [lastCompletedTicketId, setLastCompletedTicketId] = useState<string | null>(null);
   useEffect(() => {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -60,6 +64,26 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
       .catch(() => setLoadError(true));
   }, [client]);
   useEffect(() => {
+    if (!linkedScheduleId) {
+      setSelectedTicketLink(null);
+      return;
+    }
+    void client
+      .scheduleTicketLink(linkedScheduleId)
+      .then(setSelectedTicketLink)
+      .catch(() => setSelectedTicketLink(null));
+  }, [client, linkedScheduleId]);
+  useEffect(() => {
+    if (!focus.linkedTicketId) {
+      setAttributedTicketTitle(null);
+      return;
+    }
+    void client
+      .ticket(focus.linkedTicketId)
+      .then((ticket) => setAttributedTicketTitle(ticket.title))
+      .catch(() => setAttributedTicketTitle(null));
+  }, [client, focus.linkedTicketId]);
+  useEffect(() => {
     const id = window.setInterval(() => {
       setNow(new Date());
       void client
@@ -72,12 +96,16 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
   const command = async (value: "start" | "pause" | "resume" | "stop" | "skip") => {
     setBusy(true);
     try {
+      const completedTicketId = value === "stop" ? focus.linkedTicketId : null;
       setFocus(
         await client.focusCommand(
           value,
-          value === "start" && linkedScheduleId ? linkedScheduleId : undefined,
+          value === "start" && focus.phase === "idle" && linkedScheduleId
+            ? linkedScheduleId
+            : undefined,
         ),
       );
+      if (completedTicketId) setLastCompletedTicketId(completedTicketId);
       setHistory(await client.focusHistoryToday());
     } finally {
       setBusy(false);
@@ -120,7 +148,7 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
           {bootstrap.settings.focusLongBreakEvery}
           {translate("features.views.OperationalViews.013")}
         </p>
-        {focus.phase === "idle" || focus.phase === "waiting_next" ? (
+        {focus.phase === "idle" ? (
           <label className="focus-link">
             {translate("features.views.OperationalViews.014")}
             <select
@@ -144,6 +172,25 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
             </strong>
           </p>
         ) : null}
+        {focus.phase === "idle" ? (
+          linkedScheduleId ? (
+            <p role="note">
+              {selectedTicketLink
+                ? translate("features.views.OperationalViews.401", [selectedTicketLink.ticketTitle])
+                : translate("features.views.OperationalViews.402")}
+            </p>
+          ) : (
+            <p role="note">{translate("features.views.OperationalViews.403")}</p>
+          )
+        ) : focus.linkedTicketId ? (
+          <p role="status">
+            {translate("features.views.OperationalViews.404", [
+              attributedTicketTitle ?? translate("features.views.OperationalViews.405"),
+            ])}
+          </p>
+        ) : (
+          <p role="status">{translate("features.views.OperationalViews.406")}</p>
+        )}
         <div className="button-row button-row--center">
           {focus.phase === "idle" || focus.phase === "waiting_next" ? (
             <button
@@ -184,6 +231,11 @@ export function FocusView({ client, bootstrap }: { client: AppClient; bootstrap:
           ) : null}
         </div>
       </section>
+      {lastCompletedTicketId ? (
+        <StatusMessage tone="success" title={translate("features.views.OperationalViews.407")}>
+          {translate("features.views.OperationalViews.408")}
+        </StatusMessage>
+      ) : null}
       <section className="focus-history" aria-labelledby="focus-history-title">
         <div className="section-heading section-heading--compact">
           <h2 id="focus-history-title">{translate("features.views.OperationalViews.023")}</h2>

@@ -28,6 +28,7 @@ import {
   scheduleSchema,
   ticketBoardSchema,
   ticketHistoryItemSchema,
+  ticketFocusHistoryItemSchema,
   ticketPlanningSummarySchema,
   ticketScheduleLinkSchema,
   ticketPageSchema,
@@ -78,6 +79,7 @@ import {
   type TicketBoard,
   type TicketDraft,
   type TicketHistoryItem,
+  type TicketFocusHistoryItem,
   type TicketMoveRequest,
   type TicketQuery,
   type TicketUpdateRequest,
@@ -153,6 +155,7 @@ export interface AppClient {
   ticketSchedules(ticketId: string, includeUnlinked?: boolean): Promise<TicketScheduleLink[]>;
   scheduleTicketLink(scheduleId: string): Promise<TicketScheduleLink | null>;
   ticketPlanningSummaries(ticketIds: string[]): Promise<TicketPlanningSummary[]>;
+  ticketFocusHistory(ticketId: string, limit?: number): Promise<TicketFocusHistoryItem[]>;
   undo(): Promise<ChangeResult>;
   redo(): Promise<ChangeResult>;
   updateSettings(settings: Settings): Promise<Settings>;
@@ -415,6 +418,12 @@ export class TauriAppClient implements AppClient {
     return ticketPlanningSummarySchema
       .array()
       .parse(await call("ticket_planning_summaries_get", { ticketIds }));
+  }
+
+  async ticketFocusHistory(ticketId: string, limit = 100): Promise<TicketFocusHistoryItem[]> {
+    return ticketFocusHistoryItemSchema
+      .array()
+      .parse(await call("ticket_focus_history_list", { ticketId, limit }));
   }
 
   async undo(): Promise<ChangeResult> {
@@ -794,6 +803,9 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   ticketPlanningSummaries(): Promise<TicketPlanningSummary[]> {
+    return Promise.reject(this.unavailable());
+  }
+  ticketFocusHistory(): Promise<TicketFocusHistoryItem[]> {
     return Promise.reject(this.unavailable());
   }
   undo(): Promise<ChangeResult> {

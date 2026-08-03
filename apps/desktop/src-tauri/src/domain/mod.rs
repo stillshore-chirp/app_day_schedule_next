@@ -32,8 +32,8 @@ pub use ticket::{
     TicketQuery, TicketTag, rebalanced_sort_key, sort_key_between,
 };
 pub use ticket_schedule::{
-    AssignTicketScheduleRequest, LinkTicketScheduleRequest, TicketPlanningSummary,
-    TicketScheduleLink, TicketScheduleSource, UnlinkTicketScheduleRequest,
+    AssignTicketScheduleRequest, LinkTicketScheduleRequest, TicketFocusHistoryItem,
+    TicketPlanningSummary, TicketScheduleLink, TicketScheduleSource, UnlinkTicketScheduleRequest,
 };
 pub use time::{LocalTimeResolution, resolve_local_time};
 pub use timer::{

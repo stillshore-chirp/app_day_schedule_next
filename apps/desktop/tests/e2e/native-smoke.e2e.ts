@@ -58,7 +58,7 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 15, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 16, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
@@ -1476,6 +1476,106 @@ describe("Day Schedule Next native smoke", () => {
         expect.objectContaining({ title: ticketTitle, completedAt: null, archivedAt: null }),
       ]),
     );
+  });
+
+  it("attributes Focus to the Ticket selected through an explicit related schedule", async () => {
+    await persistFixtureTheme("light");
+    await setLogicalWindowSize(1280, 820);
+    const ticketTitle = `E2E-Focus帰属-${Date.now()}`;
+    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
+    await $(
+      '//section[.//h2[normalize-space(.)="In Progress"]]//input[@placeholder="タイトルだけで追加"]',
+    ).setValue(ticketTitle);
+    await $(
+      '//section[.//h2[normalize-space(.)="In Progress"]]//button[normalize-space(.)="追加"]',
+    ).click();
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    await $('//div[@role="dialog"]//label[contains(., "見積時間")]/input').setValue("25");
+    await $('//div[@role="dialog"]//button[normalize-space(.)="保存"]').click();
+    await $(
+      '//div[@role="dialog"]//*[@role="status" and contains(., "保存しました")]',
+    ).waitForDisplayed();
+    await $('//div[@role="dialog"]//button[normalize-space(.)="新しい予定を作成"]').click();
+    const startButton = $(
+      '//div[@role="dialog"]//button[normalize-space(.)="この予定でFocus開始"]',
+    );
+    await startButton.waitForDisplayed();
+    await startButton.click();
+    await $(
+      '//div[@role="dialog"]//*[@role="status" and contains(., "Focusを開始しました")]',
+    ).waitForDisplayed();
+
+    const ticketPage = (await browser.tauri.execute(
+      ({ core }, expectedTitle) =>
+        core.invoke("ticket_list", {
+          query: { search: expectedTitle, limit: 10 },
+        }),
+      ticketTitle,
+    )) as { items: Array<{ id: string }> };
+    const ticketId = ticketPage.items[0]?.id;
+    if (!ticketId) throw new Error("Focus attribution ticket was not found");
+    const active = (await browser.tauri.execute(({ core }) => core.invoke("focus_state_get"))) as {
+      linkedTicketId: string | null;
+    };
+    expect(active.linkedTicketId).toBe(ticketId);
+    await browser.saveScreenshot("./test-results/native-ticket-focus-started.png");
+    await setLogicalWindowSize(720, 820);
+    await browser.saveScreenshot("./test-results/native-ticket-focus-narrow.png");
+    await setLogicalWindowSize(1280, 820);
+    const enlargedDialogText = await browser.execute(() => {
+      const dialog = document.querySelector('div[role="dialog"]');
+      if (!(dialog instanceof HTMLElement)) throw new Error("Ticket detail dialog was not found");
+      const descendants: HTMLElement[] = Array.from(dialog.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      const elements = [dialog, ...descendants];
+      let checkedOriginal = 0;
+      let checkedInline = "";
+      elements.forEach((element) => {
+        const original = Number.parseFloat(window.getComputedStyle(element).fontSize);
+        element.dataset.e2eOriginalFontSize = element.style.fontSize;
+        if (Number.isFinite(original)) {
+          element.style.setProperty("font-size", `${original * 2}px`, "important");
+          if (checkedOriginal === 0 && element.textContent?.trim()) {
+            checkedOriginal = original;
+            checkedInline = element.style.getPropertyValue("font-size");
+          }
+        }
+      });
+      return { checkedOriginal, checkedInline };
+    });
+    expect(enlargedDialogText.checkedInline).toBe(`${enlargedDialogText.checkedOriginal * 2}px`);
+    await browser.saveScreenshot("./test-results/native-ticket-focus-text-200.png");
+    await browser.execute(() => {
+      const dialog = document.querySelector('div[role="dialog"]');
+      if (!(dialog instanceof HTMLElement)) return;
+      const descendants: HTMLElement[] = Array.from(dialog.querySelectorAll("*")).filter(
+        (element): element is HTMLElement => element instanceof HTMLElement,
+      );
+      [dialog, ...descendants].forEach((element) => {
+        const original = element.dataset.e2eOriginalFontSize ?? "";
+        if (original) element.style.fontSize = original;
+        else element.style.removeProperty("font-size");
+        delete element.dataset.e2eOriginalFontSize;
+      });
+    });
+
+    await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
+    await $('//aside[@aria-label="主要画面"]//button[@aria-label="フォーカス"]').click();
+    await $(
+      `//*[contains(., "帰属先Ticket:") and contains(., "${ticketTitle}")]`,
+    ).waitForDisplayed();
+    await $('//button[normalize-space(.)="Focusを終了"]').click();
+    await $('//*[contains(., "Ticketは自動完了していません")]').waitForDisplayed();
+
+    const history = (await browser.tauri.execute(
+      ({ core }, id) => core.invoke("ticket_focus_history_list", { ticketId: id, limit: 10 }),
+      ticketId,
+    )) as Array<{ sessionId: string; workSeconds: number }>;
+    expect(history).toHaveLength(1);
+    expect(history[0]?.workSeconds).toBeGreaterThanOrEqual(0);
+    await browser.saveScreenshot("./test-results/native-ticket-focus-ended.png");
   });
 
   it("opens and captures the compact window after all main-window assertions", async () => {
