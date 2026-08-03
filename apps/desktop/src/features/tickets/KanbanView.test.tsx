@@ -103,6 +103,7 @@ describe("KanbanView", () => {
     const client = new ConflictClient([]);
     await createTicket(client);
     const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     renderBoard(client);
 
     const open = await screen.findByRole("button", { name: "Review releaseの詳細を開く" });
@@ -145,6 +146,7 @@ describe("KanbanView", () => {
     const client = new MemoryAppClient([]);
     await createTicket(client);
     const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     renderBoard(client);
 
     await user.click(await screen.findByRole("button", { name: "Review releaseの詳細を開く" }));
@@ -157,7 +159,9 @@ describe("KanbanView", () => {
     await user.click(await screen.findByRole("button", { name: "Review releaseの詳細を開く" }));
     await user.click(screen.getByRole("button", { name: "削除…" }));
     expect(
-      screen.getByText("予定とのリンク機能はまだないため、予定は変更されません。"),
+      screen.getByText(
+        "関連する予定は削除・完了せず、そのまま残ります。チケットとの関連だけ解除されます。",
+      ),
     ).toBeVisible();
     await user.click(screen.getByRole("button", { name: "このチケットを削除" }));
     await user.click(await screen.findByRole("button", { name: "削除を取り消す" }));

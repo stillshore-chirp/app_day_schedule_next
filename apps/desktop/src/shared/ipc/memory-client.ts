@@ -38,6 +38,11 @@ import {
   type TicketMoveRequest,
   type TicketQuery,
   type TicketUpdateRequest,
+  type AssignTicketScheduleRequest,
+  type LinkTicketScheduleRequest,
+  type UnlinkTicketScheduleRequest,
+  type TicketPlanningSummary,
+  type TicketScheduleLink,
   type Settings,
   type SyncSummary,
   type SyncConflictItem,
@@ -201,6 +206,8 @@ export class MemoryAppClient implements AppClient {
   private tickets: Ticket[] = [];
   private ticketHistoryItems: TicketHistoryItem[] = [];
   private ticketOperations = new Map<string, string>();
+  private ticketScheduleLinks: TicketScheduleLink[] = [];
+  private ticketScheduleOperations = new Map<string, string>();
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
   private templates: DayTemplate[] = [
@@ -240,7 +247,7 @@ export class MemoryAppClient implements AppClient {
   async bootstrap(): Promise<Bootstrap> {
     const now = new Date();
     return {
-      schemaVersion: 14,
+      schemaVersion: 15,
       appVersion: "0.1.0-test",
       today: now.toISOString().slice(0, 10),
       timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo",
@@ -368,6 +375,13 @@ export class MemoryAppClient implements AppClient {
       deletedAt: new Date().toISOString(),
       version: current.version + 1,
     };
+    const now = new Date().toISOString();
+    for (const link of this.ticketScheduleLinks) {
+      if (link.schedule.id === request.id && link.unlinkedAt === null) {
+        link.unlinkedAt = now;
+        link.version += 1;
+      }
+    }
     return this.changeResult([request.id]);
   }
 
@@ -584,6 +598,7 @@ export class MemoryAppClient implements AppClient {
       updatedAt: new Date().toISOString(),
     };
     this.tickets[index] = updated;
+    if (archived) this.deactivateTicketLinks(id);
     this.recordTicketOperation(operationId, updated, archived ? "archive" : "restore");
     return structuredClone(updated);
   }
@@ -599,6 +614,7 @@ export class MemoryAppClient implements AppClient {
       updatedAt: new Date().toISOString(),
     };
     this.tickets[index] = updated;
+    this.deactivateTicketLinks(id);
     this.recordTicketOperation(operationId, updated, "delete");
     return structuredClone(updated);
   }
@@ -610,6 +626,161 @@ export class MemoryAppClient implements AppClient {
         .slice(-limit)
         .reverse(),
     );
+  }
+
+  async assignTicketSchedule(request: AssignTicketScheduleRequest): Promise<TicketScheduleLink> {
+    const repeated = this.ticketScheduleOperations.get(request.operationId);
+    if (repeated) return this.ticketScheduleLinkById(repeated);
+    const ticket = await this.ticket(request.ticketId);
+    if (ticket.version !== request.expectedTicketVersion)
+      throw new Error("ticket_version_conflict");
+    const start = fromZonedTime(request.localStart, request.timezoneId);
+    const end = new Date(start.getTime() + request.durationMinutes * 60_000);
+    const schedule = await this.createSchedule({
+      title: request.titleOverride?.trim() || [...ticket.title].slice(0, 200).join(""),
+      description: "",
+      location: "",
+      startUtc: start.toISOString(),
+      endUtc: end.toISOString(),
+      timezoneId: request.timezoneId,
+      allDay: false,
+      allDayStartDate: null,
+      allDayEndDateExclusive: null,
+      status: "scheduled",
+      project: "",
+      category: "",
+      tags: [],
+      color: "#6F96F4",
+      priority: ticket.priority,
+      recurrenceRule: null,
+      recurrenceSupplementalLines: [],
+      recurrenceExdates: [],
+      startNotificationMinutes: null,
+      endNotificationMinutes: null,
+    });
+    const now = new Date().toISOString();
+    const link: TicketScheduleLink = {
+      id: crypto.randomUUID(),
+      ticketId: ticket.id,
+      ticketTitle: ticket.title,
+      schedule,
+      linkedAt: now,
+      unlinkedAt: null,
+      source: request.source,
+      version: 0,
+    };
+    this.ticketScheduleLinks.push(link);
+    this.ticketScheduleOperations.set(request.operationId, link.id);
+    return structuredClone(link);
+  }
+
+  async linkTicketSchedule(request: LinkTicketScheduleRequest): Promise<TicketScheduleLink> {
+    const repeated = this.ticketScheduleOperations.get(request.operationId);
+    if (repeated) return this.ticketScheduleLinkById(repeated);
+    const ticket = await this.ticket(request.ticketId);
+    const schedule = this.schedules.find((item) => item.id === request.scheduleId);
+    if (!schedule) throw new Error("schedule_not_found");
+    if (ticket.version !== request.expectedTicketVersion)
+      throw new Error("ticket_version_conflict");
+    if (schedule.version !== request.expectedScheduleVersion)
+      throw new Error("schedule_version_conflict");
+    const existing = this.ticketScheduleLinks.find(
+      (link) => link.schedule.id === schedule.id && link.unlinkedAt === null,
+    );
+    if (existing && existing.ticketId === ticket.id) return structuredClone(existing);
+    if (existing && request.replaceExisting !== true) throw new Error("ticket_link_conflict");
+    if (existing) {
+      existing.unlinkedAt = new Date().toISOString();
+      existing.version += 1;
+    }
+    const link: TicketScheduleLink = {
+      id: crypto.randomUUID(),
+      ticketId: ticket.id,
+      ticketTitle: ticket.title,
+      schedule: structuredClone(schedule),
+      linkedAt: new Date().toISOString(),
+      unlinkedAt: null,
+      source: request.source,
+      version: 0,
+    };
+    this.ticketScheduleLinks.push(link);
+    this.ticketScheduleOperations.set(request.operationId, link.id);
+    return structuredClone(link);
+  }
+
+  async unlinkTicketSchedule(request: UnlinkTicketScheduleRequest): Promise<TicketScheduleLink> {
+    const repeated = this.ticketScheduleOperations.get(request.operationId);
+    if (repeated) return this.ticketScheduleLinkById(repeated);
+    const link = this.ticketScheduleLinks.find((candidate) => candidate.id === request.linkId);
+    if (!link || link.unlinkedAt !== null || link.version !== request.expectedLinkVersion)
+      throw new Error("ticket_link_version_conflict");
+    link.unlinkedAt = new Date().toISOString();
+    link.version += 1;
+    this.ticketScheduleOperations.set(request.operationId, link.id);
+    return structuredClone(link);
+  }
+
+  async ticketSchedules(ticketId: string, includeUnlinked = false): Promise<TicketScheduleLink[]> {
+    return structuredClone(
+      this.ticketScheduleLinks.filter(
+        (link) => link.ticketId === ticketId && (includeUnlinked || link.unlinkedAt === null),
+      ),
+    );
+  }
+
+  async scheduleTicketLink(scheduleId: string): Promise<TicketScheduleLink | null> {
+    const link = this.ticketScheduleLinks.find(
+      (candidate) => candidate.schedule.id === scheduleId && candidate.unlinkedAt === null,
+    );
+    return link ? structuredClone(link) : null;
+  }
+
+  async ticketPlanningSummaries(ticketIds: string[]): Promise<TicketPlanningSummary[]> {
+    const now = Date.now();
+    return ticketIds.map((ticketId) => {
+      const links = this.ticketScheduleLinks.filter(
+        (link) => link.ticketId === ticketId && link.unlinkedAt === null,
+      );
+      const future = links.filter((link) => Date.parse(link.schedule.endUtc) > now);
+      const minutes = (link: TicketScheduleLink, futureOnly: boolean) =>
+        Math.max(
+          0,
+          Math.round(
+            (Date.parse(link.schedule.endUtc) -
+              (futureOnly
+                ? Math.max(Date.parse(link.schedule.startUtc), now)
+                : Date.parse(link.schedule.startUtc))) /
+              60_000,
+          ),
+        );
+      return {
+        ticketId,
+        scheduleCount: links.length,
+        futurePlannedMinutes: future.reduce((total, link) => total + minutes(link, true), 0),
+        totalPlannedMinutes: links.reduce((total, link) => total + minutes(link, false), 0),
+        nextScheduledAt:
+          future
+            .map((link) => link.schedule.startUtc)
+            .filter((start) => Date.parse(start) >= now)
+            .sort()[0] ?? null,
+      };
+    });
+  }
+
+  private async ticketScheduleLinkById(id: string): Promise<TicketScheduleLink> {
+    const link = this.ticketScheduleLinks.find((candidate) => candidate.id === id);
+    if (!link) throw new Error("ticket_link_not_found");
+    return structuredClone(link);
+  }
+
+  private deactivateTicketLinks(ticketId: string): void {
+    const now = new Date().toISOString();
+    for (const link of this.ticketScheduleLinks) {
+      if (link.ticketId === ticketId && link.unlinkedAt === null) {
+        link.unlinkedAt = now;
+        link.version += 1;
+      }
+    }
   }
 
   async undo(): Promise<ChangeResult> {
@@ -897,7 +1068,7 @@ export class MemoryAppClient implements AppClient {
   async diagnostics(): Promise<DiagnosticsSnapshot> {
     return {
       appVersion: "0.1.0-test",
-      schemaVersion: 14,
+      schemaVersion: 15,
       databaseState: "ready",
       scheduleCount: this.schedules.filter((item) => item.deletedAt === null).length,
       deletedCount: this.schedules.filter((item) => item.deletedAt !== null).length,
@@ -1101,6 +1272,8 @@ export class MemoryAppClient implements AppClient {
     this.tickets = [];
     this.ticketHistoryItems = [];
     this.ticketOperations.clear();
+    this.ticketScheduleLinks = [];
+    this.ticketScheduleOperations.clear();
     this.templates = this.templates
       .filter((item) => item.isBuiltin)
       .map((item) => ({
@@ -1208,7 +1381,7 @@ export class MemoryAppClient implements AppClient {
       id: crypto.randomUUID(),
       fileName: "synthetic-backup.sqlite3",
       sizeBytes: 0,
-      schemaVersion: 14,
+      schemaVersion: 15,
       appVersion: "demo",
       verified: true,
       createdAt: new Date().toISOString(),

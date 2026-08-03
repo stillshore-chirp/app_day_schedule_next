@@ -724,11 +724,11 @@ export const jaMessages = {
     "全データ削除を確定できませんでした。表示された回復手順に従い、OSの資格情報ストアと保存領域を確認してください。",
   "features.views.OperationalViews.132": "データ",
   "features.views.OperationalViews.133":
-    " 予定、テンプレート、Quick Block、アラーム、タイマー、タイマー構成セット、設定をJSONへ保存します。ストップウォッチの実行状態、Google認証情報、同期識別子は含めません。 ",
+    " 予定、テンプレート、Quick Block、アラーム、タイマー、タイマー構成セット、設定をJSONへ保存します。チケットと予定との関連、ストップウォッチの実行状態、Google認証情報、同期識別子は含めません。チケットを含む移行にはSQLiteバックアップを使用してください。 ",
   "features.views.OperationalViews.134": "この端末の予定{0}件と関連データを削除しました",
   "features.views.OperationalViews.135": " 初期状態を再読み込み ",
   "features.views.OperationalViews.136":
-    " 追加テンプレート、Quick Block、アラーム、タイマー、タイマー構成セット、ストップウォッチ、Focus履歴、同期情報、Google認証情報、診断履歴、バックアップ、設定を消去しました。Google Calendar上の予定は削除していません。 ",
+    " チケット、予定との関連、追加テンプレート、Quick Block、アラーム、タイマー、タイマー構成セット、ストップウォッチ、Focus履歴、同期情報、Google認証情報、診断履歴、バックアップ、設定を消去しました。Google Calendar上の予定は削除していません。 ",
   "features.views.OperationalViews.137": "取り込み結果",
   "features.views.OperationalViews.138": " 予定",
   "features.views.OperationalViews.139": "件、テンプレート",
@@ -752,7 +752,7 @@ export const jaMessages = {
   "features.views.OperationalViews.157": " ローカル項目を置換（Google由来の予定は保持） ",
   "features.views.OperationalViews.158": "ローカル項目を置き換えます",
   "features.views.OperationalViews.159":
-    " 現在のローカル予定、追加テンプレート、Quick Block、アラームを削除してから取り込みます。Google由来の予定と既定テンプレートは保持します。 ",
+    " 現在のローカル予定、追加テンプレート、Quick Block、アラームを削除してから取り込みます。Google由来の予定と既定テンプレートは保持します。チケットと予定との関連はJSON対象外のため、置換・復元されません。完全な移行にはSQLiteバックアップを使用してください。 ",
   "features.views.OperationalViews.160": "確認した内容で置換",
   "features.views.OperationalViews.161": "確認した内容を追加",
   "features.views.OperationalViews.162": " 取り消す ",
@@ -1272,9 +1272,9 @@ export const jaMessages = {
   "features.tickets.KanbanView.deleteTitle": "「{0}」を削除しますか？",
   "features.tickets.KanbanView.deleteLocal": "この端末の通常ボードから削除されます。",
   "features.tickets.KanbanView.deleteScheduleImpact":
-    "予定とのリンク機能はまだないため、予定は変更されません。",
+    "関連する予定は削除・完了せず、そのまま残ります。チケットとの関連だけ解除されます。",
   "features.tickets.KanbanView.deleteGoogleImpact":
-    "Google同期はまだないため、Google側は変更されません。",
+    "関連解除によってGoogle Calendarの予定は変更・削除されません。",
   "features.tickets.KanbanView.deleteUndoImpact": "直後なら同じ内容のチケットとして作り直せます。",
   "features.tickets.KanbanView.confirmDelete": "このチケットを削除",
   "shared.time.001": "{0}分",

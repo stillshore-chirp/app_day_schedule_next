@@ -12,6 +12,7 @@ import {
 import type { AppClient } from "../../shared/ipc/client";
 import { formatDuration, localDateTimeInput } from "../../shared/time";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
+import { ScheduleTicketLink } from "./ScheduleTicketLink";
 
 interface ScheduleEditorProps {
   client: AppClient;
@@ -32,6 +33,7 @@ interface ScheduleEditorProps {
   onDuplicate?: () => Promise<void>;
   onClose: () => void;
   initialRange?: { startUtc: string; endUtc: string } | null;
+  onOpenTickets?: () => void;
 }
 
 interface FormState {
@@ -129,6 +131,7 @@ export function ScheduleEditor({
   onDuplicate,
   onClose,
   initialRange,
+  onOpenTickets,
 }: ScheduleEditorProps) {
   const [state, setState] = useState(() =>
     toState(schedule, selectedDate, timezoneId, initialRange),
@@ -594,6 +597,14 @@ export function ScheduleEditor({
             {translate("features.schedule.ScheduleEditor.046")}
             {formatElapsedSeconds(focusSummary.data?.workSeconds ?? 0)}
           </p>
+        ) : null}
+
+        {mode === "edit" && schedule && !readOnly ? (
+          <ScheduleTicketLink
+            client={client}
+            schedule={schedule}
+            {...(onOpenTickets ? { onOpenTickets } : {})}
+          />
         ) : null}
 
         <fieldset>

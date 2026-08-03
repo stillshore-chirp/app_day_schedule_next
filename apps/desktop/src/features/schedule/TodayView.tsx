@@ -1,9 +1,9 @@
 import { translate } from "../../shared/i18n/messages";
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { fromZonedTime } from "date-fns-tz";
-import type { Bootstrap, Schedule, ScheduleDraft } from "../../shared/contracts";
-import type { AppClient } from "../../shared/ipc/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
+import type { Bootstrap, Schedule, ScheduleDraft, Ticket } from "../../shared/contracts";
+import { AppClientError, type AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 import { useUiStore } from "../../app/ui-store";
 import { DayOverview } from "./DayOverview";
@@ -12,6 +12,7 @@ import { ScheduleEditor } from "./ScheduleEditor";
 import { Timeline } from "./Timeline";
 import { resolveDisplayedTemplate } from "./template-selection";
 import { useScheduleActions, useSchedules } from "./use-schedules";
+import { UnplacedTicketDrawer } from "./UnplacedTicketDrawer";
 
 interface TodayViewProps {
   client: AppClient;
@@ -19,6 +20,7 @@ interface TodayViewProps {
 }
 
 export function TodayView({ client, bootstrap }: TodayViewProps) {
+  const queryClient = useQueryClient();
   const {
     selectedDate,
     selectedScheduleId,
@@ -49,6 +51,23 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
   });
   const actions = useScheduleActions(client);
   const [status, setStatus] = useState<string | null>(null);
+  const [statusTone, setStatusTone] = useState<"success" | "danger">("success");
+  const [dragTicket, setDragTicket] = useState<{ ticket: Ticket; durationMinutes: number } | null>(
+    null,
+  );
+  const [ticketPreview, setTicketPreview] = useState<{
+    ticket: Ticket;
+    localStart: string;
+    startUtc: string;
+    endUtc: string;
+    durationMinutes: number;
+  } | null>(null);
+  const [ambiguousAssignment, setAmbiguousAssignment] = useState<{
+    ticket: Ticket;
+    localStart: string;
+    durationMinutes: number;
+    candidates: string[];
+  } | null>(null);
   const quickSchedules = useMemo(
     () =>
       (quickBlocksQuery.data ?? [])
@@ -123,9 +142,11 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             }
           : {}),
       });
+      setStatusTone("success");
       setStatus(translate("features.schedule.TodayView.001"));
     } else {
       await actions.create.mutateAsync(draft);
+      setStatusTone("success");
       setStatus(translate("features.schedule.TodayView.002"));
     }
     closeEditor();
@@ -146,6 +167,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
           }
         : {}),
     });
+    setStatusTone("success");
     setStatus(translate("features.schedule.TodayView.003"));
     closeEditor();
     selectSchedule(null);
@@ -175,6 +197,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       startNotificationMinutes: selected.startNotificationMinutes,
       endNotificationMinutes: selected.endNotificationMinutes,
     });
+    setStatusTone("success");
     setStatus(translate("features.schedule.TodayView.005"));
     closeEditor();
     selectSchedule(null);
@@ -182,6 +205,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
 
   const adjustSchedule = async (schedule: Schedule, startUtc: string, endUtc: string) => {
     if (quickBlockIds.has(schedule.id)) {
+      setStatusTone("danger");
       setStatus(translate("features.schedule.TodayView.006"));
       setActiveView("templates");
       return;
@@ -191,8 +215,84 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       expectedVersion: schedule.version,
       draft: { ...schedule, startUtc, endUtc },
     });
+    setStatusTone("success");
     setStatus(translate("features.schedule.TodayView.007"));
   };
+
+  const assignTicket = async (
+    ticket: Ticket,
+    localStart: string,
+    durationMinutes: number,
+    offsetChoice?: 0 | 1,
+  ) => {
+    const resolution = await client.resolveLocalTime(localStart, bootstrap.timezoneId);
+    if (resolution.kind === "gap") {
+      setStatusTone("danger");
+      setStatus("夏時間の切り替えで存在しない時刻です。前後の時刻を選んでください。");
+      return;
+    }
+    if (resolution.kind === "ambiguous" && offsetChoice === undefined) {
+      setAmbiguousAssignment({
+        ticket,
+        localStart,
+        durationMinutes,
+        candidates: resolution.candidates,
+      });
+      return;
+    }
+    try {
+      await client.assignTicketSchedule({
+        operationId: crypto.randomUUID(),
+        ticketId: ticket.id,
+        expectedTicketVersion: ticket.version,
+        localStart,
+        durationMinutes,
+        timezoneId: bootstrap.timezoneId,
+        offsetChoice: offsetChoice ?? null,
+        source: "today_drawer",
+      });
+    } catch (error) {
+      setStatusTone("danger");
+      setStatus(
+        error instanceof AppClientError
+          ? `${error.detail.message} ${error.detail.recovery}`
+          : "予定への割り当てに失敗しました。チケットと予定を再読み込みして再試行してください。",
+      );
+      return;
+    }
+    setTicketPreview(null);
+    setAmbiguousAssignment(null);
+    setDragTicket(null);
+    setStatusTone("success");
+    setStatus(`「${ticket.title}」を予定に入れました。`);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["schedules"] }),
+      queryClient.invalidateQueries({ queryKey: ["ticket-planning-summaries"] }),
+      schedulesQuery.refetch(),
+    ]);
+  };
+
+  const previewTicketDrop = (ticket: Ticket, startUtc: string, endUtc: string) => {
+    setTicketPreview({
+      ticket,
+      startUtc,
+      endUtc,
+      localStart: formatInTimeZone(startUtc, bootstrap.timezoneId, "yyyy-MM-dd'T'HH:mm"),
+      durationMinutes: Math.max(
+        1,
+        Math.round((Date.parse(endUtc) - Date.parse(startUtc)) / 60_000),
+      ),
+    });
+    setDragTicket(null);
+  };
+
+  const previewOverlapCount = ticketPreview
+    ? schedules.filter(
+        (schedule) =>
+          Date.parse(schedule.startUtc) < Date.parse(ticketPreview.endUtc) &&
+          Date.parse(schedule.endUtc) > Date.parse(ticketPreview.startUtc),
+      ).length
+    : 0;
 
   if (schedulesQuery.isError) {
     return (
@@ -226,7 +326,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
         </header>
         {status ? (
           <StatusMessage
-            tone="success"
+            tone={statusTone}
             title={status}
             action={
               <button className="link-button" onClick={() => setStatus(null)}>
@@ -234,6 +334,75 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
               </button>
             }
           />
+        ) : null}
+        {ambiguousAssignment ? (
+          <StatusMessage
+            tone="warning"
+            title="この時刻は2回存在します"
+            action={
+              <div className="button-row">
+                {ambiguousAssignment.candidates.map((candidate, index) => (
+                  <button
+                    className="button"
+                    type="button"
+                    key={candidate}
+                    onClick={() =>
+                      void assignTicket(
+                        ambiguousAssignment.ticket,
+                        ambiguousAssignment.localStart,
+                        ambiguousAssignment.durationMinutes,
+                        index as 0 | 1,
+                      )
+                    }
+                  >
+                    {index === 0 ? "早い方" : "遅い方"}（{candidate}）
+                  </button>
+                ))}
+                <button
+                  className="button button--subtle"
+                  type="button"
+                  onClick={() => setAmbiguousAssignment(null)}
+                >
+                  取消
+                </button>
+              </div>
+            }
+          >
+            UTCオフセットを選択してから保存します。自動では選びません。
+          </StatusMessage>
+        ) : null}
+        {ticketPreview ? (
+          <StatusMessage
+            tone={previewOverlapCount > 0 ? "warning" : "neutral"}
+            title={`「${ticketPreview.ticket.title}」の仮配置`}
+            action={
+              <div className="button-row">
+                <button
+                  className="button button--primary"
+                  type="button"
+                  onClick={() =>
+                    void assignTicket(
+                      ticketPreview.ticket,
+                      ticketPreview.localStart,
+                      ticketPreview.durationMinutes,
+                    )
+                  }
+                >
+                  この位置に保存
+                </button>
+                <button
+                  className="button button--subtle"
+                  type="button"
+                  onClick={() => setTicketPreview(null)}
+                >
+                  取消
+                </button>
+              </div>
+            }
+          >
+            {new Date(ticketPreview.startUtc).toLocaleString()}から{ticketPreview.durationMinutes}
+            分。重なる予定は{previewOverlapCount}件です。
+          </StatusMessage>
         ) : null}
         {schedulesQuery.isLoading ? (
           <StatusMessage title={translate("features.schedule.TodayView.015")}>
@@ -256,6 +425,13 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
           referenceMinute={referenceMinute}
           onReferenceChange={setReferenceMinute}
         />
+        <UnplacedTicketDrawer
+          client={client}
+          selectedDate={selectedDate}
+          onAssign={assignTicket}
+          onDragStart={(ticket, durationMinutes) => setDragTicket({ ticket, durationMinutes })}
+          onDragEnd={() => setDragTicket(null)}
+        />
         <Timeline
           schedules={schedules}
           selectedDate={selectedDate}
@@ -266,6 +442,9 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
           onCreateRange={(startUtc, endUtc) => openCreate({ startUtc, endUtc })}
           onAdjust={(schedule, startUtc, endUtc) => adjustSchedule(schedule, startUtc, endUtc)}
           referenceMinute={referenceMinute}
+          externalTicket={dragTicket?.ticket ?? null}
+          externalDurationMinutes={dragTicket?.durationMinutes ?? 30}
+          onExternalPreview={previewTicketDrop}
         />
       </main>
       {editorMode !== "closed" ? (
@@ -282,6 +461,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
           {...(editorMode === "edit" ? { onDuplicate: duplicate } : {})}
           onClose={closeEditor}
           initialRange={createRange}
+          onOpenTickets={() => setActiveView("tickets")}
         />
       ) : null}
       <div className="history-actions" aria-label={translate("features.schedule.TodayView.020")}>

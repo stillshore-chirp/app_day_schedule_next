@@ -19,6 +19,7 @@ UI input を timezone とともに resolve し、UTC instant を保存します�
 - gap: validation error または explicit resolution choice。
 - overlap: first / second occurrence を明示。
 - timezone change: instant-preserving change と wall-clock-preserving edit を別操作にする。
+- TicketからScheduleへ割り当てる場合も同じresolverを使う。local date/time、所要分、IANA timezone、必要な`OffsetChoice`を受け取り、gapを拒否し、overlapの候補をUIで選択してからScheduleとlinkを確定する。
 
 ## 3. Templates / Quick Blocks / Free Alarms
 
@@ -70,6 +71,7 @@ UI input を timezone とともに resolve し、UTC instant を保存します�
 - 23:59、00:00、24h、cross-midnight。
 - leap day、month end、year end。
 - New York / Berlin の gap / overlap。
+- Ticket割り当てのgap拒否、overlap選択、23:30からの日跨ぎ、Schedule移動・resize・timezone変更後の予定時間再集計。
 - system timezone change。
 - all-day multi-day。
 - recurrence master / exception / cancellation / until、複数RRULE、RDATE、EXDATE、EXRULE、ordinal BYDAY、BYSETPOS、WKST。

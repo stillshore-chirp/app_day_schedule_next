@@ -28,6 +28,8 @@ import {
   scheduleSchema,
   ticketBoardSchema,
   ticketHistoryItemSchema,
+  ticketPlanningSummarySchema,
+  ticketScheduleLinkSchema,
   ticketPageSchema,
   ticketSchema,
   settingsSchema,
@@ -79,6 +81,11 @@ import {
   type TicketMoveRequest,
   type TicketQuery,
   type TicketUpdateRequest,
+  type AssignTicketScheduleRequest,
+  type LinkTicketScheduleRequest,
+  type UnlinkTicketScheduleRequest,
+  type TicketPlanningSummary,
+  type TicketScheduleLink,
   type Settings,
   type SyncSummary,
   type SyncConflictItem,
@@ -140,6 +147,12 @@ export interface AppClient {
   ): Promise<Ticket>;
   deleteTicket(operationId: string, id: string, expectedVersion: number): Promise<Ticket>;
   ticketHistory(ticketId: string, limit?: number): Promise<TicketHistoryItem[]>;
+  assignTicketSchedule(request: AssignTicketScheduleRequest): Promise<TicketScheduleLink>;
+  linkTicketSchedule(request: LinkTicketScheduleRequest): Promise<TicketScheduleLink>;
+  unlinkTicketSchedule(request: UnlinkTicketScheduleRequest): Promise<TicketScheduleLink>;
+  ticketSchedules(ticketId: string, includeUnlinked?: boolean): Promise<TicketScheduleLink[]>;
+  scheduleTicketLink(scheduleId: string): Promise<TicketScheduleLink | null>;
+  ticketPlanningSummaries(ticketIds: string[]): Promise<TicketPlanningSummary[]>;
   undo(): Promise<ChangeResult>;
   redo(): Promise<ChangeResult>;
   updateSettings(settings: Settings): Promise<Settings>;
@@ -366,6 +379,42 @@ export class TauriAppClient implements AppClient {
     return ticketHistoryItemSchema
       .array()
       .parse(await call("ticket_history_list", { ticketId, limit }));
+  }
+
+  async assignTicketSchedule(request: AssignTicketScheduleRequest): Promise<TicketScheduleLink> {
+    const link = ticketScheduleLinkSchema.parse(await call("ticket_schedule_assign", { request }));
+    signalLocalChange();
+    return link;
+  }
+
+  async linkTicketSchedule(request: LinkTicketScheduleRequest): Promise<TicketScheduleLink> {
+    const link = ticketScheduleLinkSchema.parse(await call("ticket_schedule_link", { request }));
+    signalLocalChange();
+    return link;
+  }
+
+  async unlinkTicketSchedule(request: UnlinkTicketScheduleRequest): Promise<TicketScheduleLink> {
+    const link = ticketScheduleLinkSchema.parse(await call("ticket_schedule_unlink", { request }));
+    signalLocalChange();
+    return link;
+  }
+
+  async ticketSchedules(ticketId: string, includeUnlinked = false): Promise<TicketScheduleLink[]> {
+    return ticketScheduleLinkSchema
+      .array()
+      .parse(await call("ticket_schedule_list", { ticketId, includeUnlinked }));
+  }
+
+  async scheduleTicketLink(scheduleId: string): Promise<TicketScheduleLink | null> {
+    return ticketScheduleLinkSchema
+      .nullable()
+      .parse(await call("schedule_ticket_link_get", { scheduleId }));
+  }
+
+  async ticketPlanningSummaries(ticketIds: string[]): Promise<TicketPlanningSummary[]> {
+    return ticketPlanningSummarySchema
+      .array()
+      .parse(await call("ticket_planning_summaries_get", { ticketIds }));
   }
 
   async undo(): Promise<ChangeResult> {
@@ -727,6 +776,24 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   ticketHistory(): Promise<TicketHistoryItem[]> {
+    return Promise.reject(this.unavailable());
+  }
+  assignTicketSchedule(): Promise<TicketScheduleLink> {
+    return Promise.reject(this.unavailable());
+  }
+  linkTicketSchedule(): Promise<TicketScheduleLink> {
+    return Promise.reject(this.unavailable());
+  }
+  unlinkTicketSchedule(): Promise<TicketScheduleLink> {
+    return Promise.reject(this.unavailable());
+  }
+  ticketSchedules(): Promise<TicketScheduleLink[]> {
+    return Promise.reject(this.unavailable());
+  }
+  scheduleTicketLink(): Promise<TicketScheduleLink | null> {
+    return Promise.reject(this.unavailable());
+  }
+  ticketPlanningSummaries(): Promise<TicketPlanningSummary[]> {
     return Promise.reject(this.unavailable());
   }
   undo(): Promise<ChangeResult> {

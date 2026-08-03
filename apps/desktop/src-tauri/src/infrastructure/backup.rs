@@ -20,7 +20,7 @@ use super::Database;
 const BACKUP_GENERATIONS: usize = 10;
 const PENDING_RESTORE_NAME: &str = ".restore-pending.sqlite3";
 const PENDING_RESTORE_HASH_NAME: &str = ".restore-pending.sha256";
-pub const CURRENT_SCHEMA_VERSION: u32 = 14;
+pub const CURRENT_SCHEMA_VERSION: u32 = 15;
 
 #[derive(Debug, Clone)]
 pub struct PreparedMigrationBackup {
@@ -577,7 +577,10 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::domain::{TicketChecklistItemDraft, TicketDraft, TicketPatch, TicketPriority};
+    use crate::domain::{
+        AssignTicketScheduleRequest, TicketChecklistItemDraft, TicketDraft, TicketPatch,
+        TicketPriority, TicketScheduleSource,
+    };
 
     #[test]
     fn replacement_displaces_existing_destination_before_rename() {
@@ -695,6 +698,25 @@ mod tests {
             )
             .await
             .unwrap();
+        let link = database
+            .assign_ticket_to_new_schedule(
+                &AssignTicketScheduleRequest {
+                    operation_id: Uuid::new_v4(),
+                    ticket_id: created.id,
+                    expected_ticket_version: created.version,
+                    local_start: "2026-08-04T09:00".into(),
+                    duration_minutes: 45,
+                    timezone_id: "Asia/Tokyo".into(),
+                    offset_choice: None,
+                    title_override: None,
+                    source: TicketScheduleSource::Board,
+                },
+                Utc::now() + chrono::Duration::hours(1),
+                Utc::now() + chrono::Duration::minutes(105),
+                Utc::now(),
+            )
+            .await
+            .unwrap();
         let backup = database.create_backup("manual", "test").await.unwrap();
         database
             .update_ticket(
@@ -723,6 +745,10 @@ mod tests {
             restored.ticket_history(created.id, 10).await.unwrap().len(),
             1
         );
+        let restored_links = restored.ticket_schedules(created.id, true).await.unwrap();
+        assert_eq!(restored_links.len(), 1);
+        assert_eq!(restored_links[0].id, link.id);
+        assert_eq!(restored_links[0].schedule.id, link.schedule.id);
     }
 
     #[tokio::test]

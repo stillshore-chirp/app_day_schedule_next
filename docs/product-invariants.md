@@ -137,6 +137,9 @@
 - Ticket本体、tag、checklist、変更履歴は1 user actionにつき同一transactionで確定する。
 - parent自己参照と循環を拒否し、列移動・並べ替え・親子変更はoptimistic versionで古い操作を拒否する。
 - Ticket操作のoperation IDを永続履歴で一意化し、同じ操作の再送で重複や順序破損を起こさない。
+- Ticket 1件は複数のScheduleへ関連付けられるが、Schedule 1件の有効なTicket関連は最大1件とする。関連付け・解除・付け替えは専用履歴を残し、タイトル、完了、削除を暗黙に連動させない。
+- Ticketから新規Scheduleを作る操作は、Schedule、関連、両履歴、必要なOutboxを単一transactionで確定し、operation IDの再送で重複作成しない。
+- DST gapは拒否し、overlapはUTC instant候補を明示選択してから保存する。時間区間は既存どおり半開区間`[start, end)`で扱う。
 
 ## 9. Google OAuth
 

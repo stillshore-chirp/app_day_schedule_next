@@ -289,6 +289,11 @@ impl Database {
                 "ticket-parent-links",
                 "UPDATE tickets SET parent_ticket_id = NULL WHERE parent_ticket_id IS NOT NULL",
             ),
+            (
+                "ticket-schedule-link-history",
+                "DELETE FROM ticket_schedule_link_history",
+            ),
+            ("ticket-schedule-links", "DELETE FROM ticket_schedule_links"),
             ("ticket-history", "DELETE FROM ticket_change_history"),
             ("ticket-checklist", "DELETE FROM ticket_checklist_items"),
             ("ticket-tag-links", "DELETE FROM ticket_tag_links"),
@@ -958,6 +963,8 @@ impl Database {
                 SyncStatus::Pending
             };
         update_schedule_row(&mut transaction, &after, now).await?;
+        super::ticket_schedule_repository::deactivate_link_for_schedule(&mut transaction, id, now)
+            .await?;
         insert_history(
             &mut transaction,
             Uuid::new_v4(),
@@ -1450,7 +1457,7 @@ impl Database {
         self.integrity_check().await?;
         Ok(DiagnosticsSnapshot {
             app_version: app_version.into(),
-            schema_version: 14,
+            schema_version: 15,
             database_state: "ready",
             schedule_count: schedule_count.max(0) as u64,
             deleted_count: deleted_count.max(0) as u64,
@@ -1601,7 +1608,7 @@ pub(super) async fn update_schedule_row(
     }
 }
 
-async fn fetch_schedule(
+pub(super) async fn fetch_schedule(
     transaction: &mut Transaction<'_, Sqlite>,
     id: Uuid,
 ) -> AppResult<Schedule> {
@@ -1988,7 +1995,7 @@ pub(super) fn row_to_schedule(row: &SqliteRow) -> AppResult<Schedule> {
     })
 }
 
-fn timestamp(value: DateTime<Utc>) -> String {
+pub(super) fn timestamp(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
@@ -2039,7 +2046,7 @@ fn escape_like(value: &str) -> String {
         .replace('_', "\\_")
 }
 
-fn parse_datetime(value: &str, context: &'static str) -> AppResult<DateTime<Utc>> {
+pub(super) fn parse_datetime(value: &str, context: &'static str) -> AppResult<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)
         .map(|value| value.with_timezone(&Utc))
         .map_err(|error| AppError::database(context, error))
@@ -2050,18 +2057,18 @@ fn parse_date(value: &str, context: &'static str) -> AppResult<chrono::NaiveDate
         .map_err(|error| AppError::database(context, error))
 }
 
-fn parse_uuid(value: &str, context: &'static str) -> AppResult<Uuid> {
+pub(super) fn parse_uuid(value: &str, context: &'static str) -> AppResult<Uuid> {
     Uuid::parse_str(value).map_err(|error| AppError::database(context, error))
 }
 
-fn not_found() -> AppError {
+pub(super) fn not_found() -> AppError {
     AppError::NotFound {
         message: "予定が見つかりません。".into(),
         recovery: "一覧を更新してください。別の画面で削除された可能性があります。".into(),
     }
 }
 
-fn version_conflict() -> AppError {
+pub(super) fn version_conflict() -> AppError {
     AppError::Conflict {
         message: "予定が別の操作で更新されています。".into(),
         recovery:
@@ -2905,7 +2912,7 @@ mod tests {
             )
         );
         assert_eq!(never, ("never".into(), None, None));
-        assert_eq!(schema_version, "14");
+        assert_eq!(schema_version, "15");
     }
 
     #[tokio::test]
@@ -2972,7 +2979,7 @@ mod tests {
                 "[]".into()
             )
         );
-        assert_eq!(schema_version, "14");
+        assert_eq!(schema_version, "15");
         assert!(invalid.is_err());
     }
 

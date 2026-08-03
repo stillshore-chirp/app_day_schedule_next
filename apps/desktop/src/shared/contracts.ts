@@ -370,6 +370,64 @@ export type Ticket = z.infer<typeof ticketSchema>;
 export type TicketDraft = z.infer<typeof ticketDraftSchema>;
 export type TicketHistoryItem = z.infer<typeof ticketHistoryItemSchema>;
 
+export const ticketScheduleSourceSchema = z.enum([
+  "board",
+  "today_drawer",
+  "schedule_editor",
+  "import",
+]);
+
+export const ticketScheduleLinkSchema = z.object({
+  id: z.uuid(),
+  ticketId: z.uuid(),
+  ticketTitle: z.string().trim().min(1).max(1_024),
+  schedule: scheduleSchema,
+  linkedAt: z.iso.datetime({ offset: true }),
+  unlinkedAt: z.iso.datetime({ offset: true }).nullable(),
+  source: ticketScheduleSourceSchema,
+  version: z.number().int().nonnegative(),
+});
+
+export const ticketPlanningSummarySchema = z.object({
+  ticketId: z.uuid(),
+  scheduleCount: z.number().int().nonnegative(),
+  futurePlannedMinutes: z.number().int().nonnegative(),
+  totalPlannedMinutes: z.number().int().nonnegative(),
+  nextScheduledAt: z.iso.datetime({ offset: true }).nullable(),
+});
+
+export type TicketScheduleSource = z.infer<typeof ticketScheduleSourceSchema>;
+export type TicketScheduleLink = z.infer<typeof ticketScheduleLinkSchema>;
+export type TicketPlanningSummary = z.infer<typeof ticketPlanningSummarySchema>;
+
+export interface AssignTicketScheduleRequest {
+  operationId: string;
+  ticketId: string;
+  expectedTicketVersion: number;
+  localStart: string;
+  durationMinutes: number;
+  timezoneId: string;
+  offsetChoice?: 0 | 1 | null;
+  titleOverride?: string | null;
+  source: TicketScheduleSource;
+}
+
+export interface LinkTicketScheduleRequest {
+  operationId: string;
+  ticketId: string;
+  expectedTicketVersion: number;
+  scheduleId: string;
+  expectedScheduleVersion: number;
+  source: TicketScheduleSource;
+  replaceExisting?: boolean;
+}
+
+export interface UnlinkTicketScheduleRequest {
+  operationId: string;
+  linkId: string;
+  expectedLinkVersion: number;
+}
+
 export interface TicketQuery {
   boardId?: string;
   columnId?: string;

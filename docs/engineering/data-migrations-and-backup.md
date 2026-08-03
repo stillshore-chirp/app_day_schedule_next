@@ -110,3 +110,12 @@ Rules:
 - SQLite backup / restoreはTicket関連表、parent、列順、Done復帰列、tag、checklist、履歴をDB全体としてround-tripする。
 - JSON format version 1 / 2の互換性を維持するため、Ticketは現行JSON export / importへ含めない。Ticketを含む移行には検証済みSQLite backupを使用し、previewとUserManualで非対応を明示する。
 - downgradeは非対応とし、v14 DBを古いbinaryで開いてTicket表を無視する運用を許可しない。
+
+## 13. Ticket―Schedule link compatibility
+
+- schema version 15は`ticket_schedule_links`と`ticket_schedule_link_history`を追加する。既存TicketとScheduleは変更せず、初期関連は空とする。
+- partial unique indexにより、1 Scheduleの有効なTicket関連を最大1件にする。1 Ticketから複数Scheduleへの関連は許可する。
+- 新規Schedule割り当てではSchedule、Schedule履歴、Ticket関連、関連履歴、必要なOutboxを単一transactionで確定する。同じoperation IDの再送は同じ関連を返す。
+- 解除と付け替えは過去の関連行を消さず、`unlinked_at_utc`とversionを更新して専用履歴を残す。
+- SQLite backup / restoreは関連と専用履歴をDB全体としてround-tripする。JSON format version 1 / 2にはTicketと関連を追加せず、previewとUserManualでSQLite backupが必要なことを明示する。
+- downgradeは非対応とし、v15 DBを古いbinaryで開かない。

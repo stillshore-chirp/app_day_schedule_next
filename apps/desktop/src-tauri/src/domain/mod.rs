@@ -6,6 +6,7 @@ pub mod recurrence;
 pub mod schedule;
 pub mod sync;
 pub mod ticket;
+pub mod ticket_schedule;
 pub mod time;
 pub mod timer;
 
@@ -29,6 +30,10 @@ pub use ticket::{
     Ticket, TicketBoard, TicketChecklistItem, TicketChecklistItemDraft, TicketColumn,
     TicketColumnKind, TicketDraft, TicketHistoryItem, TicketPage, TicketPatch, TicketPriority,
     TicketQuery, TicketTag, rebalanced_sort_key, sort_key_between,
+};
+pub use ticket_schedule::{
+    AssignTicketScheduleRequest, LinkTicketScheduleRequest, TicketPlanningSummary,
+    TicketScheduleLink, TicketScheduleSource, UnlinkTicketScheduleRequest,
 };
 pub use time::{LocalTimeResolution, resolve_local_time};
 pub use timer::{

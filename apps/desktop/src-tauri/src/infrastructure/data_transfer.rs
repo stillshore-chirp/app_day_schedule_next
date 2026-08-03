@@ -486,6 +486,23 @@ fn parse_and_validate_export(bytes: &[u8]) -> AppResult<ExportEnvelope> {
 }
 
 async fn replace_local_data(transaction: &mut Transaction<'_, Sqlite>) -> AppResult<u64> {
+    let linked_local_schedule_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)
+         FROM ticket_schedule_links l
+         JOIN schedule_items s ON s.id = l.schedule_id
+         WHERE NOT EXISTS (
+           SELECT 1 FROM sync_mappings m WHERE m.schedule_item_id = s.id
+         )",
+    )
+    .fetch_one(&mut **transaction)
+    .await
+    .map_err(|error| AppError::database("import-replace-ticket-links-check", error))?;
+    if linked_local_schedule_count > 0 {
+        return Err(AppError::Validation {
+            message: "チケットに関連するローカル予定があるため、JSON置換は実行できません。".into(),
+            recovery: "チケットと予定の関連を保持するにはSQLiteバックアップを作成・復元してください。関連を明示的に解除した場合も履歴を保持するため、完全移行にはSQLiteバックアップが必要です。".into(),
+        });
+    }
     let preserved: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM schedule_items WHERE EXISTS (SELECT 1 FROM sync_mappings WHERE schedule_item_id = schedule_items.id)",
     )
@@ -826,7 +843,10 @@ mod tests {
     use chrono::TimeZone;
     use tempfile::tempdir;
 
-    use crate::domain::{Priority, ScheduleDraft, ScheduleStatus};
+    use crate::domain::{
+        AssignTicketScheduleRequest, Priority, ScheduleDraft, ScheduleStatus, TicketDraft,
+        TicketPriority, TicketScheduleSource,
+    };
 
     use super::*;
 
@@ -896,6 +916,69 @@ mod tests {
         assert_eq!(count, 1);
         assert_eq!(target.timer_records().await.unwrap().len(), 1);
         assert_eq!(target.list_timer_sets().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn json_replace_refuses_to_orphan_ticket_schedule_links() {
+        let database = Database::open_memory().await.unwrap();
+        let board = database.default_ticket_board().await.unwrap();
+        let ticket = database
+            .create_ticket(
+                Uuid::new_v4(),
+                TicketDraft {
+                    board_id: board.id,
+                    column_id: board.columns[0].id,
+                    parent_ticket_id: None,
+                    title: "JSONでは失わない".into(),
+                    description: String::new(),
+                    priority: TicketPriority::Normal,
+                    due_date: None,
+                    estimate_minutes: Some(30),
+                    tags: Vec::new(),
+                    checklist: Vec::new(),
+                },
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        let start = Utc.with_ymd_and_hms(2026, 7, 20, 1, 0, 0).unwrap();
+        database
+            .assign_ticket_to_new_schedule(
+                &AssignTicketScheduleRequest {
+                    operation_id: Uuid::new_v4(),
+                    ticket_id: ticket.id,
+                    expected_ticket_version: ticket.version,
+                    local_start: "2026-07-20T10:00".into(),
+                    duration_minutes: 60,
+                    timezone_id: "Asia/Tokyo".into(),
+                    offset_choice: None,
+                    title_override: None,
+                    source: TicketScheduleSource::Board,
+                },
+                start,
+                start + chrono::Duration::hours(1),
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("linked-export.json");
+        database.export_json(&path, "Asia/Tokyo").await.unwrap();
+        let preview = Database::preview_import(&path).unwrap();
+
+        let result = database
+            .import_json(&path, &preview.fingerprint, ImportMode::Replace)
+            .await;
+
+        assert!(matches!(result, Err(AppError::Validation { .. })));
+        assert_eq!(
+            database
+                .ticket_schedules(ticket.id, false)
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[tokio::test]
