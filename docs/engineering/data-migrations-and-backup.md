@@ -100,3 +100,13 @@ Rules:
 - v12以前からのmigrationは既存`recurrence_rule`、`recurrence_exdates_json`、schedule、mapping、tokenを変更せず、補助lineを空arrayでbackfillする。
 - forward-only migrationとし、v13 DBを古いbinaryで開いて補助lineを捨てるdowngradeを許可しない。
 - fresh DB、v12 upgrade、JSON array constraint、既存recurrence保持、50,000 schedule rowsのmigration budget testを必須とする。
+
+## 12. Ticket foundation compatibility
+
+- schema version 14は`ticket_boards`、`ticket_columns`、`tickets`、`ticket_tags`、`ticket_tag_links`、`ticket_checklist_items`、`ticket_change_history`を追加する。
+- v13以前のSchedule、Template、Focus、Google Calendar、Outbox、履歴を変更せず、既定boardと6列をidempotentにseedする。
+- parentは同じboardの未削除Ticketだけを参照し、application層のrecursive検証で自己参照・多段循環を拒否する。
+- Ticket本体、tag link、checklist、履歴は同一transactionで更新し、履歴のoperation IDで再送を重複適用しない。
+- SQLite backup / restoreはTicket関連表、parent、列順、Done復帰列、tag、checklist、履歴をDB全体としてround-tripする。
+- JSON format version 1 / 2の互換性を維持するため、Ticketは現行JSON export / importへ含めない。Ticketを含む移行には検証済みSQLite backupを使用し、previewとUserManualで非対応を明示する。
+- downgradeは非対応とし、v14 DBを古いbinaryで開いてTicket表を無視する運用を許可しない。

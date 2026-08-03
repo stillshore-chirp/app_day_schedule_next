@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import ticketContractFixture from "./fixtures/ticket-contract-v1.json";
 import {
   scheduleDraftSchema,
   settingsSchema,
   stopwatchSchema,
   timerDraftSchema,
   timerSetSchema,
+  ticketDraftSchema,
+  ticketSchema,
 } from "./contracts";
 
 const valid = {
@@ -118,5 +121,63 @@ describe("settingsSchema", () => {
 
     expect(settingsSchema.safeParse(settings).success).toBe(true);
     expect(settingsSchema.safeParse({ ...settings, theme: "sepia" }).success).toBe(false);
+  });
+});
+
+describe("ticket contracts", () => {
+  const ticketDraft = {
+    boardId: "00000000-0000-4000-8000-000000000100",
+    columnId: "00000000-0000-4000-8000-000000000101",
+    parentTicketId: null,
+    title: "T".repeat(1_024),
+    description: "synthetic fixture",
+    priority: "normal" as const,
+    dueDate: "2026-08-04",
+    estimateMinutes: 30,
+    tags: ["synthetic"],
+    checklist: [{ title: "synthetic item", completed: false }],
+  };
+
+  it("preserves a 1024-character title and rejects 1025 characters", () => {
+    expect(ticketDraftSchema.safeParse(ticketDraft).success).toBe(true);
+    expect(ticketDraftSchema.safeParse({ ...ticketDraft, title: "T".repeat(1_025) }).success).toBe(
+      false,
+    );
+  });
+
+  it("parses the same versioned fixture as the Rust contract", () => {
+    expect(ticketContractFixture.contractVersion).toBe(1);
+    expect(ticketDraftSchema.parse(ticketContractFixture.draft).title).toBe(
+      "Synthetic ticket contract",
+    );
+    expect(ticketContractFixture.doneReturn.lastNonDoneColumnId).toBe(ticketDraft.columnId);
+  });
+
+  it("rejects unknown request fields and validates parent and Done-return fields", () => {
+    expect(ticketDraftSchema.safeParse({ ...ticketDraft, unknown: true }).success).toBe(false);
+    expect(
+      ticketSchema.safeParse({
+        id: "00000000-0000-4000-8000-000000000201",
+        ...ticketDraft,
+        lastNonDoneColumnId: ticketDraft.columnId,
+        sortKey: 1_024,
+        tags: [{ id: "00000000-0000-4000-8000-000000000301", name: "synthetic" }],
+        checklist: [
+          {
+            id: "00000000-0000-4000-8000-000000000401",
+            title: "synthetic item",
+            completed: false,
+            sortOrder: 0,
+            version: 0,
+          },
+        ],
+        version: 1,
+        createdAt: "2026-08-03T00:00:00.000Z",
+        updatedAt: "2026-08-03T00:01:00.000Z",
+        completedAt: null,
+        archivedAt: null,
+        deletedAt: null,
+      }).success,
+    ).toBe(true);
   });
 });

@@ -10,6 +10,7 @@ mod legacy_import;
 mod library_repository;
 mod notification_repository;
 mod sync_repository;
+mod ticket_repository;
 mod timer_repository;
 
 pub use backup::{BackupRecord, RestoreStageResult};

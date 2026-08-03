@@ -260,6 +260,153 @@ export type StopwatchCommand = "start" | "pause" | "resume" | "reset";
 export type SyncSummary = z.infer<typeof syncSummarySchema>;
 export type UserSafeError = z.infer<typeof userSafeErrorSchema>;
 
+export const ticketColumnKindSchema = z.enum([
+  "inbox",
+  "backlog",
+  "next",
+  "in_progress",
+  "waiting",
+  "done",
+]);
+
+export const ticketColumnSchema = z.object({
+  id: z.uuid(),
+  boardId: z.uuid(),
+  kind: ticketColumnKindSchema,
+  name: z.string().trim().min(1).max(100),
+  sortOrder: z.number().int().nonnegative(),
+  version: z.number().int().nonnegative(),
+});
+
+export const ticketBoardSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(100),
+  version: z.number().int().nonnegative(),
+  columns: z.array(ticketColumnSchema).min(1).max(100),
+});
+
+export const ticketTagSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(50),
+});
+
+export const ticketChecklistItemDraftSchema = z
+  .object({
+    title: z.string().trim().min(1).max(500),
+    completed: z.boolean().default(false),
+  })
+  .strict();
+
+export const ticketChecklistItemSchema = ticketChecklistItemDraftSchema.extend({
+  id: z.uuid(),
+  sortOrder: z.number().int().min(0).max(199),
+  version: z.number().int().nonnegative(),
+});
+
+const ticketDraftFields = {
+  boardId: z.uuid(),
+  columnId: z.uuid(),
+  parentTicketId: z.uuid().nullable().default(null),
+  title: z.string().trim().min(1).max(1_024),
+  description: z.string().max(10_000).default(""),
+  priority: prioritySchema.default("normal"),
+  dueDate: z.iso.date().nullable().default(null),
+  estimateMinutes: z.number().int().min(1).max(100_800).nullable().default(null),
+  tags: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
+  checklist: z.array(ticketChecklistItemDraftSchema).max(200).default([]),
+} as const;
+
+export const ticketDraftSchema = z.object(ticketDraftFields).strict();
+
+export const ticketSchema = z.object({
+  id: z.uuid(),
+  boardId: z.uuid(),
+  columnId: z.uuid(),
+  lastNonDoneColumnId: z.uuid().nullable(),
+  parentTicketId: z.uuid().nullable(),
+  title: z.string().trim().min(1).max(1_024),
+  description: z.string().max(10_000),
+  priority: prioritySchema,
+  dueDate: z.iso.date().nullable(),
+  estimateMinutes: z.number().int().min(1).max(100_800).nullable(),
+  sortKey: z.number().int().positive().safe(),
+  tags: z.array(ticketTagSchema).max(20),
+  checklist: z.array(ticketChecklistItemSchema).max(200),
+  version: z.number().int().nonnegative(),
+  createdAt: z.iso.datetime({ offset: true }),
+  updatedAt: z.iso.datetime({ offset: true }),
+  completedAt: z.iso.datetime({ offset: true }).nullable(),
+  archivedAt: z.iso.datetime({ offset: true }).nullable(),
+  deletedAt: z.iso.datetime({ offset: true }).nullable(),
+});
+
+export const ticketPageSchema = z.object({
+  contractVersion: z.literal(1),
+  items: z.array(ticketSchema).max(1_000),
+  total: z.number().int().nonnegative(),
+});
+
+export const ticketHistoryItemSchema = z.object({
+  id: z.number().int().positive(),
+  actionId: z.uuid(),
+  action: z.enum([
+    "create",
+    "update",
+    "move",
+    "reorder",
+    "parent",
+    "complete",
+    "reopen",
+    "archive",
+    "restore",
+    "delete",
+  ]),
+  version: z.number().int().nonnegative(),
+  createdAt: z.iso.datetime({ offset: true }),
+});
+
+export type TicketBoard = z.infer<typeof ticketBoardSchema>;
+export type Ticket = z.infer<typeof ticketSchema>;
+export type TicketDraft = z.infer<typeof ticketDraftSchema>;
+export type TicketHistoryItem = z.infer<typeof ticketHistoryItemSchema>;
+
+export interface TicketQuery {
+  boardId?: string;
+  columnId?: string;
+  search?: string;
+  priority?: z.infer<typeof prioritySchema>;
+  includeArchived?: boolean;
+  includeDeleted?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface TicketPatch {
+  title?: string;
+  description?: string;
+  priority?: z.infer<typeof prioritySchema>;
+  dueDate?: string | null;
+  estimateMinutes?: number | null;
+  parentTicketId?: string | null;
+  tags?: string[];
+  checklist?: z.infer<typeof ticketChecklistItemDraftSchema>[];
+}
+
+export interface TicketUpdateRequest {
+  operationId: string;
+  id: string;
+  expectedVersion: number;
+  patch: TicketPatch;
+}
+
+export interface TicketMoveRequest {
+  operationId: string;
+  id: string;
+  expectedVersion: number;
+  targetColumnId: string;
+  beforeTicketId?: string | null;
+}
+
 export const localTimeResolutionSchema = z.object({
   kind: z.enum(["single", "ambiguous", "gap"]),
   candidates: z.array(z.iso.datetime({ offset: true })).max(2),

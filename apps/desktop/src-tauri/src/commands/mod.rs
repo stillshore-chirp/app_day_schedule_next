@@ -13,7 +13,8 @@ use crate::{
         LocalTimeResolution, Priority, QuickBlock, QuickBlockDraft, RecurrenceEditScope,
         RecurrencePreview, Schedule, ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery,
         ScheduleStatus, Settings, StopwatchCommand, StopwatchState, SyncStatus, SyncSummary,
-        TemplateApplyMode, TemplatePreview, TimerCommand, TimerDraft, TimerSet, TimerState,
+        TemplateApplyMode, TemplatePreview, Ticket, TicketBoard, TicketDraft, TicketHistoryItem,
+        TicketPage, TicketPatch, TicketQuery, TimerCommand, TimerDraft, TimerSet, TimerState,
         UserSafeError,
     },
     infrastructure::{
@@ -94,6 +95,49 @@ pub struct ScheduleUpdateDto {
     #[serde(default)]
     recurrence_scope: RecurrenceEditScope,
     occurrence_start_utc: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketCreateRequest {
+    operation_id: Uuid,
+    draft: TicketDraft,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketUpdateRequest {
+    operation_id: Uuid,
+    id: Uuid,
+    expected_version: u64,
+    patch: TicketPatch,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketMoveRequest {
+    operation_id: Uuid,
+    id: Uuid,
+    expected_version: u64,
+    target_column_id: Uuid,
+    before_ticket_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketLifecycleRequest {
+    operation_id: Uuid,
+    id: Uuid,
+    expected_version: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketArchiveRequest {
+    operation_id: Uuid,
+    id: Uuid,
+    expected_version: u64,
+    archived: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -340,6 +384,121 @@ pub async fn schedule_list(
         .await
         .map_err(UserSafeError::from)?;
     Ok(SchedulePage { items, total })
+}
+
+#[tauri::command]
+pub async fn ticket_board_get(
+    service: State<'_, AppService>,
+    board_id: Option<Uuid>,
+) -> CommandResult<TicketBoard> {
+    service.ticket_board(board_id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_list(
+    service: State<'_, AppService>,
+    query: TicketQuery,
+) -> CommandResult<TicketPage> {
+    service.list_tickets(query).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_get(service: State<'_, AppService>, id: Uuid) -> CommandResult<Ticket> {
+    service.ticket(id).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_create(
+    service: State<'_, AppService>,
+    request: TicketCreateRequest,
+) -> CommandResult<Ticket> {
+    service
+        .create_ticket(request.operation_id, request.draft)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_update(
+    service: State<'_, AppService>,
+    request: TicketUpdateRequest,
+) -> CommandResult<Ticket> {
+    service
+        .update_ticket(
+            request.operation_id,
+            request.id,
+            request.expected_version,
+            request.patch,
+        )
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_move(
+    service: State<'_, AppService>,
+    request: TicketMoveRequest,
+) -> CommandResult<Ticket> {
+    service
+        .move_ticket(
+            request.operation_id,
+            request.id,
+            request.expected_version,
+            request.target_column_id,
+            request.before_ticket_id,
+        )
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_reopen(
+    service: State<'_, AppService>,
+    request: TicketLifecycleRequest,
+) -> CommandResult<Ticket> {
+    service
+        .reopen_ticket(request.operation_id, request.id, request.expected_version)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_archive(
+    service: State<'_, AppService>,
+    request: TicketArchiveRequest,
+) -> CommandResult<Ticket> {
+    service
+        .archive_ticket(
+            request.operation_id,
+            request.id,
+            request.expected_version,
+            request.archived,
+        )
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_delete(
+    service: State<'_, AppService>,
+    request: TicketLifecycleRequest,
+) -> CommandResult<Ticket> {
+    service
+        .delete_ticket(request.operation_id, request.id, request.expected_version)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_history_list(
+    service: State<'_, AppService>,
+    ticket_id: Uuid,
+    limit: Option<u32>,
+) -> CommandResult<Vec<TicketHistoryItem>> {
+    service
+        .ticket_history(ticket_id, limit.unwrap_or(100))
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]

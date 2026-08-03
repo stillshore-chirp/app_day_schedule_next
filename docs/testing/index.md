@@ -54,6 +54,7 @@ cargo test --workspace --all-features
 - UTC instant、IANA timezone、半開区間、終日 local date
 - DST gap / overlap、月末、曜日／count 再発、単一／これ以降／series 編集
 - SQLite migration、optimistic concurrency、history、Outbox atomicity、50,000件検索
+- Ticketのtitle / tag / checklist境界、v14 seed / upgrade、parent循環、operation ID冪等性、Done復帰、500件reorder、backup / restore round-trip
 - template preview / apply / one-action Undo、built-in constraint、library reorder
 - notification delivery key、grace、Quick Block active linkage、Focus transition / history / 予定別実績集計
 - 予定分類の最大500件原子的変更、1 action Undo、read-only拒否

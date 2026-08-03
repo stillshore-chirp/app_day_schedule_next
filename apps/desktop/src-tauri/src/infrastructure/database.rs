@@ -20,7 +20,7 @@ use crate::domain::{
     SyncStatus, SyncSummary, SyncSummaryState, expand_recurrence,
 };
 
-static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+pub(crate) static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
 #[derive(Clone)]
 pub struct Database {
@@ -285,6 +285,15 @@ impl Database {
             ("google-calendars", "DELETE FROM google_calendars"),
             ("google-accounts", "DELETE FROM google_accounts"),
             ("google-oauth-config", "DELETE FROM google_oauth_config"),
+            (
+                "ticket-parent-links",
+                "UPDATE tickets SET parent_ticket_id = NULL WHERE parent_ticket_id IS NOT NULL",
+            ),
+            ("ticket-history", "DELETE FROM ticket_change_history"),
+            ("ticket-checklist", "DELETE FROM ticket_checklist_items"),
+            ("ticket-tag-links", "DELETE FROM ticket_tag_links"),
+            ("tickets", "DELETE FROM tickets"),
+            ("ticket-tags", "DELETE FROM ticket_tags"),
             ("history", "DELETE FROM change_history"),
             ("schedules", "DELETE FROM schedule_items"),
             ("template-blocks", "DELETE FROM template_blocks"),
@@ -1441,7 +1450,7 @@ impl Database {
         self.integrity_check().await?;
         Ok(DiagnosticsSnapshot {
             app_version: app_version.into(),
-            schema_version: 13,
+            schema_version: 14,
             database_state: "ready",
             schedule_count: schedule_count.max(0) as u64,
             deleted_count: deleted_count.max(0) as u64,
@@ -2896,7 +2905,7 @@ mod tests {
             )
         );
         assert_eq!(never, ("never".into(), None, None));
-        assert_eq!(schema_version, "13");
+        assert_eq!(schema_version, "14");
     }
 
     #[tokio::test]
@@ -2963,7 +2972,7 @@ mod tests {
                 "[]".into()
             )
         );
-        assert_eq!(schema_version, "13");
+        assert_eq!(schema_version, "14");
         assert!(invalid.is_err());
     }
 

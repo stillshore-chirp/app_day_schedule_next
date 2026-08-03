@@ -58,7 +58,7 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 13, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 14, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {

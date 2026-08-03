@@ -1,0 +1,24 @@
+{
+  "contractVersion": 1,
+  "draft": {
+    "boardId": "00000000-0000-4000-8000-000000000100",
+    "columnId": "00000000-0000-4000-8000-000000000101",
+    "parentTicketId": "00000000-0000-4000-8000-000000000201",
+    "title": "Synthetic ticket contract",
+    "description": "Synthetic fixture only",
+    "priority": "high",
+    "dueDate": "2026-08-04",
+    "estimateMinutes": 45,
+    "tags": ["synthetic", "contract"],
+    "checklist": [
+      {
+        "title": "Validate both boundaries",
+        "completed": false
+      }
+    ]
+  },
+  "doneReturn": {
+    "doneColumnId": "00000000-0000-4000-8000-000000000106",
+    "lastNonDoneColumnId": "00000000-0000-4000-8000-000000000101"
+  }
+}

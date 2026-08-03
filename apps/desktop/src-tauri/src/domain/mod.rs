@@ -5,6 +5,7 @@ pub mod notification;
 pub mod recurrence;
 pub mod schedule;
 pub mod sync;
+pub mod ticket;
 pub mod time;
 pub mod timer;
 
@@ -24,6 +25,11 @@ pub use schedule::{
     ScheduleDraft, ScheduleQuery, ScheduleStatus, Settings, SyncStatus,
 };
 pub use sync::{SyncSummary, SyncSummaryState};
+pub use ticket::{
+    Ticket, TicketBoard, TicketChecklistItem, TicketChecklistItemDraft, TicketColumn,
+    TicketColumnKind, TicketDraft, TicketHistoryItem, TicketPage, TicketPatch, TicketPriority,
+    TicketQuery, TicketTag, rebalanced_sort_key, sort_key_between,
+};
 pub use time::{LocalTimeResolution, resolve_local_time};
 pub use timer::{
     StopwatchCommand, StopwatchState, StopwatchStatus, TimerCommand, TimerDraft, TimerSet,

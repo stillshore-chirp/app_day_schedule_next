@@ -127,6 +127,17 @@
 - soft delete、change history、sync mapping の lifecycle を整合させる。
 - token / secret / raw auth response は保存しない。
 
+### 8.1 Ticket foundation
+
+- Ticketは「何を完了させるか」、Scheduleは「いつ作業するか」を表し、完了状態を暗黙に連動させない。
+- 既定boardは`Inbox / Backlog / Next / In Progress / Waiting / Done`を持ち、列順と列内順序を永続化する。
+- Ticket titleはtrim後1〜1024文字を損失なく保持し、dueは時刻を持たないlocal dateとして保存する。
+- Doneへの移動時は直前の非Done列を記録し、再開時はその列、利用不能ならInboxへ戻す。
+- archiveとdelete tombstoneを区別し、通常queryはtombstoneを返さない。
+- Ticket本体、tag、checklist、変更履歴は1 user actionにつき同一transactionで確定する。
+- parent自己参照と循環を拒否し、列移動・並べ替え・親子変更はoptimistic versionで古い操作を拒否する。
+- Ticket操作のoperation IDを永続履歴で一意化し、同じ操作の再送で重複や順序破損を起こさない。
+
 ## 9. Google OAuth
 
 - Desktop app client IDはgit追跡外のbuild設定から埋め込み、通常利用者へOAuth JSONを要求しない。
