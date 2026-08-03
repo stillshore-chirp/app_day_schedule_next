@@ -186,16 +186,16 @@ export function TicketSchedulePlanner({
       setTaskDeleteChoice(null);
       setTaskMessage(
         taskListId
-          ? "Google Tasks同期先を保存しました。反映状態はこの欄で確認できます。"
+          ? translate("features.tickets.TicketSchedulePlanner.googleTasksTargetSaved")
           : deleteRemote
-            ? "Google側Taskの削除を反映待ちにしました。Local Ticketは保持されています。"
-            : "Google Tasks同期を解除しました。Local TicketとGoogle側Taskは保持されています。",
+            ? translate("features.tickets.TicketSchedulePlanner.googleTasksDeletePending")
+            : translate("features.tickets.TicketSchedulePlanner.googleTasksDetached"),
       );
     } catch (caught) {
       setError(
         caught instanceof AppClientError
           ? `${caught.detail.message} ${caught.detail.recovery}`
-          : "Google Tasks同期先を変更できませんでした。",
+          : translate("features.tickets.TicketSchedulePlanner.googleTasksTargetFailed"),
       );
     } finally {
       setTaskAction("idle");
@@ -252,25 +252,29 @@ export function TicketSchedulePlanner({
         <div className="ticket-planner__heading">
           <div>
             <h4 id={`ticket-google-task-${ticket.id}`}>Google Tasks</h4>
-            <p>タイトル・説明・日付・完了・親子・Listだけを同期します。</p>
+            <p>{translate("features.tickets.TicketSchedulePlanner.googleTasksScope")}</p>
           </div>
           <span className="state-chip" data-state={googleTaskStatusQuery.data?.state ?? "loading"}>
             {ticketGoogleTaskStateLabel(googleTaskStatusQuery.data?.state)}
           </span>
         </div>
         {!googleConnectionQuery.data?.tasks.scopeGranted ? (
-          <StatusMessage tone="warning" title="Google Tasksの再同意が必要です">
-            設定でCalendar +
-            Tasksをまとめて再同意してください。現在のCalendar接続は成功まで保持されます。
+          <StatusMessage
+            tone="warning"
+            title={translate("features.tickets.TicketSchedulePlanner.googleTasksConsentTitle")}
+          >
+            {translate("features.tickets.TicketSchedulePlanner.googleTasksConsentDetail")}
           </StatusMessage>
         ) : !googleConnectionQuery.data.tasks.enabled ? (
-          <StatusMessage title="Google Tasks同期は無効です">
-            設定でTasks同期を有効にしてから、このTicketの同期先を選んでください。
+          <StatusMessage
+            title={translate("features.tickets.TicketSchedulePlanner.googleTasksDisabledTitle")}
+          >
+            {translate("features.tickets.TicketSchedulePlanner.googleTasksDisabledDetail")}
           </StatusMessage>
         ) : (
           <>
             <label>
-              同期先Task List
+              {translate("features.tickets.TicketSchedulePlanner.googleTasksTargetLabel")}
               <select
                 value={googleTaskStatusQuery.data?.taskListId ?? ""}
                 disabled={taskAction === "saving"}
@@ -279,7 +283,9 @@ export function TicketSchedulePlanner({
                 }
               >
                 {googleTaskStatusQuery.data?.taskListId ? null : (
-                  <option value="">同期先を選択</option>
+                  <option value="">
+                    {translate("features.tickets.TicketSchedulePlanner.googleTasksTargetPrompt")}
+                  </option>
                 )}
                 {googleConnectionQuery.data.tasks.taskLists
                   .filter((list) => list.selected && list.syncState !== "unavailable")
@@ -291,7 +297,7 @@ export function TicketSchedulePlanner({
               </select>
             </label>
             <p className="field-help">
-              priority・見積・tags・Schedule・Focus実績はLocal専用で、Google notesへ埋め込みません。
+              {translate("features.tickets.TicketSchedulePlanner.googleTasksLocalFields")}
             </p>
             {googleTaskStatusQuery.data?.taskListId ? (
               taskDeleteChoice ? (
@@ -299,13 +305,13 @@ export function TicketSchedulePlanner({
                   tone="warning"
                   title={
                     taskDeleteChoice === "delete"
-                      ? "Google Tasksからも削除しますか？"
-                      : "同期だけを解除しますか？"
+                      ? translate("features.tickets.TicketSchedulePlanner.googleTasksDeleteTitle")
+                      : translate("features.tickets.TicketSchedulePlanner.googleTasksDetachTitle")
                   }
                 >
                   {taskDeleteChoice === "delete"
-                    ? "Local Ticketは削除せず、Google側のTaskだけを明示的に削除します。失敗時はOutboxで再試行します。"
-                    : "Local TicketとLocal専用項目はすべて保持されます。Google側のTaskは残ります。"}
+                    ? translate("features.tickets.TicketSchedulePlanner.googleTasksDeleteDetail")
+                    : translate("features.tickets.TicketSchedulePlanner.googleTasksDetachDetail")}
                   <span className="button-row">
                     <button
                       className={
@@ -319,14 +325,14 @@ export function TicketSchedulePlanner({
                         void updateGoogleTaskTarget(null, taskDeleteChoice === "delete")
                       }
                     >
-                      この操作を実行
+                      {translate("features.tickets.TicketSchedulePlanner.googleTasksConfirm")}
                     </button>
                     <button
                       className="button"
                       type="button"
                       onClick={() => setTaskDeleteChoice(null)}
                     >
-                      取消
+                      {translate("features.tickets.TicketSchedulePlanner.googleTasksCancel")}
                     </button>
                   </span>
                 </StatusMessage>
@@ -337,14 +343,14 @@ export function TicketSchedulePlanner({
                     type="button"
                     onClick={() => setTaskDeleteChoice("detach")}
                   >
-                    同期を解除してLocalに残す
+                    {translate("features.tickets.TicketSchedulePlanner.googleTasksDetach")}
                   </button>
                   <button
                     className="button button--danger-outline"
                     type="button"
                     onClick={() => setTaskDeleteChoice("delete")}
                   >
-                    Google Tasksからも削除
+                    {translate("features.tickets.TicketSchedulePlanner.googleTasksDelete")}
                   </button>
                 </div>
               )
@@ -520,20 +526,20 @@ export function TicketSchedulePlanner({
 function ticketGoogleTaskStateLabel(
   state: Awaited<ReturnType<AppClient["ticketGoogleTaskStatuses"]>>[number]["state"] | undefined,
 ): string {
-  if (!state) return "確認中";
+  if (!state) return translate("features.tickets.TicketSchedulePlanner.googleTasksChecking");
   return {
-    not_connected: "未接続",
-    scope_missing: "再同意が必要",
-    disabled: "無効",
-    never: "未同期",
-    syncing: "同期中",
-    synced: "同期済み",
-    pending: "反映待ち",
-    offline: "オフライン",
-    retry_scheduled: "再試行待ち",
-    conflict: "競合あり",
-    auth_required: "再認証が必要",
-    unsupported: "未対応操作",
-    validation_required: "入力確認が必要",
+    not_connected: translate("features.tickets.TicketSchedulePlanner.googleTasksNotConnected"),
+    scope_missing: translate("features.tickets.TicketSchedulePlanner.googleTasksScopeMissing"),
+    disabled: translate("features.tickets.TicketSchedulePlanner.googleTasksDisabled"),
+    never: translate("features.tickets.TicketSchedulePlanner.googleTasksNever"),
+    syncing: translate("features.tickets.TicketSchedulePlanner.googleTasksSyncing"),
+    synced: translate("features.tickets.TicketSchedulePlanner.googleTasksSynced"),
+    pending: translate("features.tickets.TicketSchedulePlanner.googleTasksPending"),
+    offline: translate("features.tickets.TicketSchedulePlanner.googleTasksOffline"),
+    retry_scheduled: translate("features.tickets.TicketSchedulePlanner.googleTasksRetry"),
+    conflict: translate("features.tickets.TicketSchedulePlanner.googleTasksConflict"),
+    auth_required: translate("features.tickets.TicketSchedulePlanner.googleTasksAuthRequired"),
+    unsupported: translate("features.tickets.TicketSchedulePlanner.googleTasksUnsupported"),
+    validation_required: translate("features.tickets.TicketSchedulePlanner.googleTasksValidation"),
   }[state];
 }

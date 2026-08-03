@@ -773,15 +773,15 @@ function GooglePanel({ client }: { client: AppClient }) {
       await refresh();
       setMessage(
         enabled
-          ? "Google Tasks同期を有効にしました。同期対象Listを選んでください。"
-          : "Google Tasks同期だけを無効にしました。Calendar接続とtokenは保持されています。",
+          ? translate("features.views.OperationalViews.googleTasksEnabled")
+          : translate("features.views.OperationalViews.googleTasksDisabled"),
       );
     } catch (tasksError) {
       setError(
         googleUiError(
           tasksError,
-          "Google Tasks同期を変更できませんでした。",
-          "Calendar接続は保持されています。権限と接続状態を確認してください。",
+          translate("features.views.OperationalViews.googleTasksToggleFailed"),
+          translate("features.views.OperationalViews.googleTasksCalendarPreserved"),
         ),
       );
     } finally {
@@ -799,8 +799,8 @@ function GooglePanel({ client }: { client: AppClient }) {
       setError(
         googleUiError(
           tasksError,
-          "Google Task Listを更新できませんでした。",
-          "選択状態を確認して再試行してください。",
+          translate("features.views.OperationalViews.googleTasksListUpdateFailed"),
+          translate("features.views.OperationalViews.googleTasksListUpdateRecovery"),
         ),
       );
     } finally {
@@ -814,13 +814,13 @@ function GooglePanel({ client }: { client: AppClient }) {
     try {
       await client.runSync(crypto.randomUUID());
       await refresh();
-      setMessage("Google CalendarとTasksの同期が完了しました。");
+      setMessage(translate("features.views.OperationalViews.googleTasksSyncComplete"));
     } catch (tasksError) {
       setError(
         googleUiError(
           tasksError,
-          "Google Tasks同期を完了できませんでした。",
-          "ローカルTicketは保持されています。状態を確認して再試行してください。",
+          translate("features.views.OperationalViews.googleTasksSyncFailed"),
+          translate("features.views.OperationalViews.googleTasksLocalPreserved"),
         ),
       );
     } finally {
@@ -834,13 +834,13 @@ function GooglePanel({ client }: { client: AppClient }) {
     try {
       await client.reconcileGoogleTasksFull(crypto.randomUUID());
       await refresh();
-      setMessage("選択したTask Listの完全照合が完了しました。");
+      setMessage(translate("features.views.OperationalViews.googleTasksReconcileComplete"));
     } catch (tasksError) {
       setError(
         googleUiError(
           tasksError,
-          "Google Tasksの完全照合を完了できませんでした。",
-          "ローカルTicketは保持されています。状態を確認して再試行してください。",
+          translate("features.views.OperationalViews.googleTasksReconcileFailed"),
+          translate("features.views.OperationalViews.googleTasksLocalPreserved"),
         ),
       );
     } finally {
@@ -861,13 +861,13 @@ function GooglePanel({ client }: { client: AppClient }) {
         operationId: crypto.randomUUID(),
       });
       await refresh();
-      setMessage("Google Tasks競合の選択を保存しました。");
+      setMessage(translate("features.views.OperationalViews.googleTasksConflictSaved"));
     } catch (tasksError) {
       setError(
         googleUiError(
           tasksError,
-          "Google Tasks競合を解決できませんでした。",
-          "現在値を更新してから、もう一度選択してください。",
+          translate("features.views.OperationalViews.googleTasksConflictFailed"),
+          translate("features.views.OperationalViews.googleTasksConflictRecovery"),
         ),
       );
     } finally {
@@ -1025,7 +1025,7 @@ function GooglePanel({ client }: { client: AppClient }) {
             <div className="section-heading-row">
               <div>
                 <h3 id="google-tasks-title">Google Tasks</h3>
-                <p>Ticketを正本に、タイトル・説明・日付・完了・親子・Listだけを同期します。</p>
+                <p>{translate("features.views.OperationalViews.googleTasksScope")}</p>
               </div>
               <span className="state-chip" data-state={connection.tasks.state}>
                 {googleTasksStateLabel(connection.tasks.state)}
@@ -1034,7 +1034,7 @@ function GooglePanel({ client }: { client: AppClient }) {
             {!connection.tasks.scopeGranted ? (
               <StatusMessage
                 tone="warning"
-                title="Google Tasks権限の再同意が必要です"
+                title={translate("features.views.OperationalViews.googleTasksConsentTitle")}
                 action={
                   <button
                     className="button button--primary"
@@ -1042,11 +1042,11 @@ function GooglePanel({ client }: { client: AppClient }) {
                     disabled={busy}
                     onClick={() => void connect()}
                   >
-                    Calendar + Tasksを再同意
+                    {translate("features.views.OperationalViews.googleTasksConsentAction")}
                   </button>
                 }
               >
-                現在のCalendar接続は、新しい認可が完全に成功するまで保持されます。
+                {translate("features.views.OperationalViews.googleTasksConsentDetail")}
               </StatusMessage>
             ) : (
               <>
@@ -1057,7 +1057,9 @@ function GooglePanel({ client }: { client: AppClient }) {
                     disabled={busy}
                     onClick={() => void setTasksEnabled(!connection.tasks.enabled)}
                   >
-                    {connection.tasks.enabled ? "Tasks同期だけを無効化" : "Tasks同期を有効化"}
+                    {connection.tasks.enabled
+                      ? translate("features.views.OperationalViews.googleTasksDisableAction")
+                      : translate("features.views.OperationalViews.googleTasksEnableAction")}
                   </button>
                   {connection.tasks.enabled ? (
                     <>
@@ -1067,7 +1069,7 @@ function GooglePanel({ client }: { client: AppClient }) {
                         disabled={busy || connection.tasks.selectedListCount === 0}
                         onClick={() => void runTasksSync()}
                       >
-                        今すぐ同期
+                        {translate("features.views.OperationalViews.googleTasksSyncNow")}
                       </button>
                       <button
                         className="button"
@@ -1075,7 +1077,7 @@ function GooglePanel({ client }: { client: AppClient }) {
                         disabled={busy || connection.tasks.selectedListCount === 0}
                         onClick={() => void reconcileTasksFull()}
                       >
-                        完全照合
+                        {translate("features.views.OperationalViews.googleTasksReconcile")}
                       </button>
                     </>
                   ) : null}
@@ -1083,16 +1085,18 @@ function GooglePanel({ client }: { client: AppClient }) {
                 {connection.tasks.enabled ? (
                   <>
                     <p className="field-help">
-                      割り当てられたGoogleタスクは初期版の対象外です。dueは日付のみで、時刻はSchedule側に保持します。priority・見積・tags・Schedule・Focus実績はLocal専用です。
+                      {translate("features.views.OperationalViews.googleTasksLimitations")}
                     </p>
                     <div
                       className="google-calendar-list"
                       role="group"
-                      aria-label="同期するGoogle Task List"
+                      aria-label={translate("features.views.OperationalViews.googleTasksListLabel")}
                     >
                       {connection.tasks.taskLists.length === 0 ? (
-                        <StatusMessage title="Task Listがありません">
-                          再同意後に一覧を更新するか、Google Tasks側でListを確認してください。
+                        <StatusMessage
+                          title={translate("features.views.OperationalViews.googleTasksListEmpty")}
+                        >
+                          {translate("features.views.OperationalViews.googleTasksListEmptyDetail")}
                         </StatusMessage>
                       ) : null}
                       {connection.tasks.taskLists.map((list) => (
@@ -1114,7 +1118,7 @@ function GooglePanel({ client }: { client: AppClient }) {
                                 )
                               }
                             />
-                            同期
+                            {translate("features.views.OperationalViews.googleTasksSelect")}
                           </label>
                           <label>
                             <input
@@ -1124,26 +1128,30 @@ function GooglePanel({ client }: { client: AppClient }) {
                               disabled={busy || list.syncState === "unavailable"}
                               onChange={() => void updateTaskList(list.id, true, true)}
                             />
-                            新規Ticketの同期先
+                            {translate("features.views.OperationalViews.googleTasksDefaultTarget")}
                           </label>
                         </article>
                       ))}
                     </div>
                     <dl className="diagnostic-summary google-tasks-counts">
                       <div>
-                        <dt>選択List</dt>
+                        <dt>
+                          {translate("features.views.OperationalViews.googleTasksSelectedLists")}
+                        </dt>
                         <dd>{connection.tasks.selectedListCount}</dd>
                       </div>
                       <div>
-                        <dt>同期Ticket</dt>
+                        <dt>
+                          {translate("features.views.OperationalViews.googleTasksMappedTickets")}
+                        </dt>
                         <dd>{connection.tasks.mappedTicketCount}</dd>
                       </div>
                       <div>
-                        <dt>反映待ち</dt>
+                        <dt>{translate("features.views.OperationalViews.googleTasksPending")}</dt>
                         <dd>{connection.tasks.pendingOutboxCount}</dd>
                       </div>
                       <div>
-                        <dt>競合</dt>
+                        <dt>{translate("features.views.OperationalViews.googleTasksConflicts")}</dt>
                         <dd>{connection.tasks.conflictCount}</dd>
                       </div>
                     </dl>
@@ -1152,26 +1160,30 @@ function GooglePanel({ client }: { client: AppClient }) {
               </>
             )}
             {taskConflicts.length > 0 ? (
-              <div className="google-task-conflicts" aria-label="Google Tasks競合">
-                <h4>Google Tasks競合</h4>
+              <div
+                className="google-task-conflicts"
+                aria-label={translate("features.views.OperationalViews.googleTasksConflictLabel")}
+              >
+                <h4>{translate("features.views.OperationalViews.googleTasksConflictLabel")}</h4>
                 {taskConflicts.map((conflict) => (
                   <article key={conflict.id} className="conflict-card">
                     <strong>{conflict.ticketTitle}</strong>
                     <p>
-                      項目: {googleTaskConflictFieldLabel(conflict.fieldName)}
-                      。無言で上書きせず停止しています。
+                      {translate("features.views.OperationalViews.googleTasksConflictItem", [
+                        googleTaskConflictFieldLabel(conflict.fieldName),
+                      ])}
                     </p>
                     <dl>
                       <div>
-                        <dt>基準</dt>
+                        <dt>{translate("features.views.OperationalViews.googleTasksBase")}</dt>
                         <dd>{safeConflictValue(conflict.baseValue)}</dd>
                       </div>
                       <div>
-                        <dt>Local</dt>
+                        <dt>{translate("features.views.OperationalViews.googleTasksLocal")}</dt>
                         <dd>{safeConflictValue(conflict.localValue)}</dd>
                       </div>
                       <div>
-                        <dt>Google</dt>
+                        <dt>{translate("features.views.OperationalViews.googleTasksGoogle")}</dt>
                         <dd>{safeConflictValue(conflict.googleValue)}</dd>
                       </div>
                     </dl>
@@ -1181,21 +1193,21 @@ function GooglePanel({ client }: { client: AppClient }) {
                         disabled={busy || conflict.conflictType === "uncertain_create"}
                         onClick={() => void resolveTaskConflict(conflict.id, "local")}
                       >
-                        Localを残す
+                        {translate("features.views.OperationalViews.googleTasksKeepLocal")}
                       </button>
                       <button
                         className="button"
                         disabled={busy || conflict.conflictType === "uncertain_create"}
                         onClick={() => void resolveTaskConflict(conflict.id, "google")}
                       >
-                        Googleを採用
+                        {translate("features.views.OperationalViews.googleTasksUseGoogle")}
                       </button>
                       <button
                         className="button"
                         disabled={busy}
                         onClick={() => void resolveTaskConflict(conflict.id, "detach")}
                       >
-                        同期を解除してLocalに残す
+                        {translate("features.views.OperationalViews.googleTasksDetach")}
                       </button>
                     </div>
                   </article>
@@ -1297,15 +1309,13 @@ function googleOAuthFailureCopy(
   switch (category) {
     case "oauth_access_denied":
       return {
-        title: "Google接続は許可されませんでした",
-        detail:
-          "既存のCalendar接続とLocalデータは保持されています。必要な場合だけ再同意してください。",
+        title: translate("features.views.OperationalViews.googleTasksAccessDeniedTitle"),
+        detail: translate("features.views.OperationalViews.googleTasksAccessDeniedDetail"),
       };
     case "oauth_policy_denied":
       return {
-        title: "組織ポリシーによりGoogle接続が拒否されました",
-        detail:
-          "Google Workspace管理者へCalendarとTasks scopeの許可を確認してください。既存接続は保持されています。",
+        title: translate("features.views.OperationalViews.googleTasksPolicyDeniedTitle"),
+        detail: translate("features.views.OperationalViews.googleTasksPolicyDeniedDetail"),
       };
     case "oauth_callback_timeout":
     case "oauth_callback_invalid":
@@ -1346,9 +1356,8 @@ function googleOAuthFailureCopy(
       };
     case "oauth_tasks_fetch_failed":
       return {
-        title: "Google Task Listを確認できませんでした",
-        detail:
-          "新しい認証情報へは切り替えていません。Tasks APIとscopeを確認して再同意してください。",
+        title: translate("features.views.OperationalViews.googleTasksFetchFailedTitle"),
+        detail: translate("features.views.OperationalViews.googleTasksFetchFailedDetail"),
       };
     default:
       return {
@@ -1944,28 +1953,37 @@ export function DiagnosticsView({ client }: { client: AppClient }) {
             <dd>{snapshot.lastBackupAt ?? translate("features.views.OperationalViews.223")}</dd>
           </div>
           <div>
-            <dt>Google Tasks（選択List / 同期Ticket）</dt>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticLists")}</dt>
             <dd>
               {snapshot.googleTasksSelectedListCount} / {snapshot.googleTasksMappedTicketCount}
             </dd>
           </div>
           <div>
-            <dt>Google Tasks（反映待ち / 競合）</dt>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticPending")}</dt>
             <dd>
               {snapshot.googleTasksPendingOutboxCount} / {snapshot.googleTasksConflictCount}
             </dd>
           </div>
           <div>
-            <dt>Google Tasks 最終成功</dt>
-            <dd>{snapshot.googleTasksLastSuccessAt ?? "未同期"}</dd>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticSuccess")}</dt>
+            <dd>
+              {snapshot.googleTasksLastSuccessAt ??
+                translate("features.views.OperationalViews.googleTasksNever")}
+            </dd>
           </div>
           <div>
-            <dt>Google Tasks エラー分類</dt>
-            <dd>{snapshot.googleTasksLastErrorCategory ?? "なし"}</dd>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticError")}</dt>
+            <dd>
+              {snapshot.googleTasksLastErrorCategory ??
+                translate("features.views.OperationalViews.googleTasksNone")}
+            </dd>
           </div>
           <div>
-            <dt>Google Tasks 次回再試行</dt>
-            <dd>{snapshot.googleTasksNextRetryAt ?? "予定なし"}</dd>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticRetry")}</dt>
+            <dd>
+              {snapshot.googleTasksNextRetryAt ??
+                translate("features.views.OperationalViews.googleTasksNoRetry")}
+            </dd>
           </div>
         </dl>
       ) : null}
@@ -2625,19 +2643,19 @@ function googleCalendarSyncLabel(calendar: GoogleCalendar): string {
 
 function googleTasksStateLabel(state: GoogleConnection["tasks"]["state"]): string {
   return {
-    not_connected: "未接続",
-    scope_missing: "再同意が必要",
-    disabled: "無効",
-    never: "未同期",
-    syncing: "同期中",
-    synced: "同期済み",
-    pending: "反映待ち",
-    offline: "オフライン",
-    retry_scheduled: "再試行待ち",
-    conflict: "競合あり",
-    auth_required: "再認証が必要",
-    unsupported: "未対応操作",
-    validation_required: "入力確認が必要",
+    not_connected: translate("features.views.OperationalViews.googleTasksNotConnected"),
+    scope_missing: translate("features.views.OperationalViews.googleTasksScopeMissing"),
+    disabled: translate("features.views.OperationalViews.googleTasksDisabledState"),
+    never: translate("features.views.OperationalViews.googleTasksNever"),
+    syncing: translate("features.views.OperationalViews.googleTasksSyncing"),
+    synced: translate("features.views.OperationalViews.googleTasksSynced"),
+    pending: translate("features.views.OperationalViews.googleTasksPending"),
+    offline: translate("features.views.OperationalViews.googleTasksOffline"),
+    retry_scheduled: translate("features.views.OperationalViews.googleTasksRetry"),
+    conflict: translate("features.views.OperationalViews.googleTasksConflictState"),
+    auth_required: translate("features.views.OperationalViews.googleTasksAuthRequired"),
+    unsupported: translate("features.views.OperationalViews.googleTasksUnsupported"),
+    validation_required: translate("features.views.OperationalViews.googleTasksValidation"),
   }[state];
 }
 
@@ -2645,32 +2663,32 @@ function googleTaskListStateLabel(
   state: GoogleConnection["tasks"]["taskLists"][number]["syncState"],
 ): string {
   return {
-    never: "未同期",
-    syncing: "同期中",
-    synced: "同期済み",
-    offline: "オフライン",
-    retry_scheduled: "再試行待ち",
-    auth_required: "再認証が必要",
-    conflict: "競合あり",
-    unavailable: "Google側で利用できません",
+    never: translate("features.views.OperationalViews.googleTasksNever"),
+    syncing: translate("features.views.OperationalViews.googleTasksSyncing"),
+    synced: translate("features.views.OperationalViews.googleTasksSynced"),
+    offline: translate("features.views.OperationalViews.googleTasksOffline"),
+    retry_scheduled: translate("features.views.OperationalViews.googleTasksRetry"),
+    auth_required: translate("features.views.OperationalViews.googleTasksAuthRequired"),
+    conflict: translate("features.views.OperationalViews.googleTasksConflictState"),
+    unavailable: translate("features.views.OperationalViews.googleTasksUnavailable"),
   }[state];
 }
 
 function googleTaskConflictFieldLabel(field: GoogleTaskConflict["fieldName"]): string {
   return {
-    title: "タイトル",
-    notes: "説明",
-    due: "日付",
-    completed: "完了状態",
-    parent: "親Ticket",
+    title: translate("features.views.OperationalViews.googleTasksFieldTitle"),
+    notes: translate("features.views.OperationalViews.googleTasksFieldNotes"),
+    due: translate("features.views.OperationalViews.googleTasksFieldDue"),
+    completed: translate("features.views.OperationalViews.googleTasksFieldCompleted"),
+    parent: translate("features.views.OperationalViews.googleTasksFieldParent"),
     tasklist: "Task List",
-    delete: "削除",
+    delete: translate("features.views.OperationalViews.googleTasksFieldDelete"),
   }[field];
 }
 
 function safeConflictValue(value: unknown): string {
-  if (value === null) return "なし";
+  if (value === null) return translate("features.views.OperationalViews.googleTasksNone");
   const text = typeof value === "string" ? value : JSON.stringify(value);
-  if (!text) return "なし";
+  if (!text) return translate("features.views.OperationalViews.googleTasksNone");
   return text.length > 500 ? `${text.slice(0, 500)}…` : text;
 }
