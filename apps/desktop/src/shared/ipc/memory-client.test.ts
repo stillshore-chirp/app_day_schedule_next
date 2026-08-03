@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ScheduleDraft } from "../contracts";
+import type { ScheduleDraft, TicketDraft } from "../contracts";
 import { MemoryAppClient } from "./memory-client";
 
 const draft: ScheduleDraft = {
@@ -25,7 +25,57 @@ const draft: ScheduleDraft = {
   endNotificationMinutes: null,
 };
 
+const ticketDraft: TicketDraft = {
+  boardId: "00000000-0000-4000-8000-000000000100",
+  columnId: "00000000-0000-4000-8000-000000000101",
+  parentTicketId: null,
+  title: "synthetic ticket",
+  description: "synthetic fixture",
+  priority: "normal",
+  dueDate: "2026-08-04",
+  estimateMinutes: 30,
+  tags: ["synthetic"],
+  checklist: [{ title: "synthetic item", completed: false }],
+};
+
 describe("MemoryAppClient", () => {
+  it("implements idempotent versioned ticket lifecycle and Done restoration", async () => {
+    const client = new MemoryAppClient([]);
+    const operationId = crypto.randomUUID();
+    const created = await client.createTicket(operationId, ticketDraft);
+    const repeated = await client.createTicket(operationId, { ...ticketDraft, title: "ignored" });
+    expect(repeated.id).toBe(created.id);
+    const updated = await client.updateTicket({
+      operationId: crypto.randomUUID(),
+      id: created.id,
+      expectedVersion: created.version,
+      patch: { title: "updated synthetic ticket" },
+    });
+    const done = await client.moveTicket({
+      operationId: crypto.randomUUID(),
+      id: updated.id,
+      expectedVersion: updated.version,
+      targetColumnId: "00000000-0000-4000-8000-000000000106",
+    });
+    expect(done.completedAt).not.toBeNull();
+    const reopened = await client.reopenTicket(crypto.randomUUID(), done.id, done.version);
+    expect(reopened.columnId).toBe(ticketDraft.columnId);
+    expect(reopened.completedAt).toBeNull();
+    expect((await client.ticketHistory(created.id)).map((item) => item.action)).toEqual([
+      "reopen",
+      "complete",
+      "update",
+      "create",
+    ]);
+    await expect(
+      client.updateTicket({
+        operationId: crypto.randomUUID(),
+        id: reopened.id,
+        expectedVersion: 0,
+        patch: { title: "stale" },
+      }),
+    ).rejects.toThrow("ticket_version_conflict");
+  });
   it("creates, updates, soft-deletes and undoes a schedule", async () => {
     const client = new MemoryAppClient([]);
     const created = await client.createSchedule(draft);

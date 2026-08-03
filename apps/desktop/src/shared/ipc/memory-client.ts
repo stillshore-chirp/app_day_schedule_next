@@ -31,6 +31,13 @@ import {
   type ScheduleDraft,
   type ScheduleQuery,
   type ScheduleUpdate,
+  type Ticket,
+  type TicketBoard,
+  type TicketDraft,
+  type TicketHistoryItem,
+  type TicketMoveRequest,
+  type TicketQuery,
+  type TicketUpdateRequest,
   type Settings,
   type SyncSummary,
   type SyncConflictItem,
@@ -53,6 +60,29 @@ import type { AppClient, DiagnosticsSnapshot } from "./client";
 interface Snapshot {
   schedules: Schedule[];
 }
+
+const defaultTicketColumns: Array<[string, TicketBoard["columns"][number]["kind"], string]> = [
+  ["00000000-0000-4000-8000-000000000101", "inbox", "Inbox"],
+  ["00000000-0000-4000-8000-000000000102", "backlog", "Backlog"],
+  ["00000000-0000-4000-8000-000000000103", "next", "Next"],
+  ["00000000-0000-4000-8000-000000000104", "in_progress", "In Progress"],
+  ["00000000-0000-4000-8000-000000000105", "waiting", "Waiting"],
+  ["00000000-0000-4000-8000-000000000106", "done", "Done"],
+];
+
+const defaultTicketBoard: TicketBoard = {
+  id: "00000000-0000-4000-8000-000000000100",
+  name: translate("shared.ipc.memory-client.021"),
+  version: 0,
+  columns: defaultTicketColumns.map(([id, kind, name], sortOrder) => ({
+    id,
+    boardId: "00000000-0000-4000-8000-000000000100",
+    kind,
+    name,
+    sortOrder,
+    version: 0,
+  })),
+};
 
 const defaultSettings: Settings = {
   theme: "system",
@@ -168,6 +198,9 @@ export class MemoryAppClient implements AppClient {
   }
 
   private schedules: Schedule[];
+  private tickets: Ticket[] = [];
+  private ticketHistoryItems: TicketHistoryItem[] = [];
+  private ticketOperations = new Map<string, string>();
   private undoStack: Snapshot[] = [];
   private redoStack: Snapshot[] = [];
   private templates: DayTemplate[] = [
@@ -207,7 +240,7 @@ export class MemoryAppClient implements AppClient {
   async bootstrap(): Promise<Bootstrap> {
     const now = new Date();
     return {
-      schemaVersion: 11,
+      schemaVersion: 14,
       appVersion: "0.1.0-test",
       today: now.toISOString().slice(0, 10),
       timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo",
@@ -336,6 +369,247 @@ export class MemoryAppClient implements AppClient {
       version: current.version + 1,
     };
     return this.changeResult([request.id]);
+  }
+
+  async ticketBoard(boardId?: string): Promise<TicketBoard> {
+    if (boardId && boardId !== defaultTicketBoard.id) throw new Error("ticket_board_not_found");
+    return structuredClone(defaultTicketBoard);
+  }
+
+  async listTickets(
+    query: TicketQuery,
+  ): Promise<{ contractVersion: 1; items: Ticket[]; total: number }> {
+    const term = query.search?.trim().toLocaleLowerCase("ja") ?? "";
+    const filtered = this.tickets
+      .filter((ticket) => query.boardId === undefined || ticket.boardId === query.boardId)
+      .filter((ticket) => query.columnId === undefined || ticket.columnId === query.columnId)
+      .filter((ticket) => query.priority === undefined || ticket.priority === query.priority)
+      .filter((ticket) => query.includeArchived === true || ticket.archivedAt === null)
+      .filter((ticket) => query.includeDeleted === true || ticket.deletedAt === null)
+      .filter(
+        (ticket) =>
+          term === "" ||
+          `${ticket.title} ${ticket.description}`.toLocaleLowerCase("ja").includes(term),
+      )
+      .sort((left, right) =>
+        left.columnId === right.columnId
+          ? left.sortKey - right.sortKey || left.id.localeCompare(right.id)
+          : left.columnId.localeCompare(right.columnId),
+      );
+    const offset = query.offset ?? 0;
+    const limit = Math.min(Math.max(query.limit ?? 500, 1), 1_000);
+    return {
+      contractVersion: 1,
+      items: structuredClone(filtered.slice(offset, offset + limit)),
+      total: filtered.length,
+    };
+  }
+
+  async ticket(id: string): Promise<Ticket> {
+    const ticket = this.tickets.find((candidate) => candidate.id === id);
+    if (!ticket) throw new Error("ticket_not_found");
+    return structuredClone(ticket);
+  }
+
+  async createTicket(operationId: string, draft: TicketDraft): Promise<Ticket> {
+    const repeated = this.ticketOperations.get(operationId);
+    if (repeated) return this.ticket(repeated);
+    const now = new Date().toISOString();
+    const target = defaultTicketBoard.columns.find((column) => column.id === draft.columnId);
+    if (!target || draft.boardId !== defaultTicketBoard.id)
+      throw new Error("ticket_column_invalid");
+    const created: Ticket = {
+      id: crypto.randomUUID(),
+      boardId: draft.boardId,
+      columnId: draft.columnId,
+      lastNonDoneColumnId: target.kind === "done" ? null : draft.columnId,
+      parentTicketId: draft.parentTicketId,
+      title: draft.title.trim(),
+      description: draft.description,
+      priority: draft.priority,
+      dueDate: draft.dueDate,
+      estimateMinutes: draft.estimateMinutes,
+      sortKey:
+        Math.max(
+          0,
+          ...this.tickets
+            .filter((ticket) => ticket.columnId === draft.columnId)
+            .map((ticket) => ticket.sortKey),
+        ) + 1_024,
+      tags: [...new Set(draft.tags.map((name) => name.trim()))].map((name) => ({
+        id: crypto.randomUUID(),
+        name,
+      })),
+      checklist: draft.checklist.map((item, sortOrder) => ({
+        id: crypto.randomUUID(),
+        ...item,
+        title: item.title.trim(),
+        sortOrder,
+        version: 0,
+      })),
+      version: 0,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: target.kind === "done" ? now : null,
+      archivedAt: null,
+      deletedAt: null,
+    };
+    this.tickets.push(created);
+    this.recordTicketOperation(operationId, created, "create");
+    return structuredClone(created);
+  }
+
+  async updateTicket(request: TicketUpdateRequest): Promise<Ticket> {
+    const repeated = this.ticketOperations.get(request.operationId);
+    if (repeated) return this.ticket(repeated);
+    const index = this.ticketIndex(request.id, request.expectedVersion);
+    const current = this.tickets[index]!;
+    const patch = request.patch;
+    if (patch.parentTicketId === current.id) throw new Error("ticket_parent_cycle");
+    const updated: Ticket = {
+      ...current,
+      ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
+      ...(patch.description !== undefined ? { description: patch.description } : {}),
+      ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+      ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
+      ...(patch.estimateMinutes !== undefined ? { estimateMinutes: patch.estimateMinutes } : {}),
+      ...(patch.parentTicketId !== undefined ? { parentTicketId: patch.parentTicketId } : {}),
+      ...(patch.tags !== undefined
+        ? {
+            tags: [...new Set(patch.tags.map((name) => name.trim()))].map((name) => ({
+              id: crypto.randomUUID(),
+              name,
+            })),
+          }
+        : {}),
+      ...(patch.checklist !== undefined
+        ? {
+            checklist: patch.checklist.map((item, sortOrder) => ({
+              id: crypto.randomUUID(),
+              ...item,
+              title: item.title.trim(),
+              sortOrder,
+              version: 0,
+            })),
+          }
+        : {}),
+      version: current.version + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    this.tickets[index] = updated;
+    this.recordTicketOperation(
+      request.operationId,
+      updated,
+      patch.parentTicketId !== undefined ? "parent" : "update",
+    );
+    return structuredClone(updated);
+  }
+
+  async moveTicket(request: TicketMoveRequest): Promise<Ticket> {
+    const repeated = this.ticketOperations.get(request.operationId);
+    if (repeated) return this.ticket(repeated);
+    const index = this.ticketIndex(request.id, request.expectedVersion);
+    const current = this.tickets[index]!;
+    const source = defaultTicketBoard.columns.find((column) => column.id === current.columnId);
+    const target = defaultTicketBoard.columns.find(
+      (column) => column.id === request.targetColumnId,
+    );
+    if (!source || !target) throw new Error("ticket_column_invalid");
+    const ordered = this.tickets
+      .filter(
+        (ticket) =>
+          ticket.columnId === request.targetColumnId &&
+          ticket.id !== request.id &&
+          ticket.deletedAt === null,
+      )
+      .sort((left, right) => left.sortKey - right.sortKey);
+    const beforeIndex = request.beforeTicketId
+      ? ordered.findIndex((ticket) => ticket.id === request.beforeTicketId)
+      : ordered.length;
+    if (beforeIndex < 0) throw new Error("ticket_move_target_invalid");
+    ordered.splice(beforeIndex, 0, current);
+    ordered.forEach((ticket, order) => {
+      ticket.sortKey = (order + 1) * 1_024;
+    });
+    const now = new Date().toISOString();
+    const updated: Ticket = {
+      ...current,
+      columnId: target.id,
+      lastNonDoneColumnId:
+        target.kind === "done"
+          ? source.kind === "done"
+            ? current.lastNonDoneColumnId
+            : current.columnId
+          : target.id,
+      completedAt: target.kind === "done" ? (current.completedAt ?? now) : null,
+      version: current.version + 1,
+      updatedAt: now,
+    };
+    this.tickets[index] = updated;
+    const action =
+      source.kind !== "done" && target.kind === "done"
+        ? "complete"
+        : source.kind === "done" && target.kind !== "done"
+          ? "reopen"
+          : source.id === target.id
+            ? "reorder"
+            : "move";
+    this.recordTicketOperation(request.operationId, updated, action);
+    return structuredClone(updated);
+  }
+
+  async reopenTicket(operationId: string, id: string, expectedVersion: number): Promise<Ticket> {
+    const current = await this.ticket(id);
+    return this.moveTicket({
+      operationId,
+      id,
+      expectedVersion,
+      targetColumnId: current.lastNonDoneColumnId ?? defaultTicketBoard.columns[0]!.id,
+    });
+  }
+
+  async archiveTicket(
+    operationId: string,
+    id: string,
+    expectedVersion: number,
+    archived: boolean,
+  ): Promise<Ticket> {
+    const repeated = this.ticketOperations.get(operationId);
+    if (repeated) return this.ticket(repeated);
+    const index = this.ticketIndex(id, expectedVersion);
+    const updated = {
+      ...this.tickets[index]!,
+      archivedAt: archived ? new Date().toISOString() : null,
+      version: expectedVersion + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    this.tickets[index] = updated;
+    this.recordTicketOperation(operationId, updated, archived ? "archive" : "restore");
+    return structuredClone(updated);
+  }
+
+  async deleteTicket(operationId: string, id: string, expectedVersion: number): Promise<Ticket> {
+    const repeated = this.ticketOperations.get(operationId);
+    if (repeated) return this.ticket(repeated);
+    const index = this.ticketIndex(id, expectedVersion);
+    const updated = {
+      ...this.tickets[index]!,
+      deletedAt: new Date().toISOString(),
+      version: expectedVersion + 1,
+      updatedAt: new Date().toISOString(),
+    };
+    this.tickets[index] = updated;
+    this.recordTicketOperation(operationId, updated, "delete");
+    return structuredClone(updated);
+  }
+
+  async ticketHistory(ticketId: string, limit = 100): Promise<TicketHistoryItem[]> {
+    return structuredClone(
+      this.ticketHistoryItems
+        .filter((item) => item.actionId && this.ticketOperations.get(item.actionId) === ticketId)
+        .slice(-limit)
+        .reverse(),
+    );
   }
 
   async undo(): Promise<ChangeResult> {
@@ -623,7 +897,7 @@ export class MemoryAppClient implements AppClient {
   async diagnostics(): Promise<DiagnosticsSnapshot> {
     return {
       appVersion: "0.1.0-test",
-      schemaVersion: 11,
+      schemaVersion: 14,
       databaseState: "ready",
       scheduleCount: this.schedules.filter((item) => item.deletedAt === null).length,
       deletedCount: this.schedules.filter((item) => item.deletedAt !== null).length,
@@ -824,6 +1098,9 @@ export class MemoryAppClient implements AppClient {
       throw new Error("confirmation_mismatch");
     const count = this.schedules.length;
     this.schedules = [];
+    this.tickets = [];
+    this.ticketHistoryItems = [];
+    this.ticketOperations.clear();
     this.templates = this.templates
       .filter((item) => item.isBuiltin)
       .map((item) => ({
@@ -931,7 +1208,7 @@ export class MemoryAppClient implements AppClient {
       id: crypto.randomUUID(),
       fileName: "synthetic-backup.sqlite3",
       sizeBytes: 0,
-      schemaVersion: 11,
+      schemaVersion: 14,
       appVersion: "demo",
       verified: true,
       createdAt: new Date().toISOString(),
@@ -1003,6 +1280,30 @@ export class MemoryAppClient implements AppClient {
   private checkpoint(): void {
     this.undoStack.push({ schedules: structuredClone(this.schedules) });
     this.redoStack = [];
+  }
+
+  private ticketIndex(id: string, expectedVersion: number): number {
+    const index = this.tickets.findIndex((ticket) => ticket.id === id);
+    if (index < 0) throw new Error("ticket_not_found");
+    const current = this.tickets[index]!;
+    if (current.version !== expectedVersion) throw new Error("ticket_version_conflict");
+    if (current.deletedAt !== null) throw new Error("ticket_deleted");
+    return index;
+  }
+
+  private recordTicketOperation(
+    operationId: string,
+    ticket: Ticket,
+    action: TicketHistoryItem["action"],
+  ): void {
+    this.ticketOperations.set(operationId, ticket.id);
+    this.ticketHistoryItems.push({
+      id: this.ticketHistoryItems.length + 1,
+      actionId: operationId,
+      action,
+      version: ticket.version,
+      createdAt: ticket.updatedAt,
+    });
   }
 
   private changeResult(changedIds: string[]): ChangeResult {

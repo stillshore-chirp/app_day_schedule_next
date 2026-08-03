@@ -17,7 +17,8 @@ use crate::{
         FreeAlarm, FreeAlarmDraft, QuickBlock, QuickBlockDraft, RecurrenceEditScope, Schedule,
         ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery, Settings, StopwatchCommand,
         StopwatchState, StopwatchStatus, SyncSummary, SyncSummaryState, TemplateApplyMode,
-        TemplatePreview, TimerCommand, TimerDraft, TimerSet, TimerState, TimerStatus,
+        TemplatePreview, Ticket, TicketBoard, TicketDraft, TicketHistoryItem, TicketPage,
+        TicketPatch, TicketQuery, TimerCommand, TimerDraft, TimerSet, TimerState, TimerStatus,
         validate_focus_transition, validate_stopwatch_transition, validate_timer_transition,
     },
     infrastructure::{
@@ -162,7 +163,7 @@ impl AppService {
         let timezone = timezone_id.parse::<Tz>().unwrap_or(chrono_tz::UTC);
         let settings = self.database.settings().await?;
         Ok(Bootstrap {
-            schema_version: 13,
+            schema_version: 14,
             app_version: env!("CARGO_PKG_VERSION").into(),
             today: self
                 .clock
@@ -191,6 +192,107 @@ impl AppService {
         let schedule = self.database.create_schedule(draft).await?;
         self.record_event("info", "schedule", "created", None).await;
         Ok(schedule)
+    }
+
+    pub async fn ticket_board(&self, board_id: Option<Uuid>) -> AppResult<TicketBoard> {
+        match board_id {
+            Some(board_id) => self.database.ticket_board(board_id).await,
+            None => self.database.default_ticket_board().await,
+        }
+    }
+
+    pub async fn list_tickets(&self, query: TicketQuery) -> AppResult<TicketPage> {
+        self.database.list_tickets(query).await
+    }
+
+    pub async fn ticket(&self, id: Uuid) -> AppResult<Ticket> {
+        self.database.ticket(id).await
+    }
+
+    pub async fn create_ticket(&self, operation_id: Uuid, draft: TicketDraft) -> AppResult<Ticket> {
+        self.database
+            .create_ticket(operation_id, draft, self.clock.now())
+            .await
+    }
+
+    pub async fn update_ticket(
+        &self,
+        operation_id: Uuid,
+        id: Uuid,
+        expected_version: u64,
+        patch: TicketPatch,
+    ) -> AppResult<Ticket> {
+        self.database
+            .update_ticket(operation_id, id, expected_version, patch, self.clock.now())
+            .await
+    }
+
+    pub async fn move_ticket(
+        &self,
+        operation_id: Uuid,
+        id: Uuid,
+        expected_version: u64,
+        target_column_id: Uuid,
+        before_ticket_id: Option<Uuid>,
+    ) -> AppResult<Ticket> {
+        self.database
+            .move_ticket(
+                operation_id,
+                id,
+                expected_version,
+                target_column_id,
+                before_ticket_id,
+                self.clock.now(),
+            )
+            .await
+    }
+
+    pub async fn reopen_ticket(
+        &self,
+        operation_id: Uuid,
+        id: Uuid,
+        expected_version: u64,
+    ) -> AppResult<Ticket> {
+        self.database
+            .reopen_ticket(operation_id, id, expected_version, self.clock.now())
+            .await
+    }
+
+    pub async fn archive_ticket(
+        &self,
+        operation_id: Uuid,
+        id: Uuid,
+        expected_version: u64,
+        archived: bool,
+    ) -> AppResult<Ticket> {
+        self.database
+            .set_ticket_archived(
+                operation_id,
+                id,
+                expected_version,
+                archived,
+                self.clock.now(),
+            )
+            .await
+    }
+
+    pub async fn delete_ticket(
+        &self,
+        operation_id: Uuid,
+        id: Uuid,
+        expected_version: u64,
+    ) -> AppResult<Ticket> {
+        self.database
+            .delete_ticket(operation_id, id, expected_version, self.clock.now())
+            .await
+    }
+
+    pub async fn ticket_history(
+        &self,
+        ticket_id: Uuid,
+        limit: u32,
+    ) -> AppResult<Vec<TicketHistoryItem>> {
+        self.database.ticket_history(ticket_id, limit).await
     }
 
     #[cfg(feature = "e2e")]

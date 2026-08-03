@@ -20,7 +20,7 @@ use super::Database;
 const BACKUP_GENERATIONS: usize = 10;
 const PENDING_RESTORE_NAME: &str = ".restore-pending.sqlite3";
 const PENDING_RESTORE_HASH_NAME: &str = ".restore-pending.sha256";
-pub const CURRENT_SCHEMA_VERSION: u32 = 13;
+pub const CURRENT_SCHEMA_VERSION: u32 = 14;
 
 #[derive(Debug, Clone)]
 pub struct PreparedMigrationBackup {
@@ -577,6 +577,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+    use crate::domain::{TicketChecklistItemDraft, TicketDraft, TicketPatch, TicketPriority};
 
     #[test]
     fn replacement_displaces_existing_destination_before_rename() {
@@ -664,6 +665,63 @@ mod tests {
                         .to_string_lossy()
                         .contains("pre-restore")
                 })
+        );
+    }
+
+    #[tokio::test]
+    async fn backup_restore_round_trips_ticket_relations_and_history() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("data.sqlite3");
+        let database = Database::open(&path).await.unwrap();
+        let created = database
+            .create_ticket(
+                Uuid::new_v4(),
+                TicketDraft {
+                    board_id: Uuid::parse_str("00000000-0000-4000-8000-000000000100").unwrap(),
+                    column_id: Uuid::parse_str("00000000-0000-4000-8000-000000000101").unwrap(),
+                    parent_ticket_id: None,
+                    title: "synthetic ticket before backup".into(),
+                    description: "synthetic fixture".into(),
+                    priority: TicketPriority::High,
+                    due_date: chrono::NaiveDate::from_ymd_opt(2026, 8, 4),
+                    estimate_minutes: Some(45),
+                    tags: vec!["synthetic".into()],
+                    checklist: vec![TicketChecklistItemDraft {
+                        title: "synthetic item".into(),
+                        completed: true,
+                    }],
+                },
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        let backup = database.create_backup("manual", "test").await.unwrap();
+        database
+            .update_ticket(
+                Uuid::new_v4(),
+                created.id,
+                created.version,
+                TicketPatch {
+                    title: Some("changed after backup".into()),
+                    ..TicketPatch::default()
+                },
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        database.stage_restore(backup.id).await.unwrap();
+        database.pool.close().await;
+
+        assert!(Database::apply_pending_restore(&path).await.unwrap());
+        let restored = Database::open(&path).await.unwrap();
+        let ticket = restored.ticket(created.id).await.unwrap();
+        assert_eq!(ticket.title, "synthetic ticket before backup");
+        assert_eq!(ticket.tags.len(), 1);
+        assert_eq!(ticket.checklist.len(), 1);
+        assert!(ticket.checklist[0].completed);
+        assert_eq!(
+            restored.ticket_history(created.id, 10).await.unwrap().len(),
+            1
         );
     }
 

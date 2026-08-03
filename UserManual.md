@@ -140,6 +140,7 @@ Google 接続を解除すると、その接続に残る未送信 Outbox は無�
 「設定 > データ」から JSON export / import、バックアップ作成、復元準備、旧 DB import、全データ削除を操作します。
 
 - import と旧 DB import は件数・警告・fingerprint を読み取り専用 preview で確認してから単一 transaction で確定します。JSONにはタイマーのラベル・設定時間と構成セットを含めますが、タイマーとストップウォッチの実行途中の状態は含めません。
+- チケットは現行JSON export / importの対象外です。チケット本体、列順、親子、タグ、チェック項目、履歴を含めて移行・復元する場合は、検証済みSQLiteバックアップを使用してください。JSON import previewにもこの制約を表示します。
 - JSON export と手動バックアップは実行中に取り消せます。export の未完成 `.part` と未検証バックアップは削除され、完成済みファイルと現在 DB は変更しません。バックアップの SQLite 処理が進行中の場合は、処理終了後に未完成世代を削除します。
 - 復元準備では検証済みバックアップを次回起動用に staging します。再起動時は staging 上の候補へ integrity check、migration、smoke query を実行し、すべて通過してから現在 DB を一時退避して切り替えます。候補の migration に失敗した場合は現在 DB を切り替えません。切替途中で中断した場合は次回起動時に退避済み DB を回復します。
 - 全データ削除は画面に示された確認文の完全一致が必要です。Google credential も OS 秘密ストアから削除します。

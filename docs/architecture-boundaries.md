@@ -84,6 +84,7 @@ domain -X-> tauri / sqlx / reqwest / keyring / filesystem / React
 - `ScheduleInterval`, `RecurrenceRule`, `OccurrenceId`。
 - `SyncBase`, `FieldConflict`, `MergeDecision`。
 - `NotificationDeliveryKey`, `FocusState`, `TimerState`, `StopwatchState`。
+- `Ticket`, `TicketDraft`, `TicketPriority`, `TicketColumnKind`, `TicketQuery`。
 
 規則:
 
@@ -122,6 +123,7 @@ Adapter:
 - conflict resolve + schedule + mapping + Outbox。
 - legacy import all rows。
 - restore metadata switch。
+- ticket本体 + tag link + checklist + ticket change history。
 
 network request を SQLite transaction 中に待たない。
 

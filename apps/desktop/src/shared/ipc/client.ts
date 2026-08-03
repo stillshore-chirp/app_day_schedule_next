@@ -26,6 +26,10 @@ import {
   restoreStageResultSchema,
   schedulePageSchema,
   scheduleSchema,
+  ticketBoardSchema,
+  ticketHistoryItemSchema,
+  ticketPageSchema,
+  ticketSchema,
   settingsSchema,
   syncSummarySchema,
   syncConflictItemSchema,
@@ -68,6 +72,13 @@ import {
   type ScheduleDraft,
   type ScheduleQuery,
   type ScheduleUpdate,
+  type Ticket,
+  type TicketBoard,
+  type TicketDraft,
+  type TicketHistoryItem,
+  type TicketMoveRequest,
+  type TicketQuery,
+  type TicketUpdateRequest,
   type Settings,
   type SyncSummary,
   type SyncConflictItem,
@@ -114,6 +125,21 @@ export interface AppClient {
   updateSchedule(update: ScheduleUpdate): Promise<Schedule>;
   bulkClassifySchedules(ids: string[], patch: BulkClassificationPatch): Promise<ChangeResult>;
   deleteSchedule(request: DeleteRequest): Promise<ChangeResult>;
+  ticketBoard(boardId?: string): Promise<TicketBoard>;
+  listTickets(query: TicketQuery): Promise<{ contractVersion: 1; items: Ticket[]; total: number }>;
+  ticket(id: string): Promise<Ticket>;
+  createTicket(operationId: string, draft: TicketDraft): Promise<Ticket>;
+  updateTicket(request: TicketUpdateRequest): Promise<Ticket>;
+  moveTicket(request: TicketMoveRequest): Promise<Ticket>;
+  reopenTicket(operationId: string, id: string, expectedVersion: number): Promise<Ticket>;
+  archiveTicket(
+    operationId: string,
+    id: string,
+    expectedVersion: number,
+    archived: boolean,
+  ): Promise<Ticket>;
+  deleteTicket(operationId: string, id: string, expectedVersion: number): Promise<Ticket>;
+  ticketHistory(ticketId: string, limit?: number): Promise<TicketHistoryItem[]>;
   undo(): Promise<ChangeResult>;
   redo(): Promise<ChangeResult>;
   updateSettings(settings: Settings): Promise<Settings>;
@@ -279,6 +305,67 @@ export class TauriAppClient implements AppClient {
     const result = await call<ChangeResult>("schedule_delete", { request });
     signalLocalChange();
     return result;
+  }
+
+  async ticketBoard(boardId?: string): Promise<TicketBoard> {
+    return ticketBoardSchema.parse(await call("ticket_board_get", { boardId: boardId ?? null }));
+  }
+
+  async listTickets(
+    query: TicketQuery,
+  ): Promise<{ contractVersion: 1; items: Ticket[]; total: number }> {
+    return ticketPageSchema.parse(await call("ticket_list", { query }));
+  }
+
+  async ticket(id: string): Promise<Ticket> {
+    return ticketSchema.parse(await call("ticket_get", { id }));
+  }
+
+  async createTicket(operationId: string, draft: TicketDraft): Promise<Ticket> {
+    return ticketSchema.parse(await call("ticket_create", { request: { operationId, draft } }));
+  }
+
+  async updateTicket(request: TicketUpdateRequest): Promise<Ticket> {
+    return ticketSchema.parse(await call("ticket_update", { request }));
+  }
+
+  async moveTicket(request: TicketMoveRequest): Promise<Ticket> {
+    return ticketSchema.parse(
+      await call("ticket_move", {
+        request: { ...request, beforeTicketId: request.beforeTicketId ?? null },
+      }),
+    );
+  }
+
+  async reopenTicket(operationId: string, id: string, expectedVersion: number): Promise<Ticket> {
+    return ticketSchema.parse(
+      await call("ticket_reopen", { request: { operationId, id, expectedVersion } }),
+    );
+  }
+
+  async archiveTicket(
+    operationId: string,
+    id: string,
+    expectedVersion: number,
+    archived: boolean,
+  ): Promise<Ticket> {
+    return ticketSchema.parse(
+      await call("ticket_archive", {
+        request: { operationId, id, expectedVersion, archived },
+      }),
+    );
+  }
+
+  async deleteTicket(operationId: string, id: string, expectedVersion: number): Promise<Ticket> {
+    return ticketSchema.parse(
+      await call("ticket_delete", { request: { operationId, id, expectedVersion } }),
+    );
+  }
+
+  async ticketHistory(ticketId: string, limit = 100): Promise<TicketHistoryItem[]> {
+    return ticketHistoryItemSchema
+      .array()
+      .parse(await call("ticket_history_list", { ticketId, limit }));
   }
 
   async undo(): Promise<ChangeResult> {
@@ -610,6 +697,36 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   deleteSchedule(): Promise<ChangeResult> {
+    return Promise.reject(this.unavailable());
+  }
+  ticketBoard(): Promise<TicketBoard> {
+    return Promise.reject(this.unavailable());
+  }
+  listTickets(): Promise<{ contractVersion: 1; items: Ticket[]; total: number }> {
+    return Promise.reject(this.unavailable());
+  }
+  ticket(): Promise<Ticket> {
+    return Promise.reject(this.unavailable());
+  }
+  createTicket(): Promise<Ticket> {
+    return Promise.reject(this.unavailable());
+  }
+  updateTicket(): Promise<Ticket> {
+    return Promise.reject(this.unavailable());
+  }
+  moveTicket(): Promise<Ticket> {
+    return Promise.reject(this.unavailable());
+  }
+  reopenTicket(): Promise<Ticket> {
+    return Promise.reject(this.unavailable());
+  }
+  archiveTicket(): Promise<Ticket> {
+    return Promise.reject(this.unavailable());
+  }
+  deleteTicket(): Promise<Ticket> {
+    return Promise.reject(this.unavailable());
+  }
+  ticketHistory(): Promise<TicketHistoryItem[]> {
     return Promise.reject(this.unavailable());
   }
   undo(): Promise<ChangeResult> {
