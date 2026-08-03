@@ -90,6 +90,14 @@ describe("Day Schedule Next short schedule layout", () => {
     );
     await $('button[aria-label="サイドバーを格納"]').click();
     await expect(shell).toHaveAttribute("data-sidebar", "collapsed");
+    await browser.waitUntil(
+      async () =>
+        (await browser.execute(() => {
+          const sidebar = document.querySelector(".sidebar");
+          return sidebar instanceof HTMLElement ? sidebar.getBoundingClientRect().width : 0;
+        })) < 100,
+      { timeoutMsg: "sidebar did not finish collapsing" },
+    );
 
     await setLogicalWindowSize(720, 720);
     const narrowLayout = await browser.execute(() => {

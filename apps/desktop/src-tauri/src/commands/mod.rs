@@ -9,13 +9,14 @@ use uuid::Uuid;
 use crate::{
     application::{AppService, Bootstrap},
     domain::{
-        DayTemplate, DayTemplateDraft, FocusCommand, FocusState, FreeAlarm, FreeAlarmDraft,
-        LocalTimeResolution, Priority, QuickBlock, QuickBlockDraft, RecurrenceEditScope,
-        RecurrencePreview, Schedule, ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery,
-        ScheduleStatus, Settings, StopwatchCommand, StopwatchState, SyncStatus, SyncSummary,
-        TemplateApplyMode, TemplatePreview, Ticket, TicketBoard, TicketDraft, TicketHistoryItem,
-        TicketPage, TicketPatch, TicketQuery, TimerCommand, TimerDraft, TimerSet, TimerState,
-        UserSafeError,
+        AssignTicketScheduleRequest, DayTemplate, DayTemplateDraft, FocusCommand, FocusState,
+        FreeAlarm, FreeAlarmDraft, LinkTicketScheduleRequest, LocalTimeResolution, Priority,
+        QuickBlock, QuickBlockDraft, RecurrenceEditScope, RecurrencePreview, Schedule,
+        ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery, ScheduleStatus, Settings,
+        StopwatchCommand, StopwatchState, SyncStatus, SyncSummary, TemplateApplyMode,
+        TemplatePreview, Ticket, TicketBoard, TicketDraft, TicketHistoryItem, TicketPage,
+        TicketPatch, TicketPlanningSummary, TicketQuery, TicketScheduleLink, TimerCommand,
+        TimerDraft, TimerSet, TimerState, UnlinkTicketScheduleRequest, UserSafeError,
     },
     infrastructure::{
         BackupRecord, ChangeResult, ConflictChoice, DeliveryResult, DiagnosticsExportResult,
@@ -497,6 +498,73 @@ pub async fn ticket_history_list(
 ) -> CommandResult<Vec<TicketHistoryItem>> {
     service
         .ticket_history(ticket_id, limit.unwrap_or(100))
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_schedule_assign(
+    service: State<'_, AppService>,
+    request: AssignTicketScheduleRequest,
+) -> CommandResult<TicketScheduleLink> {
+    service
+        .assign_ticket_schedule(request)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_schedule_link(
+    service: State<'_, AppService>,
+    request: LinkTicketScheduleRequest,
+) -> CommandResult<TicketScheduleLink> {
+    service
+        .link_ticket_schedule(request)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_schedule_unlink(
+    service: State<'_, AppService>,
+    request: UnlinkTicketScheduleRequest,
+) -> CommandResult<TicketScheduleLink> {
+    service
+        .unlink_ticket_schedule(request)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_schedule_list(
+    service: State<'_, AppService>,
+    ticket_id: Uuid,
+    include_unlinked: Option<bool>,
+) -> CommandResult<Vec<TicketScheduleLink>> {
+    service
+        .ticket_schedules(ticket_id, include_unlinked.unwrap_or(false))
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn schedule_ticket_link_get(
+    service: State<'_, AppService>,
+    schedule_id: Uuid,
+) -> CommandResult<Option<TicketScheduleLink>> {
+    service
+        .schedule_ticket_link(schedule_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_planning_summaries_get(
+    service: State<'_, AppService>,
+    ticket_ids: Vec<Uuid>,
+) -> CommandResult<Vec<TicketPlanningSummary>> {
+    service
+        .ticket_planning_summaries(ticket_ids)
         .await
         .map_err(Into::into)
 }

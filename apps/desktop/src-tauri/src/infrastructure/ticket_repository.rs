@@ -447,6 +447,19 @@ impl Database {
         if result.rows_affected() != 1 {
             return Err(version_conflict());
         }
+        if deleted || matches!(change, TicketLifecycleChange::Archived(Some(_))) {
+            super::ticket_schedule_repository::deactivate_links_for_ticket(
+                &mut transaction,
+                id,
+                if deleted {
+                    "delete_unlink"
+                } else {
+                    "archive_unlink"
+                },
+                now,
+            )
+            .await?;
+        }
         record_history(
             &mut transaction,
             HistoryWrite {
@@ -1409,7 +1422,18 @@ mod tests {
             .execute(&pool)
             .await
             .unwrap();
-        super::super::database::MIGRATOR.run(&pool).await.unwrap();
+        let v14 = sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                super::super::database::MIGRATOR
+                    .migrations
+                    .iter()
+                    .filter(|migration| migration.version <= 14)
+                    .cloned()
+                    .collect(),
+            ),
+            ..super::super::database::MIGRATOR
+        };
+        v14.run(&pool).await.unwrap();
         let version: String =
             sqlx::query_scalar("SELECT value FROM app_meta WHERE key = 'schema_version'")
                 .fetch_one(&pool)

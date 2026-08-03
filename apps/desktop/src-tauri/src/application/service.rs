@@ -13,13 +13,15 @@ use uuid::Uuid;
 use crate::{
     application::OperationRegistry,
     domain::{
-        AppError, AppResult, DayTemplate, DayTemplateDraft, FocusCommand, FocusPhase, FocusState,
-        FreeAlarm, FreeAlarmDraft, QuickBlock, QuickBlockDraft, RecurrenceEditScope, Schedule,
-        ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery, Settings, StopwatchCommand,
-        StopwatchState, StopwatchStatus, SyncSummary, SyncSummaryState, TemplateApplyMode,
-        TemplatePreview, Ticket, TicketBoard, TicketDraft, TicketHistoryItem, TicketPage,
-        TicketPatch, TicketQuery, TimerCommand, TimerDraft, TimerSet, TimerState, TimerStatus,
-        validate_focus_transition, validate_stopwatch_transition, validate_timer_transition,
+        AppError, AppResult, AssignTicketScheduleRequest, DayTemplate, DayTemplateDraft,
+        FocusCommand, FocusPhase, FocusState, FreeAlarm, FreeAlarmDraft, LinkTicketScheduleRequest,
+        QuickBlock, QuickBlockDraft, RecurrenceEditScope, Schedule, ScheduleClassificationPatch,
+        ScheduleDraft, ScheduleQuery, Settings, StopwatchCommand, StopwatchState, StopwatchStatus,
+        SyncSummary, SyncSummaryState, TemplateApplyMode, TemplatePreview, Ticket, TicketBoard,
+        TicketDraft, TicketHistoryItem, TicketPage, TicketPatch, TicketPlanningSummary,
+        TicketQuery, TicketScheduleLink, TimerCommand, TimerDraft, TimerSet, TimerState,
+        TimerStatus, UnlinkTicketScheduleRequest, resolve_local_time, validate_focus_transition,
+        validate_stopwatch_transition, validate_timer_transition,
     },
     infrastructure::{
         BackupRecord, ChangeResult, ConflictChoice, Database, DeliveryResult,
@@ -163,7 +165,7 @@ impl AppService {
         let timezone = timezone_id.parse::<Tz>().unwrap_or(chrono_tz::UTC);
         let settings = self.database.settings().await?;
         Ok(Bootstrap {
-            schema_version: 14,
+            schema_version: 15,
             app_version: env!("CARGO_PKG_VERSION").into(),
             today: self
                 .clock
@@ -293,6 +295,91 @@ impl AppService {
         limit: u32,
     ) -> AppResult<Vec<TicketHistoryItem>> {
         self.database.ticket_history(ticket_id, limit).await
+    }
+
+    pub async fn assign_ticket_schedule(
+        &self,
+        mut request: AssignTicketScheduleRequest,
+    ) -> AppResult<TicketScheduleLink> {
+        request.validate()?;
+        let resolution = resolve_local_time(&request.local_start, &request.timezone_id)?;
+        let start_utc = match resolution.candidates.as_slice() {
+            [] => {
+                return Err(AppError::Validation {
+                    message: "このローカル時刻は夏時間の切り替えで存在しません。".into(),
+                    recovery: "前後の有効な時刻を選び直してください。自動補正は行いません。".into(),
+                });
+            }
+            [single] => {
+                if request.offset_choice.is_some() {
+                    return Err(AppError::Validation {
+                        message: "この時刻に重複候補の指定は不要です。".into(),
+                        recovery: "時刻を再確認して保存してください。".into(),
+                    });
+                }
+                *single
+            }
+            candidates => {
+                let choice = request.offset_choice.ok_or_else(|| AppError::Validation {
+                    message: "このローカル時刻は2回存在します。".into(),
+                    recovery: "早い方または遅い方のUTCオフセットを明示して選んでください。".into(),
+                })?;
+                *candidates
+                    .get(usize::from(choice))
+                    .ok_or_else(|| AppError::Validation {
+                        message: "重複時刻の選択が正しくありません。".into(),
+                        recovery: "表示された2つの候補から選び直してください。".into(),
+                    })?
+            }
+        };
+        let end_utc = start_utc + chrono::Duration::minutes(i64::from(request.duration_minutes));
+        self.database
+            .assign_ticket_to_new_schedule(&request, start_utc, end_utc, self.clock.now())
+            .await
+    }
+
+    pub async fn link_ticket_schedule(
+        &self,
+        request: LinkTicketScheduleRequest,
+    ) -> AppResult<TicketScheduleLink> {
+        self.database
+            .link_ticket_to_existing_schedule(&request, self.clock.now())
+            .await
+    }
+
+    pub async fn unlink_ticket_schedule(
+        &self,
+        request: UnlinkTicketScheduleRequest,
+    ) -> AppResult<TicketScheduleLink> {
+        self.database
+            .unlink_ticket_schedule(&request, self.clock.now())
+            .await
+    }
+
+    pub async fn ticket_schedules(
+        &self,
+        ticket_id: Uuid,
+        include_unlinked: bool,
+    ) -> AppResult<Vec<TicketScheduleLink>> {
+        self.database
+            .ticket_schedules(ticket_id, include_unlinked)
+            .await
+    }
+
+    pub async fn schedule_ticket_link(
+        &self,
+        schedule_id: Uuid,
+    ) -> AppResult<Option<TicketScheduleLink>> {
+        self.database.schedule_ticket_link(schedule_id).await
+    }
+
+    pub async fn ticket_planning_summaries(
+        &self,
+        ticket_ids: Vec<Uuid>,
+    ) -> AppResult<Vec<TicketPlanningSummary>> {
+        self.database
+            .ticket_planning_summaries(&ticket_ids, self.clock.now())
+            .await
     }
 
     #[cfg(feature = "e2e")]
@@ -1283,6 +1370,7 @@ fn stopwatch_state_from_record(record: &StopwatchRecord, elapsed_seconds: u64) -
 mod tests {
     use std::sync::Mutex as StdMutex;
 
+    use crate::domain::{TicketColumnKind, TicketPriority, TicketScheduleSource};
     use chrono::{Duration, TimeZone};
 
     use super::*;
@@ -1319,6 +1407,136 @@ mod tests {
         fn monotonic(&self) -> MonotonicDuration {
             *self.monotonic.lock().expect("manual monotonic clock lock")
         }
+    }
+
+    async fn create_test_ticket(database: &Database, now: DateTime<Utc>) -> Ticket {
+        let board = database.default_ticket_board().await.unwrap();
+        let inbox = board
+            .columns
+            .iter()
+            .find(|column| column.kind == TicketColumnKind::Inbox)
+            .unwrap();
+        database
+            .create_ticket(
+                Uuid::new_v4(),
+                TicketDraft {
+                    board_id: board.id,
+                    column_id: inbox.id,
+                    parent_ticket_id: None,
+                    title: "DSTを確認する".into(),
+                    description: String::new(),
+                    priority: TicketPriority::Normal,
+                    due_date: None,
+                    estimate_minutes: Some(30),
+                    tags: Vec::new(),
+                    checklist: Vec::new(),
+                },
+                now,
+            )
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn ticket_assignment_rejects_dst_gap_without_silent_shift() {
+        let now = Utc.with_ymd_and_hms(2026, 3, 28, 12, 0, 0).unwrap();
+        let database = Database::open_memory().await.unwrap();
+        let ticket = create_test_ticket(&database, now).await;
+        let service = AppService::with_clock(database, Arc::new(ManualClock::new(now)));
+        let result = service
+            .assign_ticket_schedule(AssignTicketScheduleRequest {
+                operation_id: Uuid::new_v4(),
+                ticket_id: ticket.id,
+                expected_ticket_version: ticket.version,
+                local_start: "2026-03-29T02:30".into(),
+                duration_minutes: 30,
+                timezone_id: "Europe/Berlin".into(),
+                offset_choice: None,
+                title_override: None,
+                source: TicketScheduleSource::Board,
+            })
+            .await;
+        assert!(matches!(result, Err(AppError::Validation { .. })));
+    }
+
+    #[tokio::test]
+    async fn ticket_assignment_requires_and_honors_dst_overlap_choice() {
+        let now = Utc.with_ymd_and_hms(2026, 10, 24, 12, 0, 0).unwrap();
+        let database = Database::open_memory().await.unwrap();
+        let ticket = create_test_ticket(&database, now).await;
+        let service = AppService::with_clock(database, Arc::new(ManualClock::new(now)));
+        let base = AssignTicketScheduleRequest {
+            operation_id: Uuid::new_v4(),
+            ticket_id: ticket.id,
+            expected_ticket_version: ticket.version,
+            local_start: "2026-10-25T02:30".into(),
+            duration_minutes: 30,
+            timezone_id: "Europe/Berlin".into(),
+            offset_choice: None,
+            title_override: None,
+            source: TicketScheduleSource::TodayDrawer,
+        };
+        assert!(matches!(
+            service.assign_ticket_schedule(base.clone()).await,
+            Err(AppError::Validation { .. })
+        ));
+        let link = service
+            .assign_ticket_schedule(AssignTicketScheduleRequest {
+                operation_id: Uuid::new_v4(),
+                offset_choice: Some(1),
+                ..base
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            link.schedule.draft.start_utc,
+            Utc.with_ymd_and_hms(2026, 10, 25, 1, 30, 0).unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn ticket_assignment_preserves_cross_midnight_instants_and_timezone() {
+        let now = Utc.with_ymd_and_hms(2026, 8, 3, 0, 0, 0).unwrap();
+        let database = Database::open_memory().await.unwrap();
+        let ticket = create_test_ticket(&database, now).await;
+        let service = AppService::with_clock(database, Arc::new(ManualClock::new(now)));
+        let link = service
+            .assign_ticket_schedule(AssignTicketScheduleRequest {
+                operation_id: Uuid::new_v4(),
+                ticket_id: ticket.id,
+                expected_ticket_version: ticket.version,
+                local_start: "2026-08-03T23:30".into(),
+                duration_minutes: 120,
+                timezone_id: "Asia/Tokyo".into(),
+                offset_choice: None,
+                title_override: None,
+                source: TicketScheduleSource::Board,
+            })
+            .await
+            .unwrap();
+        assert_eq!(link.schedule.draft.timezone_id, "Asia/Tokyo");
+        assert_eq!(
+            link.schedule.draft.end_utc - link.schedule.draft.start_utc,
+            Duration::minutes(120)
+        );
+        assert_eq!(
+            link.schedule
+                .draft
+                .start_utc
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .date_naive()
+                .to_string(),
+            "2026-08-03"
+        );
+        assert_eq!(
+            link.schedule
+                .draft
+                .end_utc
+                .with_timezone(&chrono_tz::Asia::Tokyo)
+                .date_naive()
+                .to_string(),
+            "2026-08-04"
+        );
     }
 
     #[tokio::test]

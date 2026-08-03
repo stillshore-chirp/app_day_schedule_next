@@ -5,8 +5,9 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
+  type DragEvent as ReactDragEvent,
 } from "react";
-import type { Schedule } from "../../shared/contracts";
+import type { Schedule, Ticket } from "../../shared/contracts";
 import { formatDuration, formatTime } from "../../shared/time";
 import { assignTimelineLanes, isCurrent } from "./timeline-layout";
 
@@ -20,6 +21,9 @@ interface TimelineProps {
   onCreateRange: (startUtc: string, endUtc: string) => void;
   onAdjust: (schedule: Schedule, startUtc: string, endUtc: string) => Promise<void>;
   referenceMinute: number;
+  externalTicket?: Ticket | null;
+  externalDurationMinutes?: number;
+  onExternalPreview?: (ticket: Ticket, startUtc: string, endUtc: string) => void;
 }
 
 type DragKind = "create" | "move" | "resize-start" | "resize-end";
@@ -51,6 +55,9 @@ export function Timeline({
   onCreateRange,
   onAdjust,
   referenceMinute,
+  externalTicket = null,
+  externalDurationMinutes = 30,
+  onExternalPreview,
 }: TimelineProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -132,6 +139,26 @@ export function Timeline({
     const bounds = canvas.getBoundingClientRect();
     const raw = ((event.clientY - bounds.top) / hourHeight) * 60;
     return Math.max(0, Math.min(1440, Math.round(raw / snapMinutes) * snapMinutes));
+  };
+
+  const minuteAtClientY = (clientY: number): number => {
+    const canvas = canvasRef.current;
+    if (!canvas) return 0;
+    if (!Number.isFinite(clientY)) {
+      return Math.max(0, Math.min(1439, Math.round(referenceMinute / snapMinutes) * snapMinutes));
+    }
+    const bounds = canvas.getBoundingClientRect();
+    const raw = ((clientY - bounds.top) / hourHeight) * 60;
+    return Math.max(0, Math.min(1439, Math.round(raw / snapMinutes) * snapMinutes));
+  };
+
+  const dropExternalTicket = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!externalTicket || !onExternalPreview) return;
+    event.preventDefault();
+    const minute = minuteAtClientY(event.clientY);
+    const start = dateAtMinute(selectedDate, minute);
+    const end = new Date(start.getTime() + externalDurationMinutes * 60_000);
+    onExternalPreview(externalTicket, start.toISOString(), end.toISOString());
   };
 
   const beginCreate = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -321,6 +348,11 @@ export function Timeline({
           onPointerMove={updateDrag}
           onPointerUp={() => void finishDrag()}
           onPointerCancel={() => setDrag(null)}
+          onDragOver={(event) => {
+            if (externalTicket) event.preventDefault();
+          }}
+          onDrop={dropExternalTicket}
+          data-ticket-drop-target={externalTicket ? "true" : undefined}
         >
           {Array.from({ length: 25 }, (_, hour) => (
             <div className="timeline-hour" key={hour} style={{ top: hour * hourHeight }}>

@@ -58,7 +58,7 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 14, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 15, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
@@ -387,12 +387,15 @@ describe("Day Schedule Next native smoke", () => {
         (element): element is HTMLElement => element instanceof HTMLElement,
       );
       const elements: HTMLElement[] = [panel, ...descendants];
-      const sizes: Array<{ element: HTMLElement; fontSize: number; original: string }> =
-        elements.map((element) => ({
-          element,
-          fontSize: Number.parseFloat(window.getComputedStyle(element).fontSize),
-          original: element.style.fontSize,
-        }));
+      const sizes: Array<{
+        element: HTMLElement;
+        fontSize: number;
+        original: string;
+      }> = elements.map((element) => ({
+        element,
+        fontSize: Number.parseFloat(window.getComputedStyle(element).fontSize),
+        original: element.style.fontSize,
+      }));
       sizes.forEach(({ element, fontSize, original }) => {
         element.dataset.e2eOriginalFontSize = original;
         if (Number.isFinite(fontSize)) {
@@ -1087,6 +1090,170 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-google-calendar-recovery-text-200.png");
   });
 
+  it("assigns a ticket from Today, edits its schedule, then unlinks and relinks it", async () => {
+    await persistFixtureTheme("light");
+    await setLogicalWindowSize(1280, 820);
+    const ticketTitle = `E2E予定化-${Date.now()}`;
+    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
+    await $(
+      '//section[.//h2[normalize-space(.)="Next"]]//input[@placeholder="タイトルだけで追加"]',
+    ).setValue(ticketTitle);
+    await $(
+      '//section[.//h2[normalize-space(.)="Next"]]//button[normalize-space(.)="追加"]',
+    ).click();
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    await $('//div[@role="dialog"]//label[contains(., "見積時間")]/input').setValue("30");
+    await $('//div[@role="dialog"]//button[normalize-space(.)="保存"]').click();
+    await $(
+      '//div[@role="dialog"]//*[@role="status" and contains(., "保存しました")]',
+    ).waitForDisplayed();
+    await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
+
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+    await $(".today-heading h1").waitForDisplayed();
+    const drawerToggle = $('//button[contains(., "未配置チケット")]');
+    await drawerToggle.click();
+    const drawerTicket = $(
+      `//section[contains(@class, "unplaced-ticket-drawer")]//button[contains(., "${ticketTitle}")]`,
+    );
+    await drawerTicket.waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-schedule-drawer-open.png");
+    await browser.execute((expectedTitle) => {
+      const ticket = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".unplaced-ticket-list button"),
+      ).find((button) => button.textContent?.includes(expectedTitle));
+      if (!ticket) throw new Error("ticket drag fixture was not found");
+      const dataTransfer = new DataTransfer();
+      ticket.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+    }, ticketTitle);
+    await browser.waitUntil(
+      async () => (await $(".timeline-canvas").getAttribute("data-ticket-drop-target")) === "true",
+      { timeoutMsg: "timeline did not become a ticket drop target" },
+    );
+    await browser.execute(() => {
+      const canvas = document.querySelector<HTMLElement>(".timeline-canvas");
+      if (!canvas) throw new Error("ticket drop canvas was not found");
+      const dataTransfer = new DataTransfer();
+      dataTransfer.setData("text/plain", "synthetic-ticket");
+      const bounds = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(
+        new DragEvent("drop", {
+          bubbles: true,
+          cancelable: true,
+          clientY: bounds.top + bounds.height / 3,
+          dataTransfer,
+        }),
+      );
+    });
+    const preview = $(
+      `//section[contains(@class, "status-message")][.//strong[contains(., "${ticketTitle}") and contains(., "仮配置")]]`,
+    );
+    await preview.waitForDisplayed();
+    await browser.execute(() => {
+      const workspace = document.querySelector<HTMLElement>(".workspace-main");
+      if (!workspace) throw new Error("Today workspace was not found");
+      workspace.scrollTop = 0;
+    });
+    await browser.saveScreenshot("./test-results/native-ticket-timeline-drag-preview.png");
+    await preview.$('.//button[normalize-space(.)="取消"]').click();
+    await setLogicalWindowSize(720, 820);
+    await browser.execute(() => {
+      const workspace = document.querySelector<HTMLElement>(".workspace-main");
+      const drawer = document.querySelector<HTMLElement>(".unplaced-ticket-drawer");
+      if (!workspace || !drawer) throw new Error("ticket drawer was not found");
+      workspace.scrollTop = drawer.offsetTop;
+    });
+    await browser.saveScreenshot("./test-results/native-ticket-schedule-drawer-narrow.png");
+    await setLogicalWindowSize(1280, 820);
+    await browser.execute(() => {
+      const panel = document.querySelector<HTMLElement>(".unplaced-ticket-drawer");
+      if (!panel) throw new Error("ticket drawer was not found for text scaling");
+      panel.querySelectorAll<HTMLElement>("*").forEach((element) => {
+        element.dataset.e2eOriginalFontSize = element.style.fontSize;
+        const size = Number.parseFloat(window.getComputedStyle(element).fontSize);
+        if (Number.isFinite(size)) element.style.fontSize = `${size * 2}px`;
+      });
+    });
+    await browser.execute(() => {
+      const workspace = document.querySelector<HTMLElement>(".workspace-main");
+      const drawer = document.querySelector<HTMLElement>(".unplaced-ticket-drawer");
+      if (!workspace || !drawer) throw new Error("ticket drawer was not found");
+      workspace.scrollTop = drawer.offsetTop;
+    });
+    await browser.saveScreenshot("./test-results/native-ticket-schedule-drawer-text-200.png");
+    await browser.execute(() => {
+      document
+        .querySelectorAll<HTMLElement>(".unplaced-ticket-drawer [data-e2e-original-font-size]")
+        .forEach((element) => {
+          element.style.fontSize = element.dataset.e2eOriginalFontSize ?? "";
+          delete element.dataset.e2eOriginalFontSize;
+        });
+    });
+    await drawerTicket.click();
+    await $(
+      '//div[contains(@class, "unplaced-ticket-form")]//button[normalize-space(.)="予定を作成"]',
+    ).click();
+    await $(
+      `//*[contains(@class, "timeline-event") and contains(., "${ticketTitle}")]`,
+    ).waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-scheduled-today.png");
+
+    await $(`//*[contains(@class, "timeline-event") and contains(., "${ticketTitle}")]`).click();
+    const titleInput = $('//aside//label[contains(., "タイトル")]/input');
+    await titleInput.waitForDisplayed();
+    await titleInput.setValue(`${ticketTitle}-編集済み`);
+    await $('//aside//button[normalize-space(.)="変更を保存"]').click();
+    const editedEvent = $(
+      `//*[contains(@class, "timeline-event") and contains(., "${ticketTitle}-編集済み")]`,
+    );
+    await editedEvent.waitForDisplayed();
+    await editedEvent.click();
+    const linkSection = $('//section[@aria-labelledby="schedule-ticket-link-title"]');
+    await linkSection.waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-schedule-ticket-link.png");
+    await linkSection.$('.//button[normalize-space(.)="関連を解除"]').click();
+    await linkSection
+      .$('.//p[normalize-space(.)="この予定に関連するチケットはありません。"]')
+      .waitForDisplayed();
+    await browser.execute((expectedTitle) => {
+      const section = document.querySelector<HTMLElement>(
+        'section[aria-labelledby="schedule-ticket-link-title"]',
+      );
+      const select = section?.querySelector<HTMLSelectElement>("select");
+      const option = Array.from(select?.options ?? []).find(
+        (candidate) => candidate.textContent?.trim() === expectedTitle,
+      );
+      if (!select || !option) throw new Error("ticket link option was not found");
+      select.value = option.value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }, ticketTitle);
+    const relinkButton = linkSection.$('.//button[normalize-space(.)="関連付ける"]');
+    await relinkButton.waitForEnabled();
+    await relinkButton.click();
+    await linkSection
+      .$(`.//*[contains(., "関連中:") and contains(., "${ticketTitle}")]`)
+      .waitForDisplayed();
+
+    const linked = (await browser.tauri.execute(
+      ({ core }, expectedTitle) =>
+        core.invoke("ticket_list", { query: { search: expectedTitle, limit: 10 } }),
+      ticketTitle,
+    )) as { items: Array<{ id: string }> };
+    const ticketId = linked.items[0]?.id;
+    if (!ticketId) throw new Error("scheduled ticket was not found");
+    const schedules = (await browser.tauri.execute(
+      ({ core }, id) =>
+        core.invoke("ticket_schedule_list", { ticketId: id, includeUnlinked: true }),
+      ticketId,
+    )) as Array<{ unlinkedAt: string | null; schedule: { title: string } }>;
+    expect(schedules).toHaveLength(2);
+    expect(schedules.filter((item) => item.unlinkedAt === null)).toHaveLength(1);
+    expect(schedules.find((item) => item.unlinkedAt === null)?.schedule.title).toBe(
+      `${ticketTitle}-編集済み`,
+    );
+  });
+
   it("persists the Kanban create, edit, pointer, keyboard, completion, and archive workflows", async () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1280, 820);
@@ -1160,6 +1327,9 @@ describe("Day Schedule Next native smoke", () => {
     await $(
       `//section[.//h2[normalize-space(.)="Done"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
     ).waitForDisplayed();
+    await browser.execute(() => {
+      window.confirm = () => true;
+    });
     await $(
       `//article[.//*[normalize-space(.)="${ticketTitle}"]]//button[@aria-label="左の列へ移動"]`,
     ).click();
@@ -1242,11 +1412,15 @@ describe("Day Schedule Next native smoke", () => {
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
 
-    await browser.tauri.execute(async ({ core }, count) => {
+    await browser.tauri.execute(async ({ core }, targetTotal) => {
       const board = (await core.invoke("ticket_board_get")) as {
         id: string;
         columns: Array<{ id: string }>;
       };
+      const current = (await core.invoke("ticket_list", {
+        query: { limit: 1 },
+      })) as { total: number };
+      const count = Math.max(0, targetTotal - current.total);
       for (let index = 0; index < count; index += 1) {
         await core.invoke("ticket_create", {
           request: {
@@ -1266,7 +1440,7 @@ describe("Day Schedule Next native smoke", () => {
           },
         });
       }
-    }, 499);
+    }, 500);
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();

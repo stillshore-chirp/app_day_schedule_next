@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Ticket, TicketDraft } from "../../shared/contracts";
+import type { Ticket, TicketDraft, TicketPlanningSummary } from "../../shared/contracts";
 import { appLocale, translate } from "../../shared/i18n/messages";
 import { AppClientError, type AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
@@ -11,6 +11,7 @@ import {
   nextKeyboardTarget,
   type TicketFilters,
 } from "./ticket-board-model";
+import { TicketSchedulePlanner } from "./TicketSchedulePlanner";
 
 interface EditorState {
   mode: "create" | "edit";
@@ -122,6 +123,16 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
 
   const board = boardQuery.data;
   const tickets = ticketsQuery.data?.items ?? [];
+  const ticketIds = useMemo(() => tickets.map((ticket) => ticket.id), [tickets]);
+  const planningQuery = useQuery({
+    queryKey: ["ticket-planning-summaries", ticketIds],
+    queryFn: () => client.ticketPlanningSummaries(ticketIds),
+    enabled: ticketIds.length > 0,
+  });
+  const planningByTicket = useMemo(
+    () => new Map((planningQuery.data ?? []).map((summary) => [summary.ticketId, summary])),
+    [planningQuery.data],
+  );
   const visibleTickets = useMemo(
     () => filterAndSortTickets(tickets, filters, today),
     [filters, tickets, today],
@@ -311,6 +322,18 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
   }
 
   async function toggleArchive(ticket: Ticket, archived: boolean) {
+    const planning = planningByTicket.get(ticket.id);
+    if (
+      archived &&
+      !window.confirm(
+        translate("features.tickets.KanbanView.archivePlanningConfirm", [
+          ticket.title,
+          planning?.scheduleCount ?? 0,
+          planning?.futurePlannedMinutes ?? 0,
+        ]),
+      )
+    )
+      return;
     try {
       await client.archiveTicket(crypto.randomUUID(), ticket.id, ticket.version, archived);
       setAnnouncement(
@@ -586,6 +609,9 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                   <TicketCard
                     key={ticket.id}
                     ticket={ticket}
+                    {...(planningByTicket.get(ticket.id)
+                      ? { planning: planningByTicket.get(ticket.id)! }
+                      : {})}
                     today={today}
                     draggable={reorderEnabled}
                     moving={keyboardMoveId === ticket.id}
@@ -781,6 +807,16 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                   ])}
                 </p>
               ) : null}
+              {editor.ticket &&
+              editor.ticket.archivedAt === null &&
+              editor.ticket.deletedAt === null ? (
+                <TicketSchedulePlanner
+                  client={client}
+                  ticket={editor.ticket}
+                  today={today}
+                  timezoneId={Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}
+                />
+              ) : null}
               {saveState === "pending" ? (
                 <p role="status">{translate("features.tickets.KanbanView.saving")}</p>
               ) : null}
@@ -860,6 +896,12 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
             </h2>
             <ul>
               <li>{translate("features.tickets.KanbanView.deleteLocal")}</li>
+              <li>
+                {translate("features.tickets.KanbanView.deletePlanningImpact", [
+                  planningByTicket.get(deleteTarget.id)?.scheduleCount ?? 0,
+                  planningByTicket.get(deleteTarget.id)?.futurePlannedMinutes ?? 0,
+                ])}
+              </li>
               <li>{translate("features.tickets.KanbanView.deleteScheduleImpact")}</li>
               <li>{translate("features.tickets.KanbanView.deleteGoogleImpact")}</li>
               <li>{translate("features.tickets.KanbanView.deleteUndoImpact")}</li>
@@ -913,6 +955,7 @@ function FilterSelect({
 
 function TicketCard({
   ticket,
+  planning,
   today,
   draggable,
   moving,
@@ -924,6 +967,7 @@ function TicketCard({
   onDropBefore,
 }: {
   ticket: Ticket;
+  planning?: TicketPlanningSummary;
   today: string;
   draggable: boolean;
   moving: boolean;
@@ -978,6 +1022,20 @@ function TicketCard({
           {ticket.estimateMinutes ? (
             <span>
               {translate("features.tickets.KanbanView.estimateValue", [ticket.estimateMinutes])}
+            </span>
+          ) : null}
+          <span>
+            {translate("features.tickets.KanbanView.planningSummary", [
+              planning?.scheduleCount ?? 0,
+              planning?.futurePlannedMinutes ?? 0,
+              planning?.totalPlannedMinutes ?? 0,
+            ])}
+          </span>
+          {planning?.nextScheduledAt ? (
+            <span>
+              {translate("features.tickets.KanbanView.nextSchedule", [
+                new Date(planning.nextScheduledAt).toLocaleString(appLocale),
+              ])}
             </span>
           ) : null}
           {ticket.checklist.length ? (
