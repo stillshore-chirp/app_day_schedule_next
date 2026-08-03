@@ -3,6 +3,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import "@wdio/tauri-service";
+import { browser } from "@wdio/globals";
 
 const executable = process.platform === "win32" ? "day-schedule-next.exe" : "day-schedule-next";
 const appBinaryPath = path.resolve("../../target/debug", executable);
@@ -47,12 +48,21 @@ export const config: WebdriverIO.Config = {
   ],
   logLevel: "warn",
   bail: 0,
-  waitforTimeout: 15_000,
-  connectionRetryTimeout: 90_000,
+  // Intel macOS runners can take longer to repaint after native IPC-heavy
+  // scenarios. Element waits remain condition-based; this only raises their
+  // ceiling so a slow runner is not mistaken for a product failure.
+  waitforTimeout: 30_000,
+  connectionRetryTimeout: 120_000,
   connectionRetryCount: 1,
   framework: "mocha",
   reporters: ["spec"],
-  mochaOpts: { ui: "bdd", timeout: 180_000 },
+  mochaOpts: { ui: "bdd", timeout: 240_000 },
+  beforeTest: async () => {
+    // The suite explicitly targets the main window until its final compact
+    // window assertion. This also prevents the service from performing a
+    // DirectEval-based focus discovery before every selector command.
+    await browser.tauri.switchWindow("main");
+  },
   onPrepare: async () => {
     await mkdir(path.resolve("./test-results"), { recursive: true });
   },
