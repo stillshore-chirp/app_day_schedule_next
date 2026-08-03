@@ -125,7 +125,7 @@ describe("Day Schedule Next native smoke", () => {
     await persistFixtureTheme("light");
     // Earlier specs intentionally resize the shared native window. Restore the
     // deterministic Today baseline viewport before taking its screenshot.
-    await setExactLogicalViewportSize(1024, 681);
+    await setExactLogicalViewportSize(1024, 640);
     const addButton = $('//header//button[contains(normalize-space(.), "予定")]');
     await addButton.click();
     const titleInput = $('//aside//label[contains(., "タイトル")]/input');
