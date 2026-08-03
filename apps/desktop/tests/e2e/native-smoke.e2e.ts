@@ -1087,6 +1087,223 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-google-calendar-recovery-text-200.png");
   });
 
+  it("persists the Kanban create, edit, pointer, keyboard, completion, and archive workflows", async () => {
+    await persistFixtureTheme("light");
+    await setLogicalWindowSize(1280, 820);
+    const ticketTitle = `E2Eチケット-${Date.now()}`;
+    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-board-empty.png");
+
+    await $(
+      '//section[.//h2[normalize-space(.)="Inbox"]]//input[@placeholder="タイトルだけで追加"]',
+    ).setValue(ticketTitle);
+    await $(
+      '//section[.//h2[normalize-space(.)="Inbox"]]//button[normalize-space(.)="追加"]',
+    ).click();
+    const card = $(`//article[.//*[normalize-space(.)="${ticketTitle}"]]`);
+    await card.waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-board.png");
+
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    const description = $('//div[@role="dialog"]//label[contains(., "説明")]/textarea');
+    await description.setValue("synthetic native Kanban evidence");
+    await $('//div[@role="dialog"]//label[contains(., "優先度")]/select').selectByAttribute(
+      "value",
+      "urgent",
+    );
+    await $('//div[@role="dialog"]//label[contains(., "期限")]/input').setValue("2026-08-01");
+    await $('//div[@role="dialog"]//label[contains(., "見積時間")]/input').setValue("45");
+    await $('//div[@role="dialog"]//label[contains(., "タグ")]/input').setValue("native, evidence");
+    await $('//div[@role="dialog"]//label[contains(., "チェックリスト")]/textarea').setValue(
+      "[x] 作成\n[ ] 確認",
+    );
+    await browser.saveScreenshot("./test-results/native-ticket-detail.png");
+    await $('//div[@role="dialog"]//button[normalize-space(.)="保存"]').click();
+    await $(
+      '//div[@role="dialog"]//*[@role="status" and contains(., "保存しました")]',
+    ).waitForDisplayed();
+    await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
+
+    await browser.execute((titleText) => {
+      const target = document
+        .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)
+        ?.closest("article");
+      if (!target) throw new Error("ticket card was not found");
+      target.dispatchEvent(
+        new DragEvent("dragstart", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: new DataTransfer(),
+        }),
+      );
+    }, ticketTitle);
+    await browser.waitUntil(
+      async () => (await $(".ticket-board").getAttribute("data-dragging")) === "true",
+      { timeoutMsg: "ticket drag preview did not appear" },
+    );
+    await browser.saveScreenshot("./test-results/native-ticket-drag-preview.png");
+    await browser.keys(["Escape"]);
+
+    await $(
+      `//article[.//*[normalize-space(.)="${ticketTitle}"]]//button[normalize-space(.)="移動"]`,
+    ).click();
+    await browser.saveScreenshot("./test-results/native-ticket-keyboard-move.png");
+    for (const columnName of ["Backlog", "Next", "In Progress", "Waiting", "Done"]) {
+      await $(
+        `//article[.//*[normalize-space(.)="${ticketTitle}"]]//button[@aria-label="右の列へ移動"]`,
+      ).click();
+      await $(
+        `//section[.//h2[normalize-space(.)="${columnName}"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
+      ).waitForDisplayed();
+    }
+    await $(
+      `//section[.//h2[normalize-space(.)="Done"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
+    ).waitForDisplayed();
+    await $(
+      `//article[.//*[normalize-space(.)="${ticketTitle}"]]//button[@aria-label="左の列へ移動"]`,
+    ).click();
+    await $(
+      `//section[.//h2[normalize-space(.)="Waiting"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
+    ).waitForDisplayed();
+
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    await $('//div[@role="dialog"]//button[normalize-space(.)="アーカイブ"]').click();
+    await browser.waitUntil(
+      async () => {
+        const result = (await browser.tauri.execute(
+          ({ core }, expectedTitle) =>
+            core.invoke("ticket_list", {
+              query: { search: expectedTitle, includeArchived: true, limit: 10 },
+            }),
+          ticketTitle,
+        )) as { items: Array<{ archivedAt: string | null }> };
+        return typeof result.items[0]?.archivedAt === "string";
+      },
+      { timeoutMsg: "ticket archive was not persisted" },
+    );
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await browser.execute(() => {
+      const select = Array.from(document.querySelectorAll("label"))
+        .find((label) => label.textContent?.includes("表示"))
+        ?.querySelector("select");
+      if (!select) throw new Error("ticket state filter was not found");
+      select.value = "archived";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const archivedCard = $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`);
+    await archivedCard.waitForDisplayed();
+    await archivedCard.click();
+    await $('//div[@role="dialog"]//button[normalize-space(.)="ボードへ戻す"]').click();
+
+    await browser.execute(() => {
+      const select = Array.from(document.querySelectorAll("label"))
+        .find((label) => label.textContent?.includes("表示"))
+        ?.querySelector("select");
+      if (!select) throw new Error("ticket state filter was not found");
+      select.value = "active";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const search = $('//label[span[normalize-space(.)="タイトル・説明を検索"]]/input');
+    await search.setValue("no-result-synthetic");
+    await $('//h2[normalize-space(.)="条件に合うチケットはありません"]').waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-no-results.png");
+    await search.setValue("");
+
+    const current = (await browser.tauri.execute(
+      ({ core }, expectedTitle) =>
+        core.invoke("ticket_list", { query: { search: expectedTitle, limit: 10 } }),
+      ticketTitle,
+    )) as { items: Array<{ id: string; version: number; title: string }> };
+    const currentTicket = current.items[0];
+    if (!currentTicket) throw new Error("ticket conflict fixture was not found");
+    await $(`button[aria-label="${ticketTitle}の詳細を開く"]`).click();
+    await $('//div[@role="dialog"]//label[contains(., "説明")]/textarea').addValue(
+      " locally edited",
+    );
+    await browser.tauri.execute(
+      ({ core }, ticket) =>
+        core.invoke("ticket_update", {
+          request: {
+            operationId: crypto.randomUUID(),
+            id: ticket.id,
+            expectedVersion: ticket.version,
+            patch: { priority: "high" },
+          },
+        }),
+      currentTicket,
+    );
+    await $('//div[@role="dialog"]//button[normalize-space(.)="保存"]').click();
+    await $('//*[normalize-space(.)="ほかの変更が先に保存されています"]').waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-conflict.png");
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+
+    await browser.tauri.execute(async ({ core }, count) => {
+      const board = (await core.invoke("ticket_board_get")) as {
+        id: string;
+        columns: Array<{ id: string }>;
+      };
+      for (let index = 0; index < count; index += 1) {
+        await core.invoke("ticket_create", {
+          request: {
+            operationId: crypto.randomUUID(),
+            draft: {
+              boardId: board.id,
+              columnId: board.columns[index % board.columns.length].id,
+              parentTicketId: null,
+              title: `Synthetic ticket ${String(index + 1).padStart(3, "0")}`,
+              description: "500 ticket visual evidence",
+              priority: index % 4 === 0 ? "high" : "normal",
+              dueDate: null,
+              estimateMinutes: null,
+              tags: [],
+              checklist: [],
+            },
+          },
+        });
+      }
+    }, 499);
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await browser.waitUntil(async () => (await $$(".ticket-card").length) === 500, {
+      timeoutMsg: "500 ticket cards were not rendered",
+    });
+    await browser.saveScreenshot("./test-results/native-ticket-board-500.png");
+
+    await $('//label[span[normalize-space(.)="タイトル・説明を検索"]]/input').setValue(ticketTitle);
+    await browser.waitUntil(async () => (await $$(".ticket-card").length) === 1, {
+      timeoutMsg: "ticket board did not narrow to the selected evidence card",
+    });
+    await setLogicalWindowSize(720, 820);
+    await browser.saveScreenshot("./test-results/native-ticket-board-narrow.png");
+    await setLogicalWindowSize(1280, 820);
+    await browser.execute(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    await browser.saveScreenshot("./test-results/native-ticket-board-text-200.png");
+    await browser.execute(() => {
+      document.documentElement.style.removeProperty("font-size");
+    });
+
+    const persisted = (await browser.tauri.execute(
+      ({ core }, expectedTitle) =>
+        core.invoke("ticket_list", { query: { search: expectedTitle, limit: 10 } }),
+      ticketTitle,
+    )) as {
+      items: Array<{ title: string; completedAt: string | null; archivedAt: string | null }>;
+    };
+    expect(persisted.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: ticketTitle, completedAt: null, archivedAt: null }),
+      ]),
+    );
+  });
+
   it("opens and captures the compact window after all main-window assertions", async () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1180, 820);
