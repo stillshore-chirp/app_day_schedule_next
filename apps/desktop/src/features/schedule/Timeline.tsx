@@ -39,6 +39,7 @@ interface DragState {
 }
 
 const ZOOM_LEVELS = [48, 60, 72, 96];
+const TIMELINE_OVERSCAN_MINUTES = 30;
 
 function initialZoom(): number {
   const stored = Number(localStorage.getItem("day-schedule-next.timeline.zoom"));
@@ -95,13 +96,25 @@ export function Timeline({
     viewportRef.current.scrollTop =
       Number.isFinite(stored) && stored > 0 ? stored : targetHour * hourHeight;
     const viewport = viewportRef.current;
+    let persistFrame: number | null = null;
+    const scheduleScrollPersistence = () => {
+      if (persistFrame !== null) return;
+      persistFrame = window.requestAnimationFrame(() => {
+        sessionStorage.setItem(storageKey, String(viewport.scrollTop));
+        persistFrame = null;
+      });
+    };
     const updateViewport = () => {
-      sessionStorage.setItem(storageKey, String(viewport.scrollTop));
+      scheduleScrollPersistence();
       if (viewport.clientHeight <= 0) return;
-      const startMinute = Math.max(0, (viewport.scrollTop / hourHeight) * 60 - 60);
+      const startMinute = Math.max(
+        0,
+        (viewport.scrollTop / hourHeight) * 60 - TIMELINE_OVERSCAN_MINUTES,
+      );
       const endMinute = Math.min(
         1440,
-        ((viewport.scrollTop + viewport.clientHeight) / hourHeight) * 60 + 60,
+        ((viewport.scrollTop + viewport.clientHeight) / hourHeight) * 60 +
+          TIMELINE_OVERSCAN_MINUTES,
       );
       setVisibleRange((current) =>
         Math.abs(current.startMinute - startMinute) < 1 &&
@@ -112,7 +125,11 @@ export function Timeline({
     };
     updateViewport();
     viewport.addEventListener("scroll", updateViewport, { passive: true });
-    return () => viewport.removeEventListener("scroll", updateViewport);
+    return () => {
+      viewport.removeEventListener("scroll", updateViewport);
+      if (persistFrame !== null) window.cancelAnimationFrame(persistFrame);
+      sessionStorage.setItem(storageKey, String(viewport.scrollTop));
+    };
   }, [hourHeight, isToday, selectedDate]);
 
   useEffect(() => {

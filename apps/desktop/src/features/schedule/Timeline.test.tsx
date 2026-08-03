@@ -215,7 +215,7 @@ describe("Timeline interactions", () => {
       await waitFor(() => {
         const visible = screen.getAllByRole("button", { name: /仮想化予定/ });
         expect(visible.length).toBeGreaterThan(0);
-        expect(visible.length).toBeLessThan(200);
+        expect(visible.length).toBeLessThan(180);
       });
     } finally {
       if (clientHeight) {

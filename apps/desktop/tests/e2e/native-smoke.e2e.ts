@@ -945,14 +945,21 @@ describe("Day Schedule Next native smoke", () => {
         return ordered[Math.ceil(ordered.length * 0.95) - 1] ?? 0;
       };
       const sample = (step: (run: number) => void) => {
-        const samples: number[] = [];
-        for (let run = 0; run < 30; run += 1) {
+        const warmupMs: number[] = [];
+        for (let run = 0; run < 5; run += 1) {
           const started = performance.now();
           step(run);
           canvas.getBoundingClientRect();
+          warmupMs.push(performance.now() - started);
+        }
+        const samples: number[] = [];
+        for (let run = 0; run < 30; run += 1) {
+          const started = performance.now();
+          step(run + 5);
+          canvas.getBoundingClientRect();
           samples.push(performance.now() - started);
         }
-        return { p95Ms: percentile95(samples), samplesMs: samples };
+        return { p95Ms: percentile95(samples), samplesMs: samples, warmupMs };
       };
       const maxScroll = Math.max(1, viewport.scrollHeight - viewport.clientHeight);
       const scroll = sample((run) => {
@@ -997,6 +1004,7 @@ describe("Day Schedule Next native smoke", () => {
       });
       return {
         sampleRuns: 30,
+        warmupRuns: 5,
         measurement: "synchronous event dispatch and forced current layout",
         scroll,
         drag,
@@ -1005,20 +1013,22 @@ describe("Day Schedule Next native smoke", () => {
     })) as {
       error?: string;
       sampleRuns?: number;
+      warmupRuns?: number;
       measurement?: string;
-      scroll?: { p95Ms: number; samplesMs: number[] };
-      drag?: { p95Ms: number; samplesMs: number[] };
+      scroll?: { p95Ms: number; samplesMs: number[]; warmupMs: number[] };
+      drag?: { p95Ms: number; samplesMs: number[]; warmupMs: number[] };
       renderedScheduleNodes?: number;
     };
     await writeFile(
       "./test-results/native-performance.json",
       `${JSON.stringify(
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           measuredAtUtc: new Date().toISOString(),
           platform: process.platform,
           architecture: process.arch,
           itemCount: 500,
+          thresholdColdInteractionMs: 100,
           thresholdMainThreadBudgetP95Ms: 16.7,
           ...profile,
         },
@@ -1028,7 +1038,14 @@ describe("Day Schedule Next native smoke", () => {
     );
     expect(profile.error).toBeUndefined();
     expect(profile.sampleRuns).toBe(30);
-    expect(profile.renderedScheduleNodes).toBeLessThan(200);
+    expect(profile.warmupRuns).toBe(5);
+    expect(profile.renderedScheduleNodes).toBeLessThan(180);
+    expect(
+      Math.max(...(profile.scroll?.warmupMs ?? [Number.POSITIVE_INFINITY])),
+    ).toBeLessThanOrEqual(100);
+    expect(Math.max(...(profile.drag?.warmupMs ?? [Number.POSITIVE_INFINITY]))).toBeLessThanOrEqual(
+      100,
+    );
     expect(profile.scroll?.p95Ms).toBeLessThanOrEqual(16.7);
     expect(profile.drag?.p95Ms).toBeLessThanOrEqual(16.7);
     const deletedFixtureCount = await browser.tauri.execute(
