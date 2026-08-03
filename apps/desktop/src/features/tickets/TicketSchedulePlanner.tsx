@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Ticket } from "../../shared/contracts";
-import { appLocale } from "../../shared/i18n/messages";
+import { appLocale, translate } from "../../shared/i18n/messages";
 import { AppClientError, type AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 
@@ -47,7 +47,9 @@ export function TicketSchedulePlanner({
 
   const nextLabel = useMemo(() => {
     const next = summaryQuery.data?.nextScheduledAt;
-    return next ? new Date(next).toLocaleString(appLocale) : "次の予定なし";
+    return next
+      ? new Date(next).toLocaleString(appLocale)
+      : translate("features.tickets.TicketSchedulePlanner.001");
   }, [summaryQuery.data?.nextScheduledAt]);
 
   async function inspectTime() {
@@ -56,7 +58,7 @@ export function TicketSchedulePlanner({
     setResolution(next);
     setFoldChoice(null);
     if (next.kind === "gap") {
-      setError("夏時間の切り替えで存在しない時刻です。前後の時刻を選んでください。");
+      setError(translate("features.tickets.TicketSchedulePlanner.002"));
     }
     return next;
   }
@@ -90,7 +92,7 @@ export function TicketSchedulePlanner({
       setError(
         caught instanceof AppClientError
           ? `${caught.detail.message} ${caught.detail.recovery}`
-          : "予定への割り当てに失敗しました。最新のチケットを読み込んで再試行してください。",
+          : translate("features.tickets.TicketSchedulePlanner.003"),
       );
       setState("error");
     }
@@ -108,7 +110,7 @@ export function TicketSchedulePlanner({
         queryClient.invalidateQueries({ queryKey: ["ticket-planning-summary", ticket.id] }),
       ]);
     } catch {
-      setError("関連解除に失敗しました。最新の関連予定を読み込んで再試行してください。");
+      setError(translate("features.tickets.TicketSchedulePlanner.004"));
     }
   }
 
@@ -116,18 +118,23 @@ export function TicketSchedulePlanner({
     <section className="ticket-planner" aria-labelledby={`ticket-planner-${ticket.id}`}>
       <div className="ticket-planner__heading">
         <div>
-          <h3 id={`ticket-planner-${ticket.id}`}>予定へ割り当て</h3>
-          <p>チケットは残したまま、実行する時間を複数確保できます。</p>
+          <h3 id={`ticket-planner-${ticket.id}`}>
+            {translate("features.tickets.TicketSchedulePlanner.005")}
+          </h3>
+          <p>{translate("features.tickets.TicketSchedulePlanner.006")}</p>
         </div>
         <p className="ticket-planner__summary" aria-live="polite">
-          {summaryQuery.data?.scheduleCount ?? 0}件・今後
-          {summaryQuery.data?.futurePlannedMinutes ?? 0}分・合計
-          {summaryQuery.data?.totalPlannedMinutes ?? 0}分 / {nextLabel}
+          {translate("features.tickets.TicketSchedulePlanner.007", [
+            summaryQuery.data?.scheduleCount ?? 0,
+            summaryQuery.data?.futurePlannedMinutes ?? 0,
+            summaryQuery.data?.totalPlannedMinutes ?? 0,
+            nextLabel,
+          ])}
         </p>
       </div>
       <div className="ticket-planner__form">
         <label>
-          開始
+          {translate("features.tickets.TicketSchedulePlanner.008")}
           <input
             type="datetime-local"
             value={localStart}
@@ -139,10 +146,10 @@ export function TicketSchedulePlanner({
           />
         </label>
         {ticket.estimateMinutes === null && duration === "" ? (
-          <p className="field-help">見積未設定です。保存前に所要時間を入力してください。</p>
+          <p className="field-help">{translate("features.tickets.TicketSchedulePlanner.009")}</p>
         ) : null}
         <label>
-          所要時間（分）
+          {translate("features.tickets.TicketSchedulePlanner.010")}
           <input
             type="number"
             min="1"
@@ -157,12 +164,14 @@ export function TicketSchedulePlanner({
           disabled={!canSave || state === "saving"}
           onClick={() => void assign()}
         >
-          {state === "saving" ? "保存中…" : "新しい予定を作成"}
+          {state === "saving"
+            ? translate("features.tickets.TicketSchedulePlanner.011")
+            : translate("features.tickets.TicketSchedulePlanner.012")}
         </button>
       </div>
       {resolution?.kind === "ambiguous" ? (
         <fieldset className="ticket-planner__fold">
-          <legend>この時刻は2回存在します。UTCオフセットを選択してください。</legend>
+          <legend>{translate("features.tickets.TicketSchedulePlanner.013")}</legend>
           {resolution.candidates.map((candidate, index) => (
             <label key={candidate}>
               <input
@@ -171,25 +180,34 @@ export function TicketSchedulePlanner({
                 checked={foldChoice === index}
                 onChange={() => setFoldChoice(index as 0 | 1)}
               />
-              {index === 0 ? "早い方" : "遅い方"}（{new Date(candidate).toISOString()}）
+              {translate(
+                index === 0
+                  ? "features.tickets.TicketSchedulePlanner.014"
+                  : "features.tickets.TicketSchedulePlanner.015",
+                [new Date(candidate).toISOString()],
+              )}
             </label>
           ))}
         </fieldset>
       ) : null}
       {error ? (
-        <StatusMessage tone="danger" title="予定を保存できません">
+        <StatusMessage
+          tone="danger"
+          title={translate("features.tickets.TicketSchedulePlanner.016")}
+        >
           {error}
         </StatusMessage>
       ) : null}
       {state === "saved" ? (
         <p className="success-text" role="status">
-          予定を作成し、チケットへ関連付けました。
+          {translate("features.tickets.TicketSchedulePlanner.017")}
         </p>
       ) : null}
-      <p className="field-help">
-        Focus実績との比較はIssue #35で対応します。ここでは予定時間だけを表示しています。
-      </p>
-      <ul className="ticket-planner__links" aria-label="関連予定">
+      <p className="field-help">{translate("features.tickets.TicketSchedulePlanner.018")}</p>
+      <ul
+        className="ticket-planner__links"
+        aria-label={translate("features.tickets.TicketSchedulePlanner.019")}
+      >
         {(linksQuery.data ?? []).map((link) => (
           <li key={link.id}>
             <span>
@@ -205,7 +223,7 @@ export function TicketSchedulePlanner({
               type="button"
               onClick={() => void unlink(link.id, link.version)}
             >
-              関連を解除
+              {translate("features.tickets.TicketSchedulePlanner.020")}
             </button>
           </li>
         ))}

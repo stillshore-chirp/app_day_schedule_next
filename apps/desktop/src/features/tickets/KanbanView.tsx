@@ -326,7 +326,11 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
     if (
       archived &&
       !window.confirm(
-        `「${ticket.title}」をアーカイブします。関連予定${planning?.scheduleCount ?? 0}件は残し、関連だけ解除します。今後の予定は${planning?.futurePlannedMinutes ?? 0}分です。続けますか？`,
+        translate("features.tickets.KanbanView.archivePlanningConfirm", [
+          ticket.title,
+          planning?.scheduleCount ?? 0,
+          planning?.futurePlannedMinutes ?? 0,
+        ]),
       )
     )
       return;
@@ -893,9 +897,10 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
             <ul>
               <li>{translate("features.tickets.KanbanView.deleteLocal")}</li>
               <li>
-                関連予定 {planningByTicket.get(deleteTarget.id)?.scheduleCount ?? 0}件（今後
-                {planningByTicket.get(deleteTarget.id)?.futurePlannedMinutes ?? 0}
-                分）は残り、関連だけ解除されます。
+                {translate("features.tickets.KanbanView.deletePlanningImpact", [
+                  planningByTicket.get(deleteTarget.id)?.scheduleCount ?? 0,
+                  planningByTicket.get(deleteTarget.id)?.futurePlannedMinutes ?? 0,
+                ])}
               </li>
               <li>{translate("features.tickets.KanbanView.deleteScheduleImpact")}</li>
               <li>{translate("features.tickets.KanbanView.deleteGoogleImpact")}</li>
@@ -1020,12 +1025,18 @@ function TicketCard({
             </span>
           ) : null}
           <span>
-            予定 {planning?.scheduleCount ?? 0}件 / 今後
-            {planning?.futurePlannedMinutes ?? 0}分 / 合計
-            {planning?.totalPlannedMinutes ?? 0}分
+            {translate("features.tickets.KanbanView.planningSummary", [
+              planning?.scheduleCount ?? 0,
+              planning?.futurePlannedMinutes ?? 0,
+              planning?.totalPlannedMinutes ?? 0,
+            ])}
           </span>
           {planning?.nextScheduledAt ? (
-            <span>次回 {new Date(planning.nextScheduledAt).toLocaleString(appLocale)}</span>
+            <span>
+              {translate("features.tickets.KanbanView.nextSchedule", [
+                new Date(planning.nextScheduledAt).toLocaleString(appLocale),
+              ])}
+            </span>
           ) : null}
           {ticket.checklist.length ? (
             <span>

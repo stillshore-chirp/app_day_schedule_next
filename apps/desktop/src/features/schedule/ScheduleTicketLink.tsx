@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Schedule } from "../../shared/contracts";
+import { translate } from "../../shared/i18n/messages";
 import { AppClientError, type AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 
@@ -55,7 +56,7 @@ export function ScheduleTicketLink({
       setError(
         caught instanceof AppClientError
           ? `${caught.detail.message} ${caught.detail.recovery}`
-          : "関連付けに失敗しました。予定とチケットを再読み込みし、付け替える場合は確認を選択してください。",
+          : translate("features.schedule.ScheduleTicketLink.001"),
       );
     }
   }
@@ -74,39 +75,42 @@ export function ScheduleTicketLink({
       setError(
         caught instanceof AppClientError
           ? `${caught.detail.message} ${caught.detail.recovery}`
-          : "関連解除に失敗しました。最新の関連を読み込んで再試行してください。",
+          : translate("features.schedule.ScheduleTicketLink.002"),
       );
     }
   }
 
   return (
     <section className="schedule-ticket-link" aria-labelledby="schedule-ticket-link-title">
-      <h3 id="schedule-ticket-link-title">チケットとの関連</h3>
-      <p>タイトルや完了状態は連動しません。関連の変更は明示的に行います。</p>
+      <h3 id="schedule-ticket-link-title">
+        {translate("features.schedule.ScheduleTicketLink.003")}
+      </h3>
+      <p>{translate("features.schedule.ScheduleTicketLink.004")}</p>
       {current ? (
         <div className="schedule-ticket-link__current">
           <span>
-            関連中: <strong>{current.ticketTitle}</strong>
+            {translate("features.schedule.ScheduleTicketLink.005")}{" "}
+            <strong>{current.ticketTitle}</strong>
           </span>
           <div>
             {onOpenTickets ? (
               <button className="button button--subtle" type="button" onClick={onOpenTickets}>
-                チケット画面へ
+                {translate("features.schedule.ScheduleTicketLink.006")}
               </button>
             ) : null}
             <button className="button button--subtle" type="button" onClick={() => void unlink()}>
-              関連を解除
+              {translate("features.schedule.ScheduleTicketLink.007")}
             </button>
           </div>
         </div>
       ) : (
-        <p>この予定に関連するチケットはありません。</p>
+        <p>{translate("features.schedule.ScheduleTicketLink.008")}</p>
       )}
       <div className="schedule-ticket-link__form">
         <label>
-          チケット
+          {translate("features.schedule.ScheduleTicketLink.009")}
           <select value={ticketId} onChange={(event) => setTicketId(event.target.value)}>
-            <option value="">選択してください</option>
+            <option value="">{translate("features.schedule.ScheduleTicketLink.010")}</option>
             {(ticketsQuery.data?.items ?? []).map((ticket) => (
               <option key={ticket.id} value={ticket.id}>
                 {ticket.title}
@@ -121,7 +125,10 @@ export function ScheduleTicketLink({
               checked={replace}
               onChange={(event) => setReplace(event.target.checked)}
             />
-            「{current.ticketTitle}」から「{selected.title}」へ付け替える
+            {translate("features.schedule.ScheduleTicketLink.011", [
+              current.ticketTitle,
+              selected.title,
+            ])}
           </label>
         ) : null}
         <button
@@ -132,11 +139,13 @@ export function ScheduleTicketLink({
           }
           onClick={() => void link()}
         >
-          {current ? "関連を変更" : "関連付ける"}
+          {current
+            ? translate("features.schedule.ScheduleTicketLink.012")
+            : translate("features.schedule.ScheduleTicketLink.013")}
         </button>
       </div>
       {error ? (
-        <StatusMessage tone="danger" title="関連を変更できません">
+        <StatusMessage tone="danger" title={translate("features.schedule.ScheduleTicketLink.014")}>
           {error}
         </StatusMessage>
       ) : null}

@@ -228,7 +228,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     const resolution = await client.resolveLocalTime(localStart, bootstrap.timezoneId);
     if (resolution.kind === "gap") {
       setStatusTone("danger");
-      setStatus("夏時間の切り替えで存在しない時刻です。前後の時刻を選んでください。");
+      setStatus(translate("features.schedule.TodayView.023"));
       return;
     }
     if (resolution.kind === "ambiguous" && offsetChoice === undefined) {
@@ -256,7 +256,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       setStatus(
         error instanceof AppClientError
           ? `${error.detail.message} ${error.detail.recovery}`
-          : "予定への割り当てに失敗しました。チケットと予定を再読み込みして再試行してください。",
+          : translate("features.schedule.TodayView.024"),
       );
       return;
     }
@@ -264,7 +264,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     setAmbiguousAssignment(null);
     setDragTicket(null);
     setStatusTone("success");
-    setStatus(`「${ticket.title}」を予定に入れました。`);
+    setStatus(translate("features.schedule.TodayView.025", [ticket.title]));
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["schedules"] }),
       queryClient.invalidateQueries({ queryKey: ["ticket-planning-summaries"] }),
@@ -338,7 +338,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
         {ambiguousAssignment ? (
           <StatusMessage
             tone="warning"
-            title="この時刻は2回存在します"
+            title={translate("features.schedule.TodayView.026")}
             action={
               <div className="button-row">
                 {ambiguousAssignment.candidates.map((candidate, index) => (
@@ -355,7 +355,12 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
                       )
                     }
                   >
-                    {index === 0 ? "早い方" : "遅い方"}（{candidate}）
+                    {translate(
+                      index === 0
+                        ? "features.schedule.TodayView.027"
+                        : "features.schedule.TodayView.028",
+                      [candidate],
+                    )}
                   </button>
                 ))}
                 <button
@@ -363,18 +368,18 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
                   type="button"
                   onClick={() => setAmbiguousAssignment(null)}
                 >
-                  取消
+                  {translate("features.schedule.TodayView.029")}
                 </button>
               </div>
             }
           >
-            UTCオフセットを選択してから保存します。自動では選びません。
+            {translate("features.schedule.TodayView.030")}
           </StatusMessage>
         ) : null}
         {ticketPreview ? (
           <StatusMessage
             tone={previewOverlapCount > 0 ? "warning" : "neutral"}
-            title={`「${ticketPreview.ticket.title}」の仮配置`}
+            title={translate("features.schedule.TodayView.031", [ticketPreview.ticket.title])}
             action={
               <div className="button-row">
                 <button
@@ -388,20 +393,23 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
                     )
                   }
                 >
-                  この位置に保存
+                  {translate("features.schedule.TodayView.032")}
                 </button>
                 <button
                   className="button button--subtle"
                   type="button"
                   onClick={() => setTicketPreview(null)}
                 >
-                  取消
+                  {translate("features.schedule.TodayView.029")}
                 </button>
               </div>
             }
           >
-            {new Date(ticketPreview.startUtc).toLocaleString()}から{ticketPreview.durationMinutes}
-            分。重なる予定は{previewOverlapCount}件です。
+            {translate("features.schedule.TodayView.033", [
+              new Date(ticketPreview.startUtc).toLocaleString(),
+              ticketPreview.durationMinutes,
+              previewOverlapCount,
+            ])}
           </StatusMessage>
         ) : null}
         {schedulesQuery.isLoading ? (

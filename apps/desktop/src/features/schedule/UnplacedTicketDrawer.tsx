@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Ticket } from "../../shared/contracts";
+import { translate } from "../../shared/i18n/messages";
 import type { AppClient } from "../../shared/ipc/client";
 
 export function UnplacedTicketDrawer({
@@ -46,7 +47,10 @@ export function UnplacedTicketDrawer({
     () => new Map((boardQuery.data?.columns ?? []).map((column) => [column.id, column.kind])),
     [boardQuery.data?.columns],
   );
-  const date = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+  const date = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}-${String(selectedDate.getDate()).padStart(2, "0")}`;
   const tickets = useMemo(
     () =>
       (ticketsQuery.data?.items ?? []).filter((ticket) => {
@@ -96,33 +100,42 @@ export function UnplacedTicketDrawer({
         onClick={() => setOpen((value) => !value)}
       >
         <span>
-          <strong id="unplaced-ticket-title">未配置チケット</strong>
-          <small>今日以降の予定がないチケット</small>
+          <strong id="unplaced-ticket-title">
+            {translate("features.schedule.UnplacedTicketDrawer.001")}
+          </strong>
+          <small>{translate("features.schedule.UnplacedTicketDrawer.002")}</small>
         </span>
         <span>
-          {tickets.length}件 {open ? "▲" : "▼"}
+          {translate("features.schedule.UnplacedTicketDrawer.003", [
+            tickets.length,
+            open ? "▲" : "▼",
+          ])}
         </span>
       </button>
       {open ? (
         <div id="unplaced-ticket-content" className="unplaced-ticket-drawer__content">
-          <p>
-            チケットをタイムラインへドラッグすると仮配置になります。キーボードではチケットを選び、日時を入力してください。
-          </p>
+          <p>{translate("features.schedule.UnplacedTicketDrawer.004")}</p>
           <label className="unplaced-ticket-filter">
-            表示対象
+            {translate("features.schedule.UnplacedTicketDrawer.005")}
             <select
               value={filter}
               onChange={(event) => setFilter(event.target.value as typeof filter)}
             >
-              <option value="recommended">Next・進行中・今日までの期限</option>
-              <option value="next">Next</option>
-              <option value="in_progress">In Progress</option>
-              <option value="due">今日が期限・期限超過</option>
-              <option value="all">すべての未配置</option>
+              <option value="recommended">
+                {translate("features.schedule.UnplacedTicketDrawer.006")}
+              </option>
+              <option value="next">
+                {translate("features.schedule.UnplacedTicketDrawer.007")}
+              </option>
+              <option value="in_progress">
+                {translate("features.schedule.UnplacedTicketDrawer.008")}
+              </option>
+              <option value="due">{translate("features.schedule.UnplacedTicketDrawer.009")}</option>
+              <option value="all">{translate("features.schedule.UnplacedTicketDrawer.010")}</option>
             </select>
           </label>
           {tickets.length === 0 ? (
-            <p>未配置のチケットはありません。</p>
+            <p>{translate("features.schedule.UnplacedTicketDrawer.011")}</p>
           ) : (
             <ul className="unplaced-ticket-list">
               {tickets.map((ticket) => {
@@ -147,8 +160,10 @@ export function UnplacedTicketDrawer({
                       <strong>{ticket.title}</strong>
                       <span>
                         {ticket.estimateMinutes === null
-                          ? "見積未設定・日時入力で配置"
-                          : `見積 ${ticket.estimateMinutes}分`}
+                          ? translate("features.schedule.UnplacedTicketDrawer.012")
+                          : translate("features.schedule.UnplacedTicketDrawer.013", [
+                              ticket.estimateMinutes,
+                            ])}
                       </span>
                     </button>
                   </li>
@@ -158,19 +173,17 @@ export function UnplacedTicketDrawer({
           )}
           {selected ? (
             <div className="unplaced-ticket-form">
-              <p>
-                <strong>{selected.title}</strong> を予定に入れる
-              </p>
+              <p>{translate("features.schedule.UnplacedTicketDrawer.014", [selected.title])}</p>
               <label>
-                日付
+                {translate("features.schedule.UnplacedTicketDrawer.015")}
                 <input type="date" value={date} readOnly />
               </label>
               <label>
-                開始
+                {translate("features.schedule.UnplacedTicketDrawer.016")}
                 <input type="time" value={time} onChange={(event) => setTime(event.target.value)} />
               </label>
               <label>
-                所要時間（分）
+                {translate("features.schedule.UnplacedTicketDrawer.017")}
                 <input
                   type="number"
                   min="1"
@@ -185,14 +198,16 @@ export function UnplacedTicketDrawer({
                 disabled={saving}
                 onClick={() => void assign()}
               >
-                {saving ? "保存中…" : "予定を作成"}
+                {saving
+                  ? translate("features.schedule.UnplacedTicketDrawer.018")
+                  : translate("features.schedule.UnplacedTicketDrawer.019")}
               </button>
               <button
                 className="button button--subtle"
                 type="button"
                 onClick={() => setSelectedId("")}
               >
-                取消
+                {translate("features.schedule.UnplacedTicketDrawer.020")}
               </button>
             </div>
           ) : null}
