@@ -34,6 +34,8 @@ PR CI は全PRでharness / frontendを実行し、`apps/desktop`、Rust workspac
 
 macOS x64 / Windows、Native E2E、installer生成は `Native release validation` の手動入力へ移します。通常は`macos-arm64`だけを選択し、release判断時は`platform=all`、`build_installers=true`で3 platformを検証します。Native E2Eは専用identifier `com.stillshorechirp.dayschedulenext.e2e` とfeatureを使い、通常bundleにWebDriver pluginを含めません。失敗診断とinstaller artifactは7日で失効します。
 
+手動workflowのmacOS installerは、通常identifierの `.app` をTauriで生成した後、GUIやFinderに依存しない `hdiutil` で `/Applications` リンク付きの未署名DMGへまとめ、同じjob内で `hdiutil verify` を通します。WindowsはTauriのNSIS生成経路を使用します。どちらも個人利用の検証artifactであり、署名・notarization済みの公開配布物ではありません。
+
 ## 3. Tauri security
 
 - production CSP は self / IPC / bundled asset に限定

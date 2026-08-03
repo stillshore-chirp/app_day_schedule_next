@@ -98,9 +98,24 @@ jobs:
             apps/desktop/tests/visual-baselines/macos-arm64 \
             apps/desktop/test-results \
             apps/desktop/test-results/visual-diff
-      - name: Build normal unsigned personal-use installer
-        if: inputs.build_installers && success()
+      - name: Build normal unsigned Windows installer
+        if: inputs.build_installers && success() && runner.os == 'Windows'
         run: pnpm tauri:build:debug
+      - name: Build and verify normal unsigned macOS installer
+        if: inputs.build_installers && success() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          pnpm --dir apps/desktop tauri build --debug --bundles app
+          version="$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")"
+          architecture="$(uname -m)"
+          if [[ "$architecture" == "x86_64" ]]; then architecture="x64"; fi
+          staging="${RUNNER_TEMP}/day-schedule-next-dmg"
+          mkdir -p "$staging" target/debug/bundle/dmg
+          cp -R "target/debug/bundle/macos/Day Schedule Next.app" "$staging/"
+          ln -s /Applications "$staging/Applications"
+          dmg="target/debug/bundle/dmg/Day Schedule Next_${version}_${architecture}.dmg"
+          hdiutil create -volname "Day Schedule Next" -srcfolder "$staging" -ov -format UDZO "$dmg"
+          hdiutil verify "$dmg"
       - name: Upload unsigned personal-use installer
         if: inputs.build_installers && success()
         uses: actions/upload-artifact@v7
