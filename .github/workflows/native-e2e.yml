@@ -113,6 +113,11 @@ jobs:
           mkdir -p "$staging" target/debug/bundle/dmg
           cp -R "target/debug/bundle/macos/Day Schedule Next.app" "$staging/"
           ln -s /Applications "$staging/Applications"
+          # The E2E-feature and normal app builds otherwise keep several GB of
+          # Cargo intermediates while hdiutil needs additional compression
+          # space. The complete app is already staged outside target.
+          cargo clean
+          mkdir -p target/debug/bundle/dmg
           dmg="target/debug/bundle/dmg/Day Schedule Next_${version}_${architecture}.dmg"
           hdiutil create -volname "Day Schedule Next" -srcfolder "$staging" -ov -format UDZO "$dmg"
           hdiutil verify "$dmg"
