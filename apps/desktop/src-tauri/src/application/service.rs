@@ -416,6 +416,11 @@ impl AppService {
         self.database.seed_google_tasks_fixture().await
     }
 
+    #[cfg(feature = "e2e")]
+    pub async fn seed_ticket_scale_fixture(&self, target_total: u32) -> AppResult<u64> {
+        self.database.seed_ticket_scale_fixture(target_total).await
+    }
+
     pub async fn update_schedule(
         &self,
         id: Uuid,

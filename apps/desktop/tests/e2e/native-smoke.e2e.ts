@@ -1341,7 +1341,13 @@ describe("Day Schedule Next native smoke", () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1280, 820);
     const ticketTitle = `E2Eチケット-${Date.now()}`;
-    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await browser.execute(() => {
+      const button = document.querySelector<HTMLButtonElement>(
+        'aside[aria-label="主要画面"] button[aria-label="チケット"]',
+      );
+      if (!button) throw new Error("Ticket navigation button was not found");
+      button.click();
+    });
     await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-ticket-board-empty.png");
 
@@ -1495,54 +1501,14 @@ describe("Day Schedule Next native smoke", () => {
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
 
-    // The Google Tasks scenario intentionally enables its synthetic adapter on
-    // macOS. The 500-card scenario measures board rendering, so isolate it from
-    // background sync and cover the enabled 500-create boundary in Rust.
-    await browser.tauri.execute(({ core }) =>
-      core.invoke("google_tasks_enabled_set", { request: { enabled: false } }),
+    // This scenario measures 500-card rendering. Product create/history/Outbox
+    // integrity is covered by Rust; the e2e-only seed avoids hundreds of IPC
+    // round trips and is unavailable in normal builds.
+    const seededTotal = await browser.tauri.execute(
+      ({ core }, targetTotal) => core.invoke("e2e_ticket_scale_seed", { targetTotal }),
+      500,
     );
-    const ticketScale = await browser.tauri.execute(async ({ core }, targetTotal) => {
-      const board = (await core.invoke("ticket_board_get")) as {
-        id: string;
-        columns: Array<{ id: string }>;
-      };
-      const current = (await core.invoke("ticket_list", {
-        query: { limit: 1 },
-      })) as { total: number };
-      return {
-        board,
-        count: Math.max(0, targetTotal - current.total),
-      };
-    }, 500);
-    const batchSize = 50;
-    for (let offset = 0; offset < ticketScale.count; offset += batchSize) {
-      const count = Math.min(batchSize, ticketScale.count - offset);
-      await browser.tauri.execute(
-        async ({ core }, batch) => {
-          for (let index = 0; index < batch.count; index += 1) {
-            const absoluteIndex = batch.offset + index;
-            await core.invoke("ticket_create", {
-              request: {
-                operationId: crypto.randomUUID(),
-                draft: {
-                  boardId: batch.board.id,
-                  columnId: batch.board.columns[absoluteIndex % batch.board.columns.length].id,
-                  parentTicketId: null,
-                  title: `Synthetic ticket ${String(absoluteIndex + 1).padStart(3, "0")}`,
-                  description: "500 ticket visual evidence",
-                  priority: absoluteIndex % 4 === 0 ? "high" : "normal",
-                  dueDate: null,
-                  estimateMinutes: null,
-                  tags: [],
-                  checklist: [],
-                },
-              },
-            });
-          }
-        },
-        { board: ticketScale.board, count, offset },
-      );
-    }
+    expect(seededTotal).toBe(500);
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();

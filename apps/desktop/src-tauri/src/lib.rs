@@ -123,6 +123,8 @@ pub fn run() {
             commands::e2e_google_calendar_recovery_seed,
             #[cfg(feature = "e2e")]
             commands::e2e_google_tasks_seed,
+            #[cfg(feature = "e2e")]
+            commands::e2e_ticket_scale_seed,
             commands::schedule_update,
             commands::schedule_bulk_classify,
             commands::schedule_delete,
