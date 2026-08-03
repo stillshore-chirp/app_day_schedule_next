@@ -72,7 +72,7 @@ const defaultTicketColumns: Array<[string, TicketBoard["columns"][number]["kind"
 
 const defaultTicketBoard: TicketBoard = {
   id: "00000000-0000-4000-8000-000000000100",
-  name: "チケット",
+  name: translate("shared.ipc.memory-client.021"),
   version: 0,
   columns: defaultTicketColumns.map(([id, kind, name], sortOrder) => ({
     id,

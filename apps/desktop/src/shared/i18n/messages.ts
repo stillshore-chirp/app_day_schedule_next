@@ -1161,6 +1161,7 @@ export const jaMessages = {
   "shared.ipc.memory-client.018": "旧ウィンドウ位置",
   "shared.ipc.memory-client.019": "Windows専用音",
   "shared.ipc.memory-client.020": "デバッグ出力",
+  "shared.ipc.memory-client.021": "チケット",
   "shared.time.001": "{0}分",
   "shared.time.002": "{0}時間",
   "shared.time.003": "{0}時間{1}分",
