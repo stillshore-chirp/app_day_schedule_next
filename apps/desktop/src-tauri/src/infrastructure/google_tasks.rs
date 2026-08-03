@@ -2857,6 +2857,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn five_hundred_ticket_creates_keep_history_and_tasks_outbox_complete() {
+        let database = Database::open_memory().await.unwrap();
+        seed_tasks(&database, None).await;
+        let now = Utc::now();
+
+        for index in 0..500 {
+            database
+                .create_ticket(
+                    Uuid::new_v4(),
+                    ticket_draft(&format!("Scale task {index:03}")),
+                    now,
+                )
+                .await
+                .unwrap();
+        }
+
+        let tickets: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tickets")
+            .fetch_one(&database.pool)
+            .await
+            .unwrap();
+        let histories: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM ticket_change_history WHERE action = 'create'",
+        )
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        let pending_outbox: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM google_task_outbox WHERE operation_type = 'create' AND completed_at_utc IS NULL",
+        )
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        let distinct_outbox_tickets: i64 = sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT ticket_id) FROM google_task_outbox WHERE operation_type = 'create' AND completed_at_utc IS NULL",
+        )
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+
+        assert_eq!(tickets, 500);
+        assert_eq!(histories, 500);
+        assert_eq!(pending_outbox, 500);
+        assert_eq!(distinct_outbox_tickets, 500);
+    }
+
+    #[tokio::test]
     async fn two_pages_are_applied_only_after_all_pages_succeed() {
         let database = Database::open_memory().await.unwrap();
         let (_, list_id) = seed_tasks(&database, None).await;

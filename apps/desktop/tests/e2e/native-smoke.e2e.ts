@@ -526,6 +526,15 @@ describe("Day Schedule Next native smoke", () => {
 
     await $('//input[@placeholder="例: 朝の準備"]').setValue("E2E休憩セット");
     await $('//button[normalize-space(.)="現在の構成を保存"]').click();
+    await browser.waitUntil(
+      async () => {
+        const sets = (await browser.tauri.execute(({ core }) =>
+          core.invoke("timer_set_list"),
+        )) as Array<{ name: string }>;
+        return sets.some((set) => set.name === "E2E休憩セット");
+      },
+      { timeoutMsg: "timer set was not persisted" },
+    );
     await $('//*[normalize-space(.)="E2E休憩セット"]').waitForDisplayed();
     await scrollActiveViewToTop();
     await browser.saveScreenshot("./test-results/native-timers.png");
@@ -646,10 +655,15 @@ describe("Day Schedule Next native smoke", () => {
     await $(
       '//*[self::div or self::section][contains(., "設定をこの端末に保存しました")]',
     ).waitForDisplayed();
-    const savedSettings = (await browser.tauri.execute(({ core }) =>
-      core.invoke("bootstrap_get"),
-    )) as { settings: { snapMinutes: number } };
-    expect(savedSettings.settings.snapMinutes).toBe(15);
+    await browser.waitUntil(
+      async () => {
+        const savedSettings = (await browser.tauri.execute(({ core }) =>
+          core.invoke("bootstrap_get"),
+        )) as { settings: { snapMinutes: number } };
+        return savedSettings.settings.snapMinutes === 15;
+      },
+      { timeoutMsg: "snap setting was not persisted as 15 minutes" },
+    );
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
     const persistedSettings = (await browser.tauri.execute(({ core }) =>
@@ -970,6 +984,7 @@ describe("Day Schedule Next native smoke", () => {
     );
 
     await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
     await setLogicalWindowSize(1180, 820);
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     const schedule = $('//button[contains(@aria-label, "複雑なGoogle繰り返し")]');
@@ -1480,7 +1495,13 @@ describe("Day Schedule Next native smoke", () => {
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
 
-    await browser.tauri.execute(async ({ core }, targetTotal) => {
+    // The Google Tasks scenario intentionally enables its synthetic adapter on
+    // macOS. The 500-card scenario measures board rendering, so isolate it from
+    // background sync and cover the enabled 500-create boundary in Rust.
+    await browser.tauri.execute(({ core }) =>
+      core.invoke("google_tasks_enabled_set", { request: { enabled: false } }),
+    );
+    const ticketScale = await browser.tauri.execute(async ({ core }, targetTotal) => {
       const board = (await core.invoke("ticket_board_get")) as {
         id: string;
         columns: Array<{ id: string }>;
@@ -1488,27 +1509,40 @@ describe("Day Schedule Next native smoke", () => {
       const current = (await core.invoke("ticket_list", {
         query: { limit: 1 },
       })) as { total: number };
-      const count = Math.max(0, targetTotal - current.total);
-      for (let index = 0; index < count; index += 1) {
-        await core.invoke("ticket_create", {
-          request: {
-            operationId: crypto.randomUUID(),
-            draft: {
-              boardId: board.id,
-              columnId: board.columns[index % board.columns.length].id,
-              parentTicketId: null,
-              title: `Synthetic ticket ${String(index + 1).padStart(3, "0")}`,
-              description: "500 ticket visual evidence",
-              priority: index % 4 === 0 ? "high" : "normal",
-              dueDate: null,
-              estimateMinutes: null,
-              tags: [],
-              checklist: [],
-            },
-          },
-        });
-      }
+      return {
+        board,
+        count: Math.max(0, targetTotal - current.total),
+      };
     }, 500);
+    const batchSize = 50;
+    for (let offset = 0; offset < ticketScale.count; offset += batchSize) {
+      const count = Math.min(batchSize, ticketScale.count - offset);
+      await browser.tauri.execute(
+        async ({ core }, batch) => {
+          for (let index = 0; index < batch.count; index += 1) {
+            const absoluteIndex = batch.offset + index;
+            await core.invoke("ticket_create", {
+              request: {
+                operationId: crypto.randomUUID(),
+                draft: {
+                  boardId: batch.board.id,
+                  columnId: batch.board.columns[absoluteIndex % batch.board.columns.length].id,
+                  parentTicketId: null,
+                  title: `Synthetic ticket ${String(absoluteIndex + 1).padStart(3, "0")}`,
+                  description: "500 ticket visual evidence",
+                  priority: absoluteIndex % 4 === 0 ? "high" : "normal",
+                  dueDate: null,
+                  estimateMinutes: null,
+                  tags: [],
+                  checklist: [],
+                },
+              },
+            });
+          }
+        },
+        { board: ticketScale.board, count, offset },
+      );
+    }
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();

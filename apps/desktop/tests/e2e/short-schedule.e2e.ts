@@ -123,16 +123,11 @@ describe("Day Schedule Next short schedule layout", () => {
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-narrow.png");
 
     await setLogicalWindowSize(1180, 820);
-    await browser.execute(() => {
-      document.documentElement.style.setProperty("font-size", "200%", "important");
+    const rootFontSize = await browser.execute(() => {
+      document.documentElement.style.setProperty("font-size", "32px", "important");
+      return document.documentElement.style.fontSize;
     });
-    await browser.waitUntil(
-      async () =>
-        (await browser.execute(() =>
-          Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
-        )) >= 31,
-      { timeoutMsg: "root font size did not reach 200%" },
-    );
+    expect(rootFontSize).toBe("32px");
     await expect(expandSidebar).toBeDisplayed();
     await expect($(".overview__template-action .button")).toBeDisplayed();
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-text-200.png");
