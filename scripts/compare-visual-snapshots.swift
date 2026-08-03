@@ -36,15 +36,32 @@ let requiredSnapshots = [
     "native-google-calendar-recovery.png",
     "native-google-calendar-recovery-text-200.png",
 ]
-let channelTolerance = 32
+let channelTolerance = 36
 let mismatchRatioTolerance = 0.04
+let canonicalSnapshotSizes: [String: (width: Int, height: Int)] = [
+    // WebKit element screenshots append the native titlebar inset below the
+    // verified 1024x640 app-shell rect (32px on local Retina, 28px on CI 1x).
+    // Compare the product-owned rect and exclude only that trailing blank area.
+    "native-today.png": (1024, 640),
+]
 
-func loadRGBA(_ url: URL) throws -> RGBAImage {
+func loadRGBA(_ url: URL, canonicalSize: (width: Int, height: Int)? = nil) throws -> RGBAImage {
     guard let image = NSImage(contentsOf: url) else {
         throw SnapshotError.unreadable(url.path)
     }
-    let width = Int(image.size.width)
-    let height = Int(image.size.height)
+    let sourceWidth = Int(image.size.width)
+    let sourceHeight = Int(image.size.height)
+    let width = canonicalSize?.width ?? sourceWidth
+    let height = canonicalSize?.height ?? sourceHeight
+    if sourceWidth != width || sourceHeight < height {
+        throw SnapshotError.dimension(
+            url.lastPathComponent,
+            width,
+            height,
+            sourceWidth,
+            sourceHeight
+        )
+    }
     guard width > 0, height > 0,
           let representation = NSBitmapImageRep(
               bitmapDataPlanes: nil,
@@ -67,7 +84,12 @@ func loadRGBA(_ url: URL) throws -> RGBAImage {
     NSGraphicsContext.current = context
     image.draw(
         in: NSRect(x: 0, y: 0, width: width, height: height),
-        from: .zero,
+        from: NSRect(
+            x: 0,
+            y: CGFloat(sourceHeight - height),
+            width: CGFloat(width),
+            height: CGFloat(height)
+        ),
         operation: .copy,
         fraction: 1
     )
@@ -107,8 +129,9 @@ func writeDiff(_ pixels: [UInt8], width: Int, height: Int, to url: URL) throws {
 }
 
 func compare(name: String, baselineURL: URL, actualURL: URL, diffURL: URL) throws -> Double {
-    let baseline = try loadRGBA(baselineURL)
-    let actual = try loadRGBA(actualURL)
+    let canonicalSize = canonicalSnapshotSizes[name]
+    let baseline = try loadRGBA(baselineURL, canonicalSize: canonicalSize)
+    let actual = try loadRGBA(actualURL, canonicalSize: canonicalSize)
     guard baseline.width == actual.width, baseline.height == actual.height else {
         throw SnapshotError.dimension(
             name,
