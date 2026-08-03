@@ -28,11 +28,71 @@ describe("Day Schedule Next native smoke", () => {
     );
   };
 
+  const setExactLogicalViewportSize = async (width: number, height: number) => {
+    await browser.setWindowSize(width, height);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const viewport = await browser.execute(() => ({
+        devicePixelRatio: window.devicePixelRatio,
+        height: window.innerHeight,
+        width: window.innerWidth,
+      }));
+      if (Math.abs(viewport.width - width) <= 1 && Math.abs(viewport.height - height) <= 1) {
+        return;
+      }
+      const outer = await browser.getWindowSize();
+      await browser.setWindowSize(
+        Math.max(
+          320,
+          Math.round(outer.width + (width - viewport.width) * viewport.devicePixelRatio),
+        ),
+        Math.max(
+          320,
+          Math.round(outer.height + (height - viewport.height) * viewport.devicePixelRatio),
+        ),
+      );
+    }
+    const viewport = await browser.execute(() => ({
+      height: window.innerHeight,
+      width: window.innerWidth,
+    }));
+    if (Math.abs(viewport.width - width) > 1 || Math.abs(viewport.height - height) > 1) {
+      throw new Error(
+        `viewport did not reach ${width}x${height}: ${viewport.width}x${viewport.height}`,
+      );
+    }
+  };
+
   const scrollActiveViewToTop = async () => {
     await browser.execute(() => {
       const view = document.querySelector("main.secondary-view");
       if (view instanceof HTMLElement) view.scrollTop = 0;
     });
+  };
+
+  const openTicketView = async () => {
+    await browser.tauri.switchWindow("main");
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() => {
+          const heading = Array.from(document.querySelectorAll("main h1")).find(
+            (candidate) => candidate.textContent?.trim() === "チケット",
+          );
+          if (heading) return true;
+          const button = document.querySelector<HTMLButtonElement>(
+            'aside[aria-label="主要画面"] button[aria-label="チケット"]',
+          );
+          if (!button) return false;
+          button.focus({ preventScroll: true });
+          button.click();
+          return false;
+        }),
+      {
+        interval: 250,
+        timeout: 30_000,
+        timeoutMsg: "Ticket view did not become active after retrying main-window navigation",
+      },
+    );
+    await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
   };
 
   const persistFixtureTheme = async (theme: "light" | "mild" | "dark") => {
@@ -65,7 +125,7 @@ describe("Day Schedule Next native smoke", () => {
     await persistFixtureTheme("light");
     // Earlier specs intentionally resize the shared native window. Restore the
     // deterministic Today baseline viewport before taking its screenshot.
-    await browser.setWindowSize(1024, 681);
+    await setExactLogicalViewportSize(1024, 681);
     const addButton = $('//header//button[contains(normalize-space(.), "予定")]');
     await addButton.click();
     const titleInput = $('//aside//label[contains(., "タイトル")]/input');
@@ -74,7 +134,7 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside//button[normalize-space(.)="予定を作成"]').click();
     const created = $(`//*[normalize-space(.)="${title}"]`);
     await created.waitForDisplayed();
-    await browser.saveScreenshot("./test-results/native-today.png");
+    await $(".app-shell").saveScreenshot("./test-results/native-today.png");
 
     await browser.refresh();
     await $(".today-heading h1").waitForDisplayed();
@@ -1161,7 +1221,7 @@ describe("Day Schedule Next native smoke", () => {
       });
     });
 
-    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await openTicketView();
     await $('//button[@aria-label="Google Tasks同期確認の詳細を開く"]').click();
     await $('//h4[normalize-space(.)="Google Tasks"]').waitForDisplayed();
     await expect($('//*[contains(., "Google notesへ埋め込みません")]')).toBeDisplayed();
@@ -1177,8 +1237,7 @@ describe("Day Schedule Next native smoke", () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1280, 820);
     const ticketTitle = `E2E予定化-${Date.now()}`;
-    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
-    await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
+    await openTicketView();
     await $(
       '//section[.//h2[normalize-space(.)="Next"]]//input[@placeholder="タイトルだけで追加"]',
     ).setValue(ticketTitle);
@@ -1341,14 +1400,7 @@ describe("Day Schedule Next native smoke", () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1280, 820);
     const ticketTitle = `E2Eチケット-${Date.now()}`;
-    await browser.execute(() => {
-      const button = document.querySelector<HTMLButtonElement>(
-        'aside[aria-label="主要画面"] button[aria-label="チケット"]',
-      );
-      if (!button) throw new Error("Ticket navigation button was not found");
-      button.click();
-    });
-    await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
+    await openTicketView();
     await browser.saveScreenshot("./test-results/native-ticket-board-empty.png");
 
     await $(
@@ -1443,7 +1495,7 @@ describe("Day Schedule Next native smoke", () => {
     );
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
-    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await openTicketView();
     await browser.execute(() => {
       const select = Array.from(document.querySelectorAll("label"))
         .find((label) => label.textContent?.includes("表示"))
@@ -1499,7 +1551,7 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-ticket-conflict.png");
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
-    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await openTicketView();
 
     // This scenario measures 500-card rendering. Product create/history/Outbox
     // integrity is covered by Rust; the e2e-only seed avoids hundreds of IPC
@@ -1511,7 +1563,7 @@ describe("Day Schedule Next native smoke", () => {
     expect(seededTotal).toBe(500);
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
-    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await openTicketView();
     await browser.waitUntil(async () => (await $$(".ticket-card").length) === 500, {
       timeoutMsg: "500 ticket cards were not rendered",
     });
@@ -1550,8 +1602,7 @@ describe("Day Schedule Next native smoke", () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1280, 820);
     const ticketTitle = `E2E-Focus帰属-${Date.now()}`;
-    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
-    await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
+    await openTicketView();
     await $(
       '//section[.//h2[normalize-space(.)="In Progress"]]//input[@placeholder="タイトルだけで追加"]',
     ).setValue(ticketTitle);
