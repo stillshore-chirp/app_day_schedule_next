@@ -74,6 +74,27 @@ describe("App time-tool navigation", () => {
     expect(screen.queryByRole("heading", { name: "タイマー", level: 1 })).toBeNull();
   });
 
+  it("opens the ticket board as an independent primary navigation destination", async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App client={new MemoryAppClient([])} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "チケット" }));
+
+    expect(await screen.findByRole("heading", { name: "チケット", level: 1 })).toBeVisible();
+    expect(
+      screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
+    ).toEqual(
+      expect.arrayContaining(["Inbox", "Backlog", "Next", "In Progress", "Waiting", "Done"]),
+    );
+    expect(screen.queryByRole("heading", { name: "詳細タイムライン" })).toBeNull();
+    expect(screen.queryByRole("searchbox", { name: "予定を検索" })).toBeNull();
+  });
+
   it("applies and persists the mild theme after settings are saved", async () => {
     const user = userEvent.setup();
     const client = new MemoryAppClient();

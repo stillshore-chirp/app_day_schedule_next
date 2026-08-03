@@ -12,6 +12,7 @@ import { DiagnosticsView, FocusView, SettingsView } from "../features/views/Oper
 import { AlarmsView, TemplatesView } from "../features/views/LibraryViews";
 import { TimersView } from "../features/timers/TimersView";
 import { StopwatchView } from "../features/stopwatch/StopwatchView";
+import { KanbanView } from "../features/tickets/KanbanView";
 import { useUiStore, type AppView } from "./ui-store";
 import { NotificationRuntime } from "./NotificationRuntime";
 import { SyncRuntime } from "./SyncRuntime";
@@ -22,6 +23,7 @@ const navItems: Array<{ view: AppView; label: string; symbol: string }> = [
   { view: "month", label: messages.navigation.month, symbol: "▦" },
   { view: "list", label: messages.navigation.list, symbol: "≡" },
   { view: "templates", label: messages.navigation.templates, symbol: "◇" },
+  { view: "tickets", label: translate("navigation.tickets"), symbol: "▤" },
   { view: "focus", label: messages.navigation.focus, symbol: "◎" },
   { view: "timers", label: messages.navigation.timers, symbol: "◴" },
   { view: "stopwatch", label: messages.navigation.stopwatch, symbol: "◉" },
@@ -212,15 +214,17 @@ export function App({
           </button>
         </div>
         <div className="topbar__actions">
-          <label className="global-search">
-            <span className="sr-only">{translate("app.App.012")}</span>
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={translate("app.App.013")}
-              type="search"
-            />
-          </label>
+          {activeView !== "tickets" && (
+            <label className="global-search">
+              <span className="sr-only">{translate("app.App.012")}</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder={translate("app.App.013")}
+                type="search"
+              />
+            </label>
+          )}
           <button
             className="button button--primary"
             onClick={() => {
@@ -311,6 +315,7 @@ export function App({
             settings={bootstrap.settings}
           />
         ) : null}
+        {activeView === "tickets" ? <KanbanView client={client} today={bootstrap.today} /> : null}
         {activeView === "alarms" ? (
           <AlarmsView client={client} timezoneId={bootstrap.timezoneId} />
         ) : null}

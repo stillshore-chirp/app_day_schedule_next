@@ -6,6 +6,7 @@ export type AppView =
   | "month"
   | "list"
   | "templates"
+  | "tickets"
   | "focus"
   | "timers"
   | "stopwatch"
@@ -19,6 +20,7 @@ const appViews: AppView[] = [
   "month",
   "list",
   "templates",
+  "tickets",
   "focus",
   "timers",
   "stopwatch",
