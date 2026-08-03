@@ -71,28 +71,25 @@ describe("Day Schedule Next native smoke", () => {
 
   const openTicketView = async () => {
     await browser.tauri.switchWindow("main");
-    await browser.waitUntil(
-      async () =>
-        browser.execute(() => {
-          const heading = Array.from(document.querySelectorAll("main h1")).find(
-            (candidate) => candidate.textContent?.trim() === "チケット",
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      const heading = $('//main//h1[normalize-space(.)="チケット"]');
+      if (await heading.isDisplayed().catch(() => false)) return;
+
+      try {
+        const button = $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]');
+        await button.waitForDisplayed({ timeout: 5_000 });
+        await button.click();
+        await heading.waitForDisplayed({ interval: 250, timeout: 5_000 });
+        return;
+      } catch (error) {
+        if (attempt === 6) {
+          const reason = error instanceof Error ? error.message : "unknown WebDriver error";
+          throw new Error(
+            `Ticket view did not become active after 6 WebDriver navigation attempts: ${reason}`,
           );
-          if (heading) return true;
-          const button = document.querySelector<HTMLButtonElement>(
-            'aside[aria-label="主要画面"] button[aria-label="チケット"]',
-          );
-          if (!button) return false;
-          button.focus({ preventScroll: true });
-          button.click();
-          return false;
-        }),
-      {
-        interval: 250,
-        timeout: 30_000,
-        timeoutMsg: "Ticket view did not become active after retrying main-window navigation",
-      },
-    );
-    await $('//main//h1[normalize-space(.)="チケット"]').waitForDisplayed();
+        }
+      }
+    }
   };
 
   const persistFixtureTheme = async (theme: "light" | "mild" | "dark") => {
