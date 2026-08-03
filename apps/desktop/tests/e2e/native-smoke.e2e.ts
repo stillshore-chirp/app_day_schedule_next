@@ -69,6 +69,39 @@ describe("Day Schedule Next native smoke", () => {
     });
   };
 
+  const saveAppShellAtLogicalSize = async (path: string, width: number, height: number) => {
+    const shell = $(".app-shell");
+    await shell.waitForDisplayed();
+    const originalStyle = await browser.execute(
+      ({ height, width }) => {
+        const element = document.querySelector<HTMLElement>(".app-shell");
+        if (!element) throw new Error("app shell was not found for visual capture");
+        const original = { height: element.style.height, width: element.style.width };
+        element.style.height = `${height}px`;
+        element.style.width = `${width}px`;
+        return original;
+      },
+      { height, width },
+    );
+    try {
+      const bounds = await browser.execute(() => {
+        const element = document.querySelector<HTMLElement>(".app-shell");
+        if (!element) throw new Error("app shell was not found for visual capture");
+        const rect = element.getBoundingClientRect();
+        return { height: Math.round(rect.height), width: Math.round(rect.width) };
+      });
+      expect(bounds).toEqual({ height, width });
+      await shell.saveScreenshot(path);
+    } finally {
+      await browser.execute((style) => {
+        const element = document.querySelector<HTMLElement>(".app-shell");
+        if (!element) throw new Error("app shell was not found after visual capture");
+        element.style.height = style.height;
+        element.style.width = style.width;
+      }, originalStyle);
+    }
+  };
+
   const openTicketView = async () => {
     await browser.tauri.switchWindow("main");
     for (let attempt = 1; attempt <= 6; attempt += 1) {
@@ -131,7 +164,7 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside//button[normalize-space(.)="予定を作成"]').click();
     const created = $(`//*[normalize-space(.)="${title}"]`);
     await created.waitForDisplayed();
-    await $(".app-shell").saveScreenshot("./test-results/native-today.png");
+    await saveAppShellAtLogicalSize("./test-results/native-today.png", 1024, 640);
 
     await browser.refresh();
     await $(".today-heading h1").waitForDisplayed();
