@@ -1533,19 +1533,18 @@ describe("Day Schedule Next native smoke", () => {
 
     await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
     await $('//div[@role="dialog"]//button[normalize-space(.)="アーカイブ"]').click();
-    await browser.waitUntil(
-      async () => {
-        const result = (await browser.tauri.execute(
-          ({ core }, expectedTitle) =>
-            core.invoke("ticket_list", {
-              query: { search: expectedTitle, includeArchived: true, limit: 10 },
-            }),
-          ticketTitle,
-        )) as { items: Array<{ archivedAt: string | null }> };
-        return typeof result.items[0]?.archivedAt === "string";
-      },
-      { timeoutMsg: "ticket archive was not persisted" },
-    );
+    await $(
+      `//p[@aria-live="polite" and normalize-space(.)="${ticketTitle}をアーカイブしました。"]`,
+    ).waitForExist();
+    await $(`//article[.//*[normalize-space(.)="${ticketTitle}"]]`).waitForExist({ reverse: true });
+    const archived = (await browser.tauri.execute(
+      ({ core }, expectedTitle) =>
+        core.invoke("ticket_list", {
+          query: { search: expectedTitle, includeArchived: true, limit: 10 },
+        }),
+      ticketTitle,
+    )) as { items: Array<{ archivedAt: string | null }> };
+    expect(typeof archived.items[0]?.archivedAt).toBe("string");
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
     await openTicketView();
