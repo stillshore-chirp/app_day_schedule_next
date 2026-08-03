@@ -642,6 +642,104 @@ impl Database {
     }
 
     #[cfg(feature = "e2e")]
+    pub async fn seed_ticket_scale_fixture(&self, target_total: u32) -> AppResult<u64> {
+        if !(1..=500).contains(&target_total) {
+            return Err(AppError::Validation {
+                message: "E2E Ticket fixtureは1〜500件にしてください".into(),
+                recovery: "targetTotalを1〜500へ変更してください".into(),
+            });
+        }
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| AppError::database("e2e-ticket-scale-begin", error))?;
+        sqlx::query("UPDATE google_tasks_config SET enabled = 0 WHERE singleton = 1")
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| AppError::database("e2e-ticket-scale-disable-tasks", error))?;
+        let current: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM tickets WHERE archived_at_utc IS NULL AND deleted_at_utc IS NULL",
+        )
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("e2e-ticket-scale-count", error))?;
+        let missing = i64::from(target_total).saturating_sub(current);
+        if missing > 0 {
+            let columns: Vec<(String, String, i64)> = sqlx::query_as(
+                "SELECT c.id, c.kind, COALESCE(MAX(t.sort_key), 0) FROM ticket_columns c LEFT JOIN tickets t ON t.column_id = c.id AND t.deleted_at_utc IS NULL WHERE c.board_id = ? GROUP BY c.id, c.kind, c.sort_order ORDER BY c.sort_order",
+            )
+            .bind(
+                crate::infrastructure::ticket_repository::DEFAULT_TICKET_BOARD_ID.to_string(),
+            )
+            .fetch_all(&mut *transaction)
+            .await
+            .map_err(|error| AppError::database("e2e-ticket-scale-columns", error))?;
+            if columns.is_empty() {
+                return Err(AppError::database(
+                    "e2e-ticket-scale-columns",
+                    "default Ticket columns are missing",
+                ));
+            }
+            let fixture_count: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM tickets WHERE id LIKE 'f0000000-0000-4000-8000-%'",
+            )
+            .fetch_one(&mut *transaction)
+            .await
+            .map_err(|error| AppError::database("e2e-ticket-scale-existing", error))?;
+            let now = timestamp(Utc::now());
+            let mut next_sort_keys = columns
+                .iter()
+                .map(|(_, _, sort_key)| *sort_key)
+                .collect::<Vec<_>>();
+            for offset in 0..missing {
+                let fixture_index = fixture_count + offset;
+                let column_index = fixture_index as usize % columns.len();
+                let (column_id, column_kind, _) = &columns[column_index];
+                next_sort_keys[column_index] += 1024;
+                let ticket_id = Uuid::from_u128(
+                    0xf0000000_0000_4000_8000_000000000000_u128 + fixture_index as u128,
+                );
+                let completed_at = (column_kind == "done").then_some(now.as_str());
+                let last_non_done = (column_kind != "done").then_some(column_id.as_str());
+                sqlx::query(
+                    "INSERT INTO tickets(id, board_id, column_id, last_non_done_column_id, parent_ticket_id, title, description, priority, due_date, estimate_minutes, sort_key, version, completed_at_utc, archived_at_utc, deleted_at_utc, created_at_utc, updated_at_utc) VALUES (?, ?, ?, ?, NULL, ?, '500 ticket visual evidence', ?, NULL, NULL, ?, 0, ?, NULL, NULL, ?, ?)",
+                )
+                .bind(ticket_id.to_string())
+                .bind(
+                    crate::infrastructure::ticket_repository::DEFAULT_TICKET_BOARD_ID.to_string(),
+                )
+                .bind(column_id)
+                .bind(last_non_done)
+                .bind(format!("Synthetic ticket {:03}", fixture_index + 1))
+                .bind(if fixture_index % 4 == 0 {
+                    "high"
+                } else {
+                    "normal"
+                })
+                .bind(next_sort_keys[column_index])
+                .bind(completed_at)
+                .bind(&now)
+                .bind(&now)
+                .execute(&mut *transaction)
+                .await
+                .map_err(|error| AppError::database("e2e-ticket-scale-insert", error))?;
+            }
+        }
+        transaction
+            .commit()
+            .await
+            .map_err(|error| AppError::database("e2e-ticket-scale-commit", error))?;
+        let total: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM tickets WHERE archived_at_utc IS NULL AND deleted_at_utc IS NULL",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| AppError::database("e2e-ticket-scale-result", error))?;
+        Ok(total.max(0) as u64)
+    }
+
+    #[cfg(feature = "e2e")]
     pub async fn seed_google_calendar_recovery_fixture(&self) -> AppResult<()> {
         let mut transaction = self
             .pool
@@ -2322,6 +2420,45 @@ mod tests {
             .execute(&database.pool)
             .await
             .unwrap();
+    }
+
+    #[cfg(feature = "e2e")]
+    #[tokio::test]
+    async fn ticket_scale_fixture_preserves_existing_data_and_is_idempotent() {
+        let database = Database::open_memory().await.unwrap();
+        let existing = database
+            .create_ticket(
+                Uuid::new_v4(),
+                crate::domain::TicketDraft {
+                    board_id: crate::infrastructure::ticket_repository::DEFAULT_TICKET_BOARD_ID,
+                    column_id: crate::infrastructure::ticket_repository::INBOX_TICKET_COLUMN_ID,
+                    parent_ticket_id: None,
+                    title: "Existing Ticket".into(),
+                    description: String::new(),
+                    priority: crate::domain::TicketPriority::Normal,
+                    due_date: None,
+                    estimate_minutes: None,
+                    tags: Vec::new(),
+                    checklist: Vec::new(),
+                },
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(database.seed_ticket_scale_fixture(500).await.unwrap(), 500);
+        assert_eq!(database.seed_ticket_scale_fixture(500).await.unwrap(), 500);
+        assert_eq!(
+            database.ticket(existing.id).await.unwrap().title,
+            "Existing Ticket"
+        );
+        let unique_fixture_ids: i64 = sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT id) FROM tickets WHERE id LIKE 'f0000000-0000-4000-8000-%'",
+        )
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert_eq!(unique_fixture_ids, 499);
     }
 
     #[tokio::test]

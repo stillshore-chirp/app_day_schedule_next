@@ -647,6 +647,18 @@ pub async fn e2e_google_tasks_seed(service: State<'_, AppService>) -> CommandRes
         .map_err(Into::into)
 }
 
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn e2e_ticket_scale_seed(
+    service: State<'_, AppService>,
+    target_total: u32,
+) -> CommandResult<u64> {
+    service
+        .seed_ticket_scale_fixture(target_total)
+        .await
+        .map_err(Into::into)
+}
+
 #[tauri::command]
 pub async fn schedule_update(
     service: State<'_, AppService>,

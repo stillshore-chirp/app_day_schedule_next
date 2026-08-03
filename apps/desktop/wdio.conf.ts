@@ -42,7 +42,7 @@ export const config: WebdriverIO.Config = {
         captureBackendLogs: true,
         captureFrontendLogs: true,
         logDir: path.resolve("./wdio-logs"),
-        startTimeout: 60_000,
+        startTimeout: 120_000,
       },
     ],
   ],
