@@ -137,6 +137,7 @@ describe("Day Schedule Next native smoke", () => {
         settings: { theme: string };
       };
       document.documentElement.dataset.theme = nextTheme;
+      document.querySelector<HTMLElement>(".workspace-main")?.scrollTo(0, 0);
       return {
         documentTheme: document.documentElement.dataset.theme,
         persistedTheme: persisted.settings.theme,
