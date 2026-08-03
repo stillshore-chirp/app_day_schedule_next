@@ -181,6 +181,16 @@ impl Database {
             },
         )
         .await?;
+        #[cfg(feature = "google-sync")]
+        super::google_tasks::enqueue_ticket_task_outbox(
+            &mut transaction,
+            operation_id,
+            id,
+            "create",
+            0,
+            &now_text,
+        )
+        .await?;
         transaction
             .commit()
             .await
@@ -246,21 +256,32 @@ impl Database {
             replace_checklist,
         )
         .await?;
+        let action = if before.parent_ticket_id != draft.parent_ticket_id {
+            "parent"
+        } else {
+            "update"
+        };
         record_history(
             &mut transaction,
             HistoryWrite {
                 action_id: operation_id,
                 ticket_id: id,
-                action: if before.parent_ticket_id != draft.parent_ticket_id {
-                    "parent"
-                } else {
-                    "update"
-                },
+                action,
                 version: expected_version + 1,
                 before: Some(&before),
                 after: Some(&draft),
                 now: &now_text,
             },
+        )
+        .await?;
+        #[cfg(feature = "google-sync")]
+        super::google_tasks::enqueue_ticket_task_outbox(
+            &mut transaction,
+            operation_id,
+            id,
+            action,
+            expected_version + 1,
+            &now_text,
         )
         .await?;
         transaction
@@ -342,6 +363,16 @@ impl Database {
                 after: Some(&target_column_id),
                 now: &now_text,
             },
+        )
+        .await?;
+        #[cfg(feature = "google-sync")]
+        super::google_tasks::enqueue_ticket_task_outbox(
+            &mut transaction,
+            operation_id,
+            id,
+            action,
+            expected_version + 1,
+            &now_text,
         )
         .await?;
         transaction
@@ -473,6 +504,18 @@ impl Database {
             },
         )
         .await?;
+        #[cfg(feature = "google-sync")]
+        if deleted {
+            super::google_tasks::enqueue_ticket_task_outbox(
+                &mut transaction,
+                operation_id,
+                id,
+                "delete",
+                expected_version + 1,
+                &now_text,
+            )
+            .await?;
+        }
         transaction
             .commit()
             .await

@@ -14,16 +14,17 @@ Day Schedule Next は Google の Desktop app OAuth client、既定ブラウザ�
 この作業は個人用ビルドを作る人が一度だけ行います。通常のアプリ利用者には不要です。
 
 1. 個人利用用の Google Cloud project を作成または選択します。
-2. Google Calendar API を有効にします。
+2. Google Calendar API と Google Tasks API を有効にします。
 3. Google Auth Platform の Branding / Audience / Data Access を構成します。
 4. External の Testing で使う場合は、自分の Google account を test user に追加します。
 5. OAuth client を作成し、application type は必ず `Desktop app` を選びます。
 6. client IDとclient secretを安全なローカル設定へ控えます。client JSONや実値をgit、Issue、PR、ログへ保存しません。
 
-Day Schedule Next が要求する scope は次の2つです。
+Day Schedule Next が要求する scope は次の3つです。Calendarだけを利用する場合も、現在の接続フローは一括同意です。Tasks同期自体は設定で無効にできます。
 
 - `https://www.googleapis.com/auth/calendar.events`: 選択した calendar の event を読取・作成・更新・削除
 - `https://www.googleapis.com/auth/calendar.calendarlist.readonly`: calendar 一覧、色、timezone、access role の読取
+- `https://www.googleapis.com/auth/tasks`: 選択したTask ListとTaskの読取・作成・更新・移動・削除
 
 個人利用の Testing app では未確認アプリの警告やtest-user制限が表示され、同意から7日後に認証が失効します。継続利用する個人用appをIn productionへ切り替える場合も、未確認appの警告や未確認app向け上限が残ることがあります。警告に表示されたapp名が自分で作成したprojectと一致する場合だけ許可してください。第三者へ配布する場合は、Googleの公開・verification要件を別途満たす必要があります。
 
@@ -47,9 +48,9 @@ client IDはcompile-time設定です。値を変更した場合はRust側を再�
 2. Google カレンダーで「Google カレンダーに接続」を選びます。
 3. 既定ブラウザでアカウント、app名、要求権限を確認し、許可します。
 4. 成功画面を閉じ、アプリへ戻ります。
-5. 読み込むcalendarと、書き込み可能な既定calendarを選びます。
+5. 読み込むcalendarと書き込み可能な既定calendarを選び、必要ならTasks同期を有効にしてTask Listを選びます。
 
-認証tokenはmacOS Keychain / Windows Credential Managerへ保存し、SQLiteには保存しません。再接続では同じaccount recordと秘密ストア参照を更新し、既存calendar、同期mapping、`nextSyncToken`を維持します。
+認証tokenはmacOS Keychain / Windows Credential Managerへ保存し、SQLiteには保存しません。再接続では同じaccount recordと秘密ストア参照を更新し、既存calendar、同期mapping、`nextSyncToken`を維持します。再同意したtokenでCalendar一覧とTask List一覧の両方を取得できない場合は、以前のcredentialを保持します。
 
 ## 4. 独自のOAuth設定を上書きする
 

@@ -15,6 +15,7 @@ import type {
   Schedule,
   GoogleCalendar,
   GoogleConnection,
+  GoogleTaskConflict,
   ImportPreview,
   ImportResult,
   LegacyImportPreview,
@@ -648,19 +649,33 @@ function GooglePanel({ client }: { client: AppClient }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<{ title: string; detail?: string } | null>(null);
+  const [taskConflicts, setTaskConflicts] = useState<GoogleTaskConflict[]>([]);
   const [disconnectMode, setDisconnectMode] = useState<"keep_local" | "delete_mapped_local" | null>(
     null,
   );
   const oauthFailure = googleOAuthFailureCopy(connection?.lastError);
 
-  const refresh = async () => setConnection(await client.googleConnection());
+  const refresh = async () => {
+    const next = await client.googleConnection();
+    setConnection(next);
+    if (next.tasks.scopeGranted) {
+      setTaskConflicts(await client.googleTaskConflicts());
+    } else {
+      setTaskConflicts([]);
+    }
+  };
 
   useEffect(() => {
     let active = true;
     const read = () =>
       client
         .googleConnection()
-        .then((value) => active && setConnection(value))
+        .then(async (value) => {
+          const conflicts = value.tasks.scopeGranted ? await client.googleTaskConflicts() : [];
+          if (!active) return;
+          setConnection(value);
+          setTaskConflicts(conflicts);
+        })
         .catch((readError) => {
           if (!active) return;
           setError(
@@ -743,6 +758,116 @@ function GooglePanel({ client }: { client: AppClient }) {
           calendarError,
           translate("features.views.OperationalViews.084"),
           translate("features.views.OperationalViews.364"),
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const setTasksEnabled = async (enabled: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await client.setGoogleTasksEnabled(enabled);
+      await refresh();
+      setMessage(
+        enabled
+          ? translate("features.views.OperationalViews.googleTasksEnabled")
+          : translate("features.views.OperationalViews.googleTasksDisabled"),
+      );
+    } catch (tasksError) {
+      setError(
+        googleUiError(
+          tasksError,
+          translate("features.views.OperationalViews.googleTasksToggleFailed"),
+          translate("features.views.OperationalViews.googleTasksCalendarPreserved"),
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateTaskList = async (id: string, selected: boolean, defaultWriteTarget: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await client.updateGoogleTaskList(id, selected, defaultWriteTarget);
+      await refresh();
+    } catch (tasksError) {
+      setError(
+        googleUiError(
+          tasksError,
+          translate("features.views.OperationalViews.googleTasksListUpdateFailed"),
+          translate("features.views.OperationalViews.googleTasksListUpdateRecovery"),
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runTasksSync = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await client.runSync(crypto.randomUUID());
+      await refresh();
+      setMessage(translate("features.views.OperationalViews.googleTasksSyncComplete"));
+    } catch (tasksError) {
+      setError(
+        googleUiError(
+          tasksError,
+          translate("features.views.OperationalViews.googleTasksSyncFailed"),
+          translate("features.views.OperationalViews.googleTasksLocalPreserved"),
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reconcileTasksFull = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await client.reconcileGoogleTasksFull(crypto.randomUUID());
+      await refresh();
+      setMessage(translate("features.views.OperationalViews.googleTasksReconcileComplete"));
+    } catch (tasksError) {
+      setError(
+        googleUiError(
+          tasksError,
+          translate("features.views.OperationalViews.googleTasksReconcileFailed"),
+          translate("features.views.OperationalViews.googleTasksLocalPreserved"),
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const resolveTaskConflict = async (
+    conflictId: string,
+    resolution: "local" | "google" | "detach" | "delete_local",
+  ) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await client.resolveGoogleTaskConflict({
+        conflictId,
+        resolution,
+        operationId: crypto.randomUUID(),
+      });
+      await refresh();
+      setMessage(translate("features.views.OperationalViews.googleTasksConflictSaved"));
+    } catch (tasksError) {
+      setError(
+        googleUiError(
+          tasksError,
+          translate("features.views.OperationalViews.googleTasksConflictFailed"),
+          translate("features.views.OperationalViews.googleTasksConflictRecovery"),
         ),
       );
     } finally {
@@ -896,6 +1021,200 @@ function GooglePanel({ client }: { client: AppClient }) {
               </article>
             ))}
           </div>
+          <section className="google-tasks-panel" aria-labelledby="google-tasks-title">
+            <div className="section-heading-row">
+              <div>
+                <h3 id="google-tasks-title">Google Tasks</h3>
+                <p>{translate("features.views.OperationalViews.googleTasksScope")}</p>
+              </div>
+              <span className="state-chip" data-state={connection.tasks.state}>
+                {googleTasksStateLabel(connection.tasks.state)}
+              </span>
+            </div>
+            {!connection.tasks.scopeGranted ? (
+              <StatusMessage
+                tone="warning"
+                title={translate("features.views.OperationalViews.googleTasksConsentTitle")}
+                action={
+                  <button
+                    className="button button--primary"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void connect()}
+                  >
+                    {translate("features.views.OperationalViews.googleTasksConsentAction")}
+                  </button>
+                }
+              >
+                {translate("features.views.OperationalViews.googleTasksConsentDetail")}
+              </StatusMessage>
+            ) : (
+              <>
+                <div className="button-row">
+                  <button
+                    className={connection.tasks.enabled ? "button" : "button button--primary"}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void setTasksEnabled(!connection.tasks.enabled)}
+                  >
+                    {connection.tasks.enabled
+                      ? translate("features.views.OperationalViews.googleTasksDisableAction")
+                      : translate("features.views.OperationalViews.googleTasksEnableAction")}
+                  </button>
+                  {connection.tasks.enabled ? (
+                    <>
+                      <button
+                        className="button button--primary"
+                        type="button"
+                        disabled={busy || connection.tasks.selectedListCount === 0}
+                        onClick={() => void runTasksSync()}
+                      >
+                        {translate("features.views.OperationalViews.googleTasksSyncNow")}
+                      </button>
+                      <button
+                        className="button"
+                        type="button"
+                        disabled={busy || connection.tasks.selectedListCount === 0}
+                        onClick={() => void reconcileTasksFull()}
+                      >
+                        {translate("features.views.OperationalViews.googleTasksReconcile")}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+                {connection.tasks.enabled ? (
+                  <>
+                    <p className="field-help">
+                      {translate("features.views.OperationalViews.googleTasksLimitations")}
+                    </p>
+                    <div
+                      className="google-calendar-list"
+                      role="group"
+                      aria-label={translate("features.views.OperationalViews.googleTasksListLabel")}
+                    >
+                      {connection.tasks.taskLists.length === 0 ? (
+                        <StatusMessage
+                          title={translate("features.views.OperationalViews.googleTasksListEmpty")}
+                        >
+                          {translate("features.views.OperationalViews.googleTasksListEmptyDetail")}
+                        </StatusMessage>
+                      ) : null}
+                      {connection.tasks.taskLists.map((list) => (
+                        <article key={list.id}>
+                          <span>
+                            <strong>{list.displayName}</strong>
+                            <small>{googleTaskListStateLabel(list.syncState)}</small>
+                          </span>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={list.selected}
+                              disabled={busy || list.syncState === "unavailable"}
+                              onChange={(event) =>
+                                void updateTaskList(
+                                  list.id,
+                                  event.target.checked,
+                                  event.target.checked && list.defaultWriteTarget,
+                                )
+                              }
+                            />
+                            {translate("features.views.OperationalViews.googleTasksSelect")}
+                          </label>
+                          <label>
+                            <input
+                              type="radio"
+                              name="default-google-task-list"
+                              checked={list.defaultWriteTarget}
+                              disabled={busy || list.syncState === "unavailable"}
+                              onChange={() => void updateTaskList(list.id, true, true)}
+                            />
+                            {translate("features.views.OperationalViews.googleTasksDefaultTarget")}
+                          </label>
+                        </article>
+                      ))}
+                    </div>
+                    <dl className="diagnostic-summary google-tasks-counts">
+                      <div>
+                        <dt>
+                          {translate("features.views.OperationalViews.googleTasksSelectedLists")}
+                        </dt>
+                        <dd>{connection.tasks.selectedListCount}</dd>
+                      </div>
+                      <div>
+                        <dt>
+                          {translate("features.views.OperationalViews.googleTasksMappedTickets")}
+                        </dt>
+                        <dd>{connection.tasks.mappedTicketCount}</dd>
+                      </div>
+                      <div>
+                        <dt>{translate("features.views.OperationalViews.googleTasksPending")}</dt>
+                        <dd>{connection.tasks.pendingOutboxCount}</dd>
+                      </div>
+                      <div>
+                        <dt>{translate("features.views.OperationalViews.googleTasksConflicts")}</dt>
+                        <dd>{connection.tasks.conflictCount}</dd>
+                      </div>
+                    </dl>
+                  </>
+                ) : null}
+              </>
+            )}
+            {taskConflicts.length > 0 ? (
+              <div
+                className="google-task-conflicts"
+                aria-label={translate("features.views.OperationalViews.googleTasksConflictLabel")}
+              >
+                <h4>{translate("features.views.OperationalViews.googleTasksConflictLabel")}</h4>
+                {taskConflicts.map((conflict) => (
+                  <article key={conflict.id} className="conflict-card">
+                    <strong>{conflict.ticketTitle}</strong>
+                    <p>
+                      {translate("features.views.OperationalViews.googleTasksConflictItem", [
+                        googleTaskConflictFieldLabel(conflict.fieldName),
+                      ])}
+                    </p>
+                    <dl>
+                      <div>
+                        <dt>{translate("features.views.OperationalViews.googleTasksBase")}</dt>
+                        <dd>{safeConflictValue(conflict.baseValue)}</dd>
+                      </div>
+                      <div>
+                        <dt>{translate("features.views.OperationalViews.googleTasksLocal")}</dt>
+                        <dd>{safeConflictValue(conflict.localValue)}</dd>
+                      </div>
+                      <div>
+                        <dt>{translate("features.views.OperationalViews.googleTasksGoogle")}</dt>
+                        <dd>{safeConflictValue(conflict.googleValue)}</dd>
+                      </div>
+                    </dl>
+                    <div className="button-row">
+                      <button
+                        className="button button--primary"
+                        disabled={busy || conflict.conflictType === "uncertain_create"}
+                        onClick={() => void resolveTaskConflict(conflict.id, "local")}
+                      >
+                        {translate("features.views.OperationalViews.googleTasksKeepLocal")}
+                      </button>
+                      <button
+                        className="button"
+                        disabled={busy || conflict.conflictType === "uncertain_create"}
+                        onClick={() => void resolveTaskConflict(conflict.id, "google")}
+                      >
+                        {translate("features.views.OperationalViews.googleTasksUseGoogle")}
+                      </button>
+                      <button
+                        className="button"
+                        disabled={busy}
+                        onClick={() => void resolveTaskConflict(conflict.id, "detach")}
+                      >
+                        {translate("features.views.OperationalViews.googleTasksDetach")}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </section>
           {disconnectMode ? (
             <div className="disconnect-confirm">
               <StatusMessage
@@ -944,6 +1263,8 @@ function GooglePanel({ client }: { client: AppClient }) {
           {translate("features.views.OperationalViews.113")}
           <code>calendar.events</code> {translate("features.views.OperationalViews.114")}
           <code>calendar.calendarlist.readonly</code>
+          {translate("features.views.OperationalViews.114")}
+          <code>tasks</code>
           {translate("features.views.OperationalViews.115")}
         </p>
       </details>
@@ -986,6 +1307,16 @@ function googleOAuthFailureCopy(
 ): { title: string; detail: string } | null {
   if (!category?.startsWith("oauth_")) return null;
   switch (category) {
+    case "oauth_access_denied":
+      return {
+        title: translate("features.views.OperationalViews.googleTasksAccessDeniedTitle"),
+        detail: translate("features.views.OperationalViews.googleTasksAccessDeniedDetail"),
+      };
+    case "oauth_policy_denied":
+      return {
+        title: translate("features.views.OperationalViews.googleTasksPolicyDeniedTitle"),
+        detail: translate("features.views.OperationalViews.googleTasksPolicyDeniedDetail"),
+      };
     case "oauth_callback_timeout":
     case "oauth_callback_invalid":
       return {
@@ -1022,6 +1353,11 @@ function googleOAuthFailureCopy(
       return {
         title: translate("features.views.OperationalViews.388"),
         detail: translate("features.views.OperationalViews.389"),
+      };
+    case "oauth_tasks_fetch_failed":
+      return {
+        title: translate("features.views.OperationalViews.googleTasksFetchFailedTitle"),
+        detail: translate("features.views.OperationalViews.googleTasksFetchFailedDetail"),
       };
     default:
       return {
@@ -1615,6 +1951,39 @@ export function DiagnosticsView({ client }: { client: AppClient }) {
           <div>
             <dt>{translate("features.views.OperationalViews.222")}</dt>
             <dd>{snapshot.lastBackupAt ?? translate("features.views.OperationalViews.223")}</dd>
+          </div>
+          <div>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticLists")}</dt>
+            <dd>
+              {snapshot.googleTasksSelectedListCount} / {snapshot.googleTasksMappedTicketCount}
+            </dd>
+          </div>
+          <div>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticPending")}</dt>
+            <dd>
+              {snapshot.googleTasksPendingOutboxCount} / {snapshot.googleTasksConflictCount}
+            </dd>
+          </div>
+          <div>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticSuccess")}</dt>
+            <dd>
+              {snapshot.googleTasksLastSuccessAt ??
+                translate("features.views.OperationalViews.googleTasksNever")}
+            </dd>
+          </div>
+          <div>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticError")}</dt>
+            <dd>
+              {snapshot.googleTasksLastErrorCategory ??
+                translate("features.views.OperationalViews.googleTasksNone")}
+            </dd>
+          </div>
+          <div>
+            <dt>{translate("features.views.OperationalViews.googleTasksDiagnosticRetry")}</dt>
+            <dd>
+              {snapshot.googleTasksNextRetryAt ??
+                translate("features.views.OperationalViews.googleTasksNoRetry")}
+            </dd>
           </div>
         </dl>
       ) : null}
@@ -2270,4 +2639,56 @@ function googleCalendarSyncLabel(calendar: GoogleCalendar): string {
     retry_scheduled: translate("features.views.OperationalViews.399"),
     auth_required: translate("features.views.OperationalViews.400"),
   }[calendar.syncState];
+}
+
+function googleTasksStateLabel(state: GoogleConnection["tasks"]["state"]): string {
+  return {
+    not_connected: translate("features.views.OperationalViews.googleTasksNotConnected"),
+    scope_missing: translate("features.views.OperationalViews.googleTasksScopeMissing"),
+    disabled: translate("features.views.OperationalViews.googleTasksDisabledState"),
+    never: translate("features.views.OperationalViews.googleTasksNever"),
+    syncing: translate("features.views.OperationalViews.googleTasksSyncing"),
+    synced: translate("features.views.OperationalViews.googleTasksSynced"),
+    pending: translate("features.views.OperationalViews.googleTasksPending"),
+    offline: translate("features.views.OperationalViews.googleTasksOffline"),
+    retry_scheduled: translate("features.views.OperationalViews.googleTasksRetry"),
+    conflict: translate("features.views.OperationalViews.googleTasksConflictState"),
+    auth_required: translate("features.views.OperationalViews.googleTasksAuthRequired"),
+    unsupported: translate("features.views.OperationalViews.googleTasksUnsupported"),
+    validation_required: translate("features.views.OperationalViews.googleTasksValidation"),
+  }[state];
+}
+
+function googleTaskListStateLabel(
+  state: GoogleConnection["tasks"]["taskLists"][number]["syncState"],
+): string {
+  return {
+    never: translate("features.views.OperationalViews.googleTasksNever"),
+    syncing: translate("features.views.OperationalViews.googleTasksSyncing"),
+    synced: translate("features.views.OperationalViews.googleTasksSynced"),
+    offline: translate("features.views.OperationalViews.googleTasksOffline"),
+    retry_scheduled: translate("features.views.OperationalViews.googleTasksRetry"),
+    auth_required: translate("features.views.OperationalViews.googleTasksAuthRequired"),
+    conflict: translate("features.views.OperationalViews.googleTasksConflictState"),
+    unavailable: translate("features.views.OperationalViews.googleTasksUnavailable"),
+  }[state];
+}
+
+function googleTaskConflictFieldLabel(field: GoogleTaskConflict["fieldName"]): string {
+  return {
+    title: translate("features.views.OperationalViews.googleTasksFieldTitle"),
+    notes: translate("features.views.OperationalViews.googleTasksFieldNotes"),
+    due: translate("features.views.OperationalViews.googleTasksFieldDue"),
+    completed: translate("features.views.OperationalViews.googleTasksFieldCompleted"),
+    parent: translate("features.views.OperationalViews.googleTasksFieldParent"),
+    tasklist: "Task List",
+    delete: translate("features.views.OperationalViews.googleTasksFieldDelete"),
+  }[field];
+}
+
+function safeConflictValue(value: unknown): string {
+  if (value === null) return translate("features.views.OperationalViews.googleTasksNone");
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  if (!text) return translate("features.views.OperationalViews.googleTasksNone");
+  return text.length > 500 ? `${text.slice(0, 500)}…` : text;
 }

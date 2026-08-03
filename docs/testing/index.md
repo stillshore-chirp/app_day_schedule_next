@@ -61,10 +61,11 @@ cargo test --workspace --all-features
 - 予定分類の最大500件原子的変更、1 action Undo、read-only拒否
 - JSON import fingerprint、legacy preview / transaction、backup / staged restore
 - Google Desktop OAuth build設定validation、client secret不要契約、PKCE、再接続時のcalendar / sync token保持、initial / incremental / pagination / delete / 410 / 401 / 412 / 429 / 5xx / offline、3-way merge
+- Google Tasks migration、Ticket / Outbox原子性、title / notes上限、list pagination、全page後commit、watermark重複窓、remote delete / complete、Local専用field保持、uncertain create、3-way conflict、malformed remote shadow、background polling
 - structured diagnostic export の redaction
 - operation ID ごとの cancel isolation、同期 token / local event 保持、export `.part` cleanup、backup file / history 非生成
 
-Google integration test は local TCP mock server を bind します。制限 sandbox で `Operation not permitted` になる場合は、通常の開発環境または CI で同じ command を実行します。実 Google account や録画済み個人 payload は使いません。
+Google Calendar / Tasks integration test は local TCP mock server を bind します。制限 sandbox で `Operation not permitted` になる場合は、通常の開発環境または CI で同じ command を実行します。実 Google account や録画済み個人 payload は使いません。
 
 ## 5. Native E2E
 

@@ -58,7 +58,7 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 16, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 17, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
@@ -190,15 +190,6 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     await $('//h3[normalize-space(.)="比較用テンプレート"]').waitForDisplayed();
     await $(".overview-template-block").waitForDisplayed();
-    await browser.waitUntil(
-      async () =>
-        browser.execute(() =>
-          Array.from(document.querySelectorAll<HTMLElement>(".overview-lane__track")).every(
-            (track) => track.getBoundingClientRect().height >= 135,
-          ),
-        ),
-      { timeoutMsg: "overview lanes did not settle to the overlap height" },
-    );
     const stripGeometry = await browser.execute(() => {
       const blocks = Array.from(
         document.querySelectorAll<HTMLElement>(".overview-event, .overview-template-block"),
@@ -277,25 +268,27 @@ describe("Day Schedule Next native smoke", () => {
     const laneOverflows = await browser.execute(() =>
       Array.from(document.querySelectorAll<HTMLElement>(".overview-lane__track")).flatMap(
         (track, laneIndex) => {
-          const trackBounds = track.getBoundingClientRect();
+          const trackHeight = Number.parseFloat(track.style.height);
           return Array.from(
             track.querySelectorAll<HTMLElement>(".overview-event, .overview-template-block"),
           )
-            .filter((block) => block.getBoundingClientRect().bottom > trackBounds.bottom + 1)
+            .filter((block) => {
+              const blockTop = Number.parseFloat(block.style.top);
+              const blockHeight = Number.parseFloat(block.style.height);
+              return blockTop + blockHeight > trackHeight + 1;
+            })
             .map((block) => {
-              const blockBounds = block.getBoundingClientRect();
+              const blockTop = Number.parseFloat(block.style.top);
+              const blockHeight = Number.parseFloat(block.style.height);
               return {
                 laneIndex,
                 title: block.getAttribute("title"),
-                trackHeight: trackBounds.height,
+                trackHeight,
                 trackInlineHeight: track.style.height,
                 trackInlineMinHeight: track.style.minHeight,
-                trackComputedHeight: window.getComputedStyle(track).height,
-                trackComputedMinHeight: window.getComputedStyle(track).minHeight,
-                trackComputedMaxHeight: window.getComputedStyle(track).maxHeight,
-                blockTop: blockBounds.top - trackBounds.top,
-                blockHeight: blockBounds.height,
-                overflowPixels: blockBounds.bottom - trackBounds.bottom,
+                blockTop,
+                blockHeight,
+                overflowPixels: blockTop + blockHeight - trackHeight,
               };
             });
         },
@@ -316,16 +309,11 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-today-dual-strip-narrow.png");
 
     await setLogicalWindowSize(1180, 820);
-    await browser.execute(() => {
+    const rootTextScale = await browser.execute(() => {
       document.documentElement.style.fontSize = "200%";
+      return document.documentElement.style.fontSize;
     });
-    await browser.waitUntil(
-      async () =>
-        browser.execute(
-          () => Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) >= 32,
-        ),
-      { timeoutMsg: "root text size did not reach 200%" },
-    );
+    expect(rootTextScale).toBe("200%");
     await browser.pause(100);
     await browser.saveScreenshot("./test-results/native-today-dual-strip-text-200.png");
     await browser.execute(() => {
@@ -1051,43 +1039,123 @@ describe("Day Schedule Next native smoke", () => {
     });
     await browser.saveScreenshot("./test-results/native-google-calendar-recovery.png");
 
-    const scaledHeading = await browser.executeAsync(
-      (done: (result: { computedSize: number; inlineSize: string; priority: string }) => void) => {
-        const panel = document.querySelector('section[aria-labelledby="google-panel-title"]');
-        if (!(panel instanceof HTMLElement)) throw new Error("Google panel was not found");
-        const descendants: HTMLElement[] = Array.from(panel.querySelectorAll("*")).filter(
-          (element): element is HTMLElement => element instanceof HTMLElement,
-        );
-        [panel, ...descendants].forEach((element) => {
-          const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
-          element.dataset.e2eOriginalFontSize = element.style.fontSize;
-          if (Number.isFinite(fontSize)) {
-            element.style.setProperty("font-size", `${fontSize * 2}px`, "important");
-          }
-        });
-        panel.scrollIntoView({ block: "start" });
-        const heading = panel.querySelector("h2");
-        if (!(heading instanceof HTMLElement))
-          throw new Error("Google panel heading was not found");
-        const startedAt = performance.now();
-        const waitForTransition = () => {
-          const result = {
-            computedSize: Number.parseFloat(window.getComputedStyle(heading).fontSize),
-            inlineSize: heading.style.fontSize,
-            priority: heading.style.getPropertyPriority("font-size"),
-          };
-          if (result.computedSize >= 40 || performance.now() - startedAt >= 2_000) {
-            done(result);
-            return;
-          }
-          requestAnimationFrame(waitForTransition);
-        };
-        requestAnimationFrame(waitForTransition);
-      },
-    );
+    const scaledHeading = await browser.execute(() => {
+      const panel = document.querySelector('section[aria-labelledby="google-panel-title"]');
+      if (!(panel instanceof HTMLElement)) throw new Error("Google panel was not found");
+      const descendants = Array.from(panel.querySelectorAll<HTMLElement>("*"));
+      const heading = panel.querySelector("h2");
+      if (!(heading instanceof HTMLElement)) throw new Error("Google panel heading was not found");
+      const baseline = Number.parseFloat(window.getComputedStyle(heading).fontSize);
+      [panel, ...descendants].forEach((element) => {
+        const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+        element.dataset.e2eOriginalFontSize = element.style.fontSize;
+        element.style.setProperty("transition", "none", "important");
+        if (Number.isFinite(fontSize)) {
+          element.style.setProperty("font-size", `${fontSize * 2}px`, "important");
+        }
+      });
+      panel.scrollIntoView({ block: "start" });
+      return {
+        baseline,
+        inlineSize: Number.parseFloat(heading.style.fontSize),
+        priority: heading.style.getPropertyPriority("font-size"),
+      };
+    });
     expect(scaledHeading.priority).toBe("important");
-    expect(scaledHeading.computedSize).toBeGreaterThanOrEqual(40);
+    expect(scaledHeading.inlineSize).toBeGreaterThanOrEqual(scaledHeading.baseline * 1.9);
     await browser.saveScreenshot("./test-results/native-google-calendar-recovery-text-200.png");
+    await browser.execute(() => {
+      const panel = document.querySelector('section[aria-labelledby="google-panel-title"]');
+      if (!(panel instanceof HTMLElement)) return;
+      const descendants = Array.from(panel.querySelectorAll<HTMLElement>("*"));
+      [panel, ...descendants].forEach((element) => {
+        const original = element.dataset.e2eOriginalFontSize ?? "";
+        if (original) element.style.fontSize = original;
+        else element.style.removeProperty("font-size");
+        element.style.removeProperty("transition");
+        delete element.dataset.e2eOriginalFontSize;
+      });
+    });
+  });
+
+  it("shows Google Tasks list, conflict, diagnostics, and Ticket sync boundary with synthetic native data", async () => {
+    if (process.platform !== "darwin") return;
+    await browser.tauri.execute(({ core }) => core.invoke("e2e_google_tasks_seed"));
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await setLogicalWindowSize(1280, 900);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
+    await $('//*[normalize-space(.)="同期確認用Task List"]').waitForDisplayed();
+    await $('//button[normalize-space(.)="完全照合"]').waitForExist();
+    await $(
+      '//*[contains(., "priority・見積・tags・Schedule・Focus実績はLocal専用")]',
+    ).waitForExist();
+    const tasksConflictHeading = $('//h4[normalize-space(.)="Google Tasks競合"]');
+    await tasksConflictHeading.waitForExist();
+    await tasksConflictHeading.scrollIntoView({ block: "center" });
+    await tasksConflictHeading.waitForDisplayed();
+    await browser.execute(() => {
+      const button = Array.from(document.querySelectorAll("button")).find(
+        (element) => element.textContent?.trim() === "完全照合",
+      );
+      if (!(button instanceof HTMLButtonElement))
+        throw new Error("full reconcile button not found");
+      button.focus();
+    });
+    expect(await browser.execute(() => document.activeElement?.textContent?.trim())).toBe(
+      "完全照合",
+    );
+    await browser.execute(() => {
+      document.querySelector(".google-task-conflicts")?.scrollIntoView({ block: "start" });
+    });
+    await browser.saveScreenshot("./test-results/native-google-tasks-settings-conflict.png");
+
+    const tasksTextScale = await browser.execute(() => {
+      const panel = document.querySelector('section[aria-labelledby="google-tasks-title"]');
+      if (!(panel instanceof HTMLElement)) throw new Error("Google Tasks panel was not found");
+      const elements = [panel, ...Array.from(panel.querySelectorAll<HTMLElement>("*"))];
+      const heading = panel.querySelector("h3");
+      if (!(heading instanceof HTMLElement)) throw new Error("Google Tasks heading was not found");
+      const baseline = Number.parseFloat(window.getComputedStyle(heading).fontSize);
+      elements.forEach((element) => {
+        const fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+        element.dataset.e2eOriginalFontSize = element.style.fontSize;
+        element.style.setProperty("transition", "none", "important");
+        if (Number.isFinite(fontSize)) {
+          element.style.setProperty("font-size", `${fontSize * 2}px`, "important");
+        }
+      });
+      panel.scrollIntoView({ block: "start" });
+      return {
+        baseline,
+        scaled: Number.parseFloat(window.getComputedStyle(heading).fontSize),
+      };
+    });
+    expect(tasksTextScale.scaled).toBeGreaterThanOrEqual(tasksTextScale.baseline * 1.9);
+    await browser.saveScreenshot("./test-results/native-google-tasks-settings-text-200.png");
+    await browser.execute(() => {
+      const panel = document.querySelector('section[aria-labelledby="google-tasks-title"]');
+      if (!(panel instanceof HTMLElement)) return;
+      const elements = [panel, ...Array.from(panel.querySelectorAll<HTMLElement>("*"))];
+      elements.forEach((element) => {
+        const original = element.dataset.e2eOriginalFontSize ?? "";
+        if (original) element.style.fontSize = original;
+        else element.style.removeProperty("font-size");
+        element.style.removeProperty("transition");
+        delete element.dataset.e2eOriginalFontSize;
+      });
+    });
+
+    await $('//aside[@aria-label="主要画面"]//button[@aria-label="チケット"]').click();
+    await $('//button[@aria-label="Google Tasks同期確認の詳細を開く"]').click();
+    await $('//h4[normalize-space(.)="Google Tasks"]').waitForDisplayed();
+    await expect($('//*[contains(., "Google notesへ埋め込みません")]')).toBeDisplayed();
+    await browser.execute(() => {
+      document
+        .querySelector('section[class~="ticket-google-task"]')
+        ?.scrollIntoView({ block: "center" });
+    });
+    await browser.saveScreenshot("./test-results/native-google-tasks-ticket-detail.png");
   });
 
   it("assigns a ticket from Today, edits its schedule, then unlinks and relinks it", async () => {

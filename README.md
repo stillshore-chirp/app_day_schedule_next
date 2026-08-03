@@ -1,6 +1,6 @@
 # Day Schedule Next
 
-Day Schedule Next は、一日の予定を分単位で設計・実行し、現在・次・残り・空き時間を把握する個人利用向け macOS / Windows デスクトップアプリです。Tauri 2、React、TypeScript、Rust、SQLite を使い、ローカルを一次データとして Google Calendar と双方向同期します。
+Day Schedule Next は、一日の予定を分単位で設計・実行し、現在・次・残り・空き時間を把握する個人利用向け macOS / Windows デスクトップアプリです。Tauri 2、React、TypeScript、Rust、SQLite を使い、ローカルを一次データとして Google Calendar / Tasks と双方向同期します。
 
 ## 実装済み機能
 
@@ -10,6 +10,7 @@ Day Schedule Next は、一日の予定を分単位で設計・実行し、現�
 - Focus の開始・一時停止・再開・休憩・終了、予定への紐付け、予定別実績集計、当日履歴
 - 永続通知台帳、重複抑止、復帰時の猶予・上限、OS 通知とアプリ内音の独立設定
 - OAuth JSON不要のDesktop OAuth + Authorization Code + PKCE + loopback、Outbox、差分同期、競合解決
+- TicketとGoogle Tasksの双方向同期、Task List選択、Local専用のpriority・見積・tags・Schedule・Focus実績の保護
 - SQLite migration、バックアップ、復元 staging、JSON export / import、旧 DB の read-only preview
 - Compact Window、トレイ常駐、single instance、構造化・マスク済み診断 export
 
@@ -59,7 +60,7 @@ pnpm test:e2e
 - React から SQLite、Google API、OS credential store を直接呼びません。
 - OAuth token は OS の秘密ストアへ保存し、SQLite や設定 export へ含めません。
 - CSP は self / IPC と同梱 asset に限定し、remote script、CDN、general shell / fs / SQL 権限を使いません。
-- 公開用診断には予定本文、メール、calendar / event ID、token、絶対パスを含めません。
+- 公開用診断には予定／Ticket本文、メール、calendar / event / task / list ID、token、絶対パスを含めません。
 
 アプリデータや OAuth credential を Issue、PR、fixture、スクリーンショットへ掲載しないでください。
 

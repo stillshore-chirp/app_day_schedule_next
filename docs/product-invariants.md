@@ -181,6 +181,19 @@
 - Undo / Redo は古い entity version の未完了 Outbox を同一 transaction で無効化し、復元版へ単調増加する version と補償 Outbox を与える。
 - Google disconnect は未完了 Outbox を無効化し、未送信 entity を `local_only` へ戻してから account / mapping を削除する。再接続先へ古い操作を暗黙に転送しない。
 
+### 10.1 Google Tasks sync
+
+- TicketをLocalの一次データとし、Google Taskとはtitle、notes、due local date、completed、parent、Task Listだけを同期する。
+- priority、estimate、tags、checklist、Schedule link、Focus実績はLocal専用とし、remote notesへ埋め込まない。
+- Ticket本体・履歴・Tasks Outboxは同じSQLite transactionで確定し、network待機をtransaction内で行わない。
+- Task Listごとに選択、既定書込先、incremental watermark、最終full reconcile、状態、allowlist error、次回retryを保持する。
+- `tasks.list`は最大100件、completed / hidden / deletedを含め全pageを取得し、local transaction成功後だけ開始時刻をwatermarkへ保存する。増分には重複窓を持たせ、定期的なfull reconcileで削除・欠落を照合する。
+- base / local / remoteのfield単位3-way mergeを行い、同一field変更、削除、完了列、親移動、List移動を無言で上書きしない。
+- remote payloadがLocal validation上限を超える場合は切り詰めず、local shadowへ保存して当該Listを停止する。
+- createの結果がnetwork切断、5xx、またはmalformed responseで不明な場合は`uncertain_create`として自動再作成を停止する。
+- Tasks無効化はCalendar接続・token・Local Ticketを変更しない。同期解除とGoogle側削除は別操作とし、対象と結果を確認する。
+- Calendar + Tasksの再同意では3 scopeを一括検証し、新しいcredentialでCalendar一覧とTask List一覧を取得できるまで既存credentialを置換しない。
+
 ## 11. Notification / Focus
 
 - notification rule と delivery ledger を分離する。

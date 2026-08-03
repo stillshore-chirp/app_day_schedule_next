@@ -72,15 +72,30 @@ pub fn run() {
             let main_always_on_top =
                 tauri::async_runtime::block_on(database.window_always_on_top("main"))?;
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(feature = "e2e")]
+                window.set_position(tauri::PhysicalPosition::new(100, 100))?;
                 window.set_always_on_top(main_always_on_top)?;
             }
-            app.manage(AppService::new_started_at(database, process_started_at));
+            let service = AppService::new_started_at(database, process_started_at);
+            app.manage(service.clone());
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    service.run_background_google_sync_if_due().await;
+                    tokio::time::sleep(std::time::Duration::from_secs(300)).await;
+                }
+            });
             configure_tray(app)?;
             Ok(())
         })
         .on_window_event(|window, event| {
             if window.label() != "main" {
                 return;
+            }
+            if matches!(event, WindowEvent::Focused(true)) {
+                let service = window.app_handle().state::<AppService>().inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    service.run_background_google_sync_if_due().await;
+                });
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
@@ -106,6 +121,8 @@ pub fn run() {
             commands::e2e_schedule_fixtures_delete,
             #[cfg(feature = "e2e")]
             commands::e2e_google_calendar_recovery_seed,
+            #[cfg(feature = "e2e")]
+            commands::e2e_google_tasks_seed,
             commands::schedule_update,
             commands::schedule_bulk_classify,
             commands::schedule_delete,
@@ -169,6 +186,14 @@ pub fn run() {
             commands::google_oauth_begin,
             commands::google_connection_get,
             commands::google_calendar_update,
+            commands::google_tasks_connection_get,
+            commands::google_tasks_full_reconcile,
+            commands::google_tasks_enabled_set,
+            commands::google_task_list_update,
+            commands::ticket_google_task_status_list,
+            commands::ticket_google_task_target_update,
+            commands::google_task_conflict_list,
+            commands::google_task_conflict_resolve,
             commands::google_disconnect,
             commands::compact_window_open,
             commands::main_window_show,

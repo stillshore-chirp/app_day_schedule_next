@@ -20,7 +20,7 @@ use super::Database;
 const BACKUP_GENERATIONS: usize = 10;
 const PENDING_RESTORE_NAME: &str = ".restore-pending.sqlite3";
 const PENDING_RESTORE_HASH_NAME: &str = ".restore-pending.sha256";
-pub const CURRENT_SCHEMA_VERSION: u32 = 16;
+pub const CURRENT_SCHEMA_VERSION: u32 = 17;
 
 #[derive(Debug, Clone)]
 pub struct PreparedMigrationBackup {
@@ -733,6 +733,41 @@ mod tests {
             .end_focus(focus.id, Utc::now() + chrono::Duration::minutes(10), 600)
             .await
             .unwrap();
+        let now = Utc::now().to_rfc3339();
+        sqlx::query("INSERT INTO google_accounts(id, display_label, scopes_json, status, created_at_utc, updated_at_utc) VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Synthetic Google', '[]', 'connected', ?, ?)")
+            .bind(&now)
+            .bind(&now)
+            .execute(&database.pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO google_task_lists(id, google_account_id, remote_list_id, display_name, selected, default_write_target, sync_state, created_at_utc, updated_at_utc) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'synthetic-list', 'Synthetic tasks', 1, 1, 'synced', ?, ?)")
+            .bind(&now)
+            .bind(&now)
+            .execute(&database.pool)
+            .await
+            .unwrap();
+        let base = serde_json::json!({
+            "title": created.title.clone(),
+            "notes": created.description.clone(),
+            "due_date": "2026-08-04",
+            "completed": false,
+            "parent_ticket_id": null,
+            "task_list_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        });
+        sqlx::query("INSERT INTO google_task_mappings(ticket_id, google_task_list_id, remote_task_id, base_snapshot_json, created_at_utc, updated_at_utc) VALUES (?, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'synthetic-task', ?, ?, ?)")
+            .bind(created.id.to_string())
+            .bind(base.to_string())
+            .bind(&now)
+            .bind(&now)
+            .execute(&database.pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO google_task_conflicts(id, ticket_id, field_name, base_value_json, local_value_json, remote_value_json, conflict_type, detected_at_utc) VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', ?, 'notes', 'null', 'null', 'null', 'same_field', ?)")
+            .bind(created.id.to_string())
+            .bind(&now)
+            .execute(&database.pool)
+            .await
+            .unwrap();
         let backup = database.create_backup("manual", "test").await.unwrap();
         database
             .update_ticket(
@@ -769,6 +804,21 @@ mod tests {
         assert_eq!(focus_history.len(), 1);
         assert_eq!(focus_history[0].session_id, focus.id);
         assert_eq!(focus_history[0].work_seconds, 600);
+        let task_mapping_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM google_task_mappings WHERE ticket_id = ?")
+                .bind(created.id.to_string())
+                .fetch_one(&restored.pool)
+                .await
+                .unwrap();
+        assert_eq!(task_mapping_count, 1);
+        let task_conflict_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM google_task_conflicts WHERE ticket_id = ? AND resolved_at_utc IS NULL",
+        )
+        .bind(created.id.to_string())
+        .fetch_one(&restored.pool)
+        .await
+        .unwrap();
+        assert_eq!(task_conflict_count, 1);
     }
 
     #[tokio::test]

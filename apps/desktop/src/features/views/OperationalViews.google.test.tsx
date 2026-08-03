@@ -1,7 +1,7 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
-import type { GoogleCalendar, GoogleConnection } from "../../shared/contracts";
+import type { GoogleCalendar, GoogleConnection, GoogleTaskConflict } from "../../shared/contracts";
 import { MemoryAppClient } from "../../shared/ipc/memory-client";
 import { SettingsView } from "./OperationalViews";
 
@@ -18,6 +18,18 @@ function googleConnection(overrides: Partial<GoogleConnection> = {}): GoogleConn
     calendars: [],
     lastError: null,
     mappedScheduleCount: 0,
+    tasks: {
+      enabled: false,
+      scopeGranted: false,
+      state: "not_connected",
+      taskLists: [],
+      mappedTicketCount: 0,
+      pendingOutboxCount: 0,
+      conflictCount: 0,
+      selectedListCount: 0,
+      lastSuccessAt: null,
+      nextRetryAt: null,
+    },
     ...overrides,
   };
 }
@@ -42,13 +54,21 @@ function googleCalendar(overrides: Partial<GoogleCalendar> = {}): GoogleCalendar
 
 class GoogleStateClient extends MemoryAppClient {
   beginCount = 0;
+  fullReconcileCount = 0;
 
-  constructor(private connection: GoogleConnection) {
+  constructor(
+    private connection: GoogleConnection,
+    private conflicts: GoogleTaskConflict[] = [],
+  ) {
     super([]);
   }
 
   override googleConnection(): Promise<GoogleConnection> {
     return Promise.resolve(this.connection);
+  }
+
+  override googleTaskConflicts(): Promise<GoogleTaskConflict[]> {
+    return Promise.resolve(this.conflicts);
   }
 
   override beginGoogleOAuth() {
@@ -57,6 +77,11 @@ class GoogleStateClient extends MemoryAppClient {
       openedInSystemBrowser: true,
       expiresAt: new Date(Date.now() + 180_000).toISOString(),
     });
+  }
+
+  override reconcileGoogleTasksFull() {
+    this.fullReconcileCount += 1;
+    return Promise.resolve(this.connection.tasks);
   }
 }
 
@@ -180,5 +205,88 @@ describe("Google Calendar settings", () => {
       await screen.findByText("同期を停止しました。Google側の共有権限を確認してください。"),
     ).toBeVisible();
     expect(screen.getByRole("checkbox", { name: "同期" })).toBeEnabled();
+  });
+
+  it("shows Tasks scope, selected-list counts, local-only boundary, and full reconcile", async () => {
+    const user = userEvent.setup();
+    const client = new GoogleStateClient(
+      googleConnection({
+        state: "connected",
+        accountId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        tasks: {
+          enabled: true,
+          scopeGranted: true,
+          state: "synced",
+          taskLists: [
+            {
+              id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+              displayName: "Synthetic tasks",
+              selected: true,
+              defaultWriteTarget: true,
+              syncState: "synced",
+              lastSuccessAt: "2026-08-03T00:00:00Z",
+              nextRetryAt: null,
+              lastErrorCategory: null,
+            },
+          ],
+          mappedTicketCount: 3,
+          pendingOutboxCount: 1,
+          conflictCount: 2,
+          selectedListCount: 1,
+          lastSuccessAt: "2026-08-03T00:00:00Z",
+          nextRetryAt: null,
+        },
+      }),
+    );
+    await renderSettings(client);
+
+    expect(await screen.findByText("Synthetic tasks")).toBeVisible();
+    expect(screen.getByText(/priority・見積・tags・Schedule・Focus実績はLocal専用/)).toBeVisible();
+    const counts = screen.getByText("同期Ticket").closest("dl")!;
+    expect(within(counts).getByText("3")).toBeVisible();
+    expect(within(counts).getAllByText("1")).toHaveLength(2);
+    expect(within(counts).getByText("2")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "完全照合" }));
+    await waitFor(() => expect(client.fullReconcileCount).toBe(1));
+    expect(screen.getByText("選択したTask Listの完全照合が完了しました。")).toBeVisible();
+  });
+
+  it("loads open Tasks conflicts on the initial settings render", async () => {
+    const connection = googleConnection({
+      state: "connected",
+      accountId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      tasks: {
+        enabled: true,
+        scopeGranted: true,
+        state: "conflict",
+        taskLists: [],
+        mappedTicketCount: 1,
+        pendingOutboxCount: 0,
+        conflictCount: 1,
+        selectedListCount: 0,
+        lastSuccessAt: null,
+        nextRetryAt: null,
+      },
+    });
+    const client = new GoogleStateClient(connection, [
+      {
+        id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        ticketId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+        ticketTitle: "Synthetic task",
+        fieldName: "notes",
+        baseValue: "base",
+        localValue: "local",
+        googleValue: "google",
+        conflictType: "same_field",
+        detectedAt: "2026-08-03T00:00:00Z",
+      },
+    ]);
+
+    await renderSettings(client);
+
+    expect(await screen.findByRole("heading", { name: "Google Tasks競合" })).toBeVisible();
+    expect(screen.getByText("Synthetic task")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Localを残す" })).toBeVisible();
   });
 });

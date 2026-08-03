@@ -85,6 +85,7 @@ domain -X-> tauri / sqlx / reqwest / keyring / filesystem / React
 - `SyncBase`, `FieldConflict`, `MergeDecision`。
 - `NotificationDeliveryKey`, `FocusState`, `TimerState`, `StopwatchState`。
 - `Ticket`, `TicketDraft`, `TicketPriority`, `TicketColumnKind`, `TicketQuery`。
+- `GoogleTaskSnapshot`, field-level 3-way merge、Tasks sync state / conflict resolution。
 
 規則:
 
@@ -99,7 +100,7 @@ domain -X-> tauri / sqlx / reqwest / keyring / filesystem / React
 Adapter:
 
 - SQLite / SQLx repository。
-- Google OAuth / Calendar HTTP client。
+- Google OAuth / Calendar / Tasks HTTP client。CalendarとTasksのremote contractは別adapter moduleに分離する。
 - OS keyring。
 - native notification。
 - filesystem / backup / import。

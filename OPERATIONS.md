@@ -20,8 +20,9 @@ Day Schedule Next は個人端末で動くローカルファーストアプリ�
 - 有効予定、削除待ち、Outbox、未解決競合
 - 最終検証済みバックアップ
 - 通知の発火予定・試行時刻・結果・エラー分類（本文なし）
+- Google Tasksの選択List数、同期Ticket数、反映待ち、競合、最終成功、エラー分類、次回retry（remote IDと本文なし）
 
-export は構造化イベントだけを最大500件含めます。予定名、説明、場所、メール、remote ID、token、絶対パスは収集しません。
+export は構造化イベントだけを最大500件含めます。予定／Ticket名、説明、場所、メール、remote ID、token、絶対パスは収集しません。
 
 ## データ復旧
 
@@ -45,6 +46,8 @@ export は構造化イベントだけを最大500件含めます。予定名、�
 | 429 | `Retry-After` を優先し、再試行時刻を保存 |
 | 5xx | bounded backoff。手動連打で retry storm を作らない |
 | 同一フィールド／削除競合 | silent last-write-wins を禁止し、解決結果を新しい base として同期 |
+| Tasks作成結果不明 | 自動再作成を停止。Google側を確認後に同期解除し、必要な場合だけ再同期 |
+| Tasks validation | remote値を切り詰めずshadowを保持。当該Listを停止して入力またはGoogle側を確認 |
 
 同期キューは項目ごとの理由、試行回数、次回時刻を表示し、項目単位または全体で再試行できます。
 

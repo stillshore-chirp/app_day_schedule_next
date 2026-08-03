@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use crate::{
     application::OperationCancellation,
-    domain::{AppError, AppResult, SyncSummary},
+    domain::{AppError, AppResult, GoogleTaskSyncState, GoogleTasksConnection, SyncSummary},
 };
 
 use super::Database;
@@ -16,7 +16,7 @@ use super::Database;
 pub struct OAuthConfigResult {
     pub configured: bool,
     pub client_id_hint: String,
-    pub scopes: [&'static str; 2],
+    pub scopes: [&'static str; 3],
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -36,6 +36,7 @@ pub struct GoogleConnection {
     pub calendars: Vec<GoogleCalendar>,
     pub last_error: Option<String>,
     pub mapped_schedule_count: u64,
+    pub tasks: GoogleTasksConnection,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -71,6 +72,8 @@ impl Database {
         Err(disabled())
     }
 
+    pub fn cancel_google_oauth_attempt(&self) {}
+
     pub async fn google_connection(&self) -> AppResult<GoogleConnection> {
         Ok(GoogleConnection {
             configured: false,
@@ -80,6 +83,18 @@ impl Database {
             calendars: Vec::new(),
             last_error: None,
             mapped_schedule_count: 0,
+            tasks: GoogleTasksConnection {
+                enabled: false,
+                scope_granted: false,
+                state: GoogleTaskSyncState::NotConnected,
+                task_lists: Vec::new(),
+                mapped_ticket_count: 0,
+                pending_outbox_count: 0,
+                conflict_count: 0,
+                selected_list_count: 0,
+                last_success_at: None,
+                next_retry_at: None,
+            },
         })
     }
 
@@ -102,6 +117,14 @@ impl Database {
     ) -> AppResult<SyncSummary> {
         cancellation.check()?;
         self.sync_summary().await
+    }
+
+    pub async fn run_google_tasks_full_reconcile(
+        &self,
+        cancellation: &OperationCancellation,
+    ) -> AppResult<GoogleTasksConnection> {
+        cancellation.check()?;
+        Err(disabled())
     }
 }
 

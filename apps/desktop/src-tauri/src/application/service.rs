@@ -11,14 +11,15 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    application::OperationRegistry,
+    application::{OperationCancellation, OperationRegistry},
     domain::{
         AppError, AppResult, AssignTicketScheduleRequest, DayTemplate, DayTemplateDraft,
-        FocusCommand, FocusPhase, FocusState, FreeAlarm, FreeAlarmDraft, LinkTicketScheduleRequest,
-        QuickBlock, QuickBlockDraft, RecurrenceEditScope, Schedule, ScheduleClassificationPatch,
-        ScheduleDraft, ScheduleQuery, Settings, StopwatchCommand, StopwatchState, StopwatchStatus,
-        SyncSummary, SyncSummaryState, TemplateApplyMode, TemplatePreview, Ticket, TicketBoard,
-        TicketDraft, TicketFocusHistoryItem, TicketHistoryItem, TicketPage, TicketPatch,
+        FocusCommand, FocusPhase, FocusState, FreeAlarm, FreeAlarmDraft, GoogleTaskConflict,
+        GoogleTasksConnection, LinkTicketScheduleRequest, QuickBlock, QuickBlockDraft,
+        RecurrenceEditScope, Schedule, ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery,
+        Settings, StopwatchCommand, StopwatchState, StopwatchStatus, SyncSummary, SyncSummaryState,
+        TemplateApplyMode, TemplatePreview, Ticket, TicketBoard, TicketDraft,
+        TicketFocusHistoryItem, TicketGoogleTaskStatus, TicketHistoryItem, TicketPage, TicketPatch,
         TicketPlanningSummary, TicketQuery, TicketScheduleLink, TimerCommand, TimerDraft, TimerSet,
         TimerState, TimerStatus, UnlinkTicketScheduleRequest, resolve_local_time,
         validate_focus_transition, validate_stopwatch_transition, validate_timer_transition,
@@ -26,10 +27,12 @@ use crate::{
     infrastructure::{
         BackupRecord, ChangeResult, ConflictChoice, Database, DeliveryResult,
         DiagnosticsExportResult, DiagnosticsSnapshot, DisconnectMode, ExportResult,
-        FocusHistoryReport, FocusRecord, GoogleCalendar, GoogleConnection, ImportMode,
-        ImportPreview, ImportResult, LegacyImportPreview, LegacyImportResult, NotificationDelivery,
+        FocusHistoryReport, FocusRecord, GoogleCalendar, GoogleConnection,
+        GoogleTaskConflictResolveRequest, GoogleTaskListUpdate, ImportMode, ImportPreview,
+        ImportResult, LegacyImportPreview, LegacyImportResult, NotificationDelivery,
         NotificationLedgerItem, OAuthBeginResult, OAuthConfigResult, RestoreStageResult,
-        StopwatchRecord, SyncConflictItem, SyncQueueItem, TimerRecord,
+        StopwatchRecord, SyncConflictItem, SyncQueueItem, TicketGoogleTaskTargetUpdate,
+        TimerRecord,
     },
 };
 
@@ -165,7 +168,7 @@ impl AppService {
         let timezone = timezone_id.parse::<Tz>().unwrap_or(chrono_tz::UTC);
         let settings = self.database.settings().await?;
         Ok(Bootstrap {
-            schema_version: 16,
+            schema_version: 17,
             app_version: env!("CARGO_PKG_VERSION").into(),
             today: self
                 .clock
@@ -406,6 +409,11 @@ impl AppService {
     #[cfg(feature = "e2e")]
     pub async fn seed_google_calendar_recovery_fixture(&self) -> AppResult<()> {
         self.database.seed_google_calendar_recovery_fixture().await
+    }
+
+    #[cfg(feature = "e2e")]
+    pub async fn seed_google_tasks_fixture(&self) -> AppResult<Uuid> {
+        self.database.seed_google_tasks_fixture().await
     }
 
     pub async fn update_schedule(
@@ -1041,6 +1049,23 @@ impl AppService {
         result
     }
 
+    pub async fn run_background_google_sync_if_due(&self) {
+        let Ok(true) = self
+            .database
+            .google_tasks_background_due(self.clock.now())
+            .await
+        else {
+            return;
+        };
+        let Ok(_guard) = self.sync_gate.try_lock() else {
+            return;
+        };
+        let cancellation = OperationCancellation::default();
+        if let Err(error) = self.database.run_google_sync(&cancellation).await {
+            tracing::warn!(error = %error, "background Google sync did not complete");
+        }
+    }
+
     pub async fn sync_queue(&self) -> AppResult<Vec<SyncQueueItem>> {
         self.database.sync_queue_items().await
     }
@@ -1178,6 +1203,72 @@ impl AppService {
 
     pub async fn google_connection(&self) -> AppResult<GoogleConnection> {
         self.database.google_connection().await
+    }
+
+    pub async fn google_tasks_connection(&self) -> AppResult<GoogleTasksConnection> {
+        self.database.google_tasks_connection().await
+    }
+
+    pub async fn reconcile_google_tasks_full(
+        &self,
+        operation_id: Uuid,
+    ) -> AppResult<GoogleTasksConnection> {
+        let cancellation = self.operations.begin(operation_id).await?;
+        let result = async {
+            let Ok(_guard) = self.sync_gate.try_lock() else {
+                return Err(AppError::Conflict {
+                    message: "別のGoogle同期が進行中です。".into(),
+                    recovery: "進行中の同期が完了してから完全照合を再実行してください。".into(),
+                });
+            };
+            self.database
+                .run_google_tasks_full_reconcile(&cancellation)
+                .await
+        }
+        .await;
+        self.operations.finish(operation_id).await;
+        result
+    }
+
+    pub async fn set_google_tasks_enabled(
+        &self,
+        enabled: bool,
+    ) -> AppResult<GoogleTasksConnection> {
+        self.database.set_google_tasks_enabled(enabled).await
+    }
+
+    pub async fn update_google_task_list(
+        &self,
+        request: GoogleTaskListUpdate,
+    ) -> AppResult<crate::domain::GoogleTaskList> {
+        self.database.update_google_task_list(request).await
+    }
+
+    pub async fn ticket_google_task_statuses(
+        &self,
+        ticket_ids: &[Uuid],
+    ) -> AppResult<Vec<TicketGoogleTaskStatus>> {
+        self.database.ticket_google_task_statuses(ticket_ids).await
+    }
+
+    pub async fn update_ticket_google_task_target(
+        &self,
+        request: TicketGoogleTaskTargetUpdate,
+    ) -> AppResult<TicketGoogleTaskStatus> {
+        self.database
+            .update_ticket_google_task_target(request)
+            .await
+    }
+
+    pub async fn google_task_conflicts(&self) -> AppResult<Vec<GoogleTaskConflict>> {
+        self.database.google_task_conflicts().await
+    }
+
+    pub async fn resolve_google_task_conflict(
+        &self,
+        request: GoogleTaskConflictResolveRequest,
+    ) -> AppResult<TicketGoogleTaskStatus> {
+        self.database.resolve_google_task_conflict(request).await
     }
 
     pub async fn update_google_calendar(

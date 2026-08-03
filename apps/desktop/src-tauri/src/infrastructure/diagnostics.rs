@@ -112,7 +112,7 @@ impl Database {
             webview: sanitize_runtime_info(webview),
             database: snapshot,
             events,
-            redaction: "予定本文、説明、場所、メール、calendar/event ID、token、絶対パスは収集しません。",
+            redaction: "予定本文、Ticket本文、説明、場所、メール、calendar/event/task/list ID、token、絶対パスは収集しません。",
         };
         let bytes = serde_json::to_vec_pretty(&bundle)
             .map_err(|error| AppError::database("diagnostic-export-encode", error))?;
@@ -149,6 +149,23 @@ mod tests {
     #[tokio::test]
     async fn diagnostic_export_contains_only_structured_redacted_events() {
         let database = Database::open_memory().await.unwrap();
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO google_accounts(id, display_label, scopes_json, status, created_at_utc, updated_at_utc) VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Private account label', '[]', 'connected', ?, ?)",
+        )
+        .bind(&now)
+        .bind(&now)
+        .execute(&database.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO google_task_lists(id, google_account_id, remote_list_id, display_name, selected, sync_state, created_at_utc, updated_at_utc) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'private-remote-list-id', 'Private Task List', 1, 'offline', ?, ?)",
+        )
+        .bind(&now)
+        .bind(&now)
+        .execute(&database.pool)
+        .await
+        .unwrap();
         database
             .record_diagnostic_event("info", "schedule", "created", None)
             .await
@@ -163,6 +180,9 @@ mod tests {
         let exported = fs::read_to_string(target).unwrap();
         assert!(exported.contains("\"event\": \"created\""));
         assert!(!exported.contains("schedule_items"));
+        assert!(!exported.contains("Private account label"));
+        assert!(!exported.contains("Private Task List"));
+        assert!(!exported.contains("private-remote-list-id"));
         assert!(!exported.contains(directory.path().to_string_lossy().as_ref()));
     }
 }

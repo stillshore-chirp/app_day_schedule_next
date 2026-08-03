@@ -6,6 +6,10 @@ mod diagnostics;
 mod google;
 #[cfg(not(feature = "google-sync"))]
 mod google_disabled;
+#[cfg(feature = "google-sync")]
+mod google_tasks;
+#[cfg(not(feature = "google-sync"))]
+mod google_tasks_disabled;
 mod legacy_import;
 mod library_repository;
 mod notification_repository;
@@ -25,6 +29,14 @@ pub use google::{
 #[cfg(not(feature = "google-sync"))]
 pub use google_disabled::{
     DisconnectMode, GoogleCalendar, GoogleConnection, OAuthBeginResult, OAuthConfigResult,
+};
+#[cfg(feature = "google-sync")]
+pub use google_tasks::{
+    GoogleTaskConflictResolveRequest, GoogleTaskListUpdate, TicketGoogleTaskTargetUpdate,
+};
+#[cfg(not(feature = "google-sync"))]
+pub use google_tasks_disabled::{
+    GoogleTaskConflictResolveRequest, GoogleTaskListUpdate, TicketGoogleTaskTargetUpdate,
 };
 pub use legacy_import::{LegacyImportPreview, LegacyImportResult};
 pub use notification_repository::{DeliveryResult, NotificationDelivery, NotificationLedgerItem};

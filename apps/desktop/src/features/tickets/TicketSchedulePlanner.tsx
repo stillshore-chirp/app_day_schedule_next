@@ -30,6 +30,9 @@ export function TicketSchedulePlanner({
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
   const [focusState, setFocusState] = useState<"idle" | "starting" | "started">("idle");
+  const [taskAction, setTaskAction] = useState<"idle" | "saving">("idle");
+  const [taskMessage, setTaskMessage] = useState("");
+  const [taskDeleteChoice, setTaskDeleteChoice] = useState<"detach" | "delete" | null>(null);
   const linksQuery = useQuery({
     queryKey: ["ticket-schedules", ticket.id],
     queryFn: () => client.ticketSchedules(ticket.id),
@@ -41,6 +44,14 @@ export function TicketSchedulePlanner({
   const focusHistoryQuery = useQuery({
     queryKey: ["ticket-focus-history", ticket.id],
     queryFn: () => client.ticketFocusHistory(ticket.id, 20),
+  });
+  const googleConnectionQuery = useQuery({
+    queryKey: ["google-connection"],
+    queryFn: () => client.googleConnection(),
+  });
+  const googleTaskStatusQuery = useQuery({
+    queryKey: ["ticket-google-task-status", ticket.id],
+    queryFn: async () => (await client.ticketGoogleTaskStatuses([ticket.id]))[0],
   });
   useEffect(() => {
     setDuration(ticket.estimateMinutes === null ? "" : String(ticket.estimateMinutes));
@@ -157,6 +168,40 @@ export function TicketSchedulePlanner({
     }
   }
 
+  async function updateGoogleTaskTarget(taskListId: string | null, deleteRemote = false) {
+    setTaskAction("saving");
+    setError("");
+    setTaskMessage("");
+    try {
+      await client.updateTicketGoogleTaskTarget({
+        ticketId: ticket.id,
+        taskListId,
+        deleteRemote,
+        operationId: crypto.randomUUID(),
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ticket-google-task-status", ticket.id] }),
+        queryClient.invalidateQueries({ queryKey: ["google-connection"] }),
+      ]);
+      setTaskDeleteChoice(null);
+      setTaskMessage(
+        taskListId
+          ? translate("features.tickets.TicketSchedulePlanner.googleTasksTargetSaved")
+          : deleteRemote
+            ? translate("features.tickets.TicketSchedulePlanner.googleTasksDeletePending")
+            : translate("features.tickets.TicketSchedulePlanner.googleTasksDetached"),
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof AppClientError
+          ? `${caught.detail.message} ${caught.detail.recovery}`
+          : translate("features.tickets.TicketSchedulePlanner.googleTasksTargetFailed"),
+      );
+    } finally {
+      setTaskAction("idle");
+    }
+  }
+
   return (
     <section className="ticket-planner" aria-labelledby={`ticket-planner-${ticket.id}`}>
       <div className="ticket-planner__heading">
@@ -203,6 +248,121 @@ export function TicketSchedulePlanner({
         </div>
       </dl>
       <p className="field-help">{translate("features.tickets.TicketSchedulePlanner.027")}</p>
+      <section className="ticket-google-task" aria-labelledby={`ticket-google-task-${ticket.id}`}>
+        <div className="ticket-planner__heading">
+          <div>
+            <h4 id={`ticket-google-task-${ticket.id}`}>Google Tasks</h4>
+            <p>{translate("features.tickets.TicketSchedulePlanner.googleTasksScope")}</p>
+          </div>
+          <span className="state-chip" data-state={googleTaskStatusQuery.data?.state ?? "loading"}>
+            {ticketGoogleTaskStateLabel(googleTaskStatusQuery.data?.state)}
+          </span>
+        </div>
+        {!googleConnectionQuery.data?.tasks.scopeGranted ? (
+          <StatusMessage
+            tone="warning"
+            title={translate("features.tickets.TicketSchedulePlanner.googleTasksConsentTitle")}
+          >
+            {translate("features.tickets.TicketSchedulePlanner.googleTasksConsentDetail")}
+          </StatusMessage>
+        ) : !googleConnectionQuery.data.tasks.enabled ? (
+          <StatusMessage
+            title={translate("features.tickets.TicketSchedulePlanner.googleTasksDisabledTitle")}
+          >
+            {translate("features.tickets.TicketSchedulePlanner.googleTasksDisabledDetail")}
+          </StatusMessage>
+        ) : (
+          <>
+            <label>
+              {translate("features.tickets.TicketSchedulePlanner.googleTasksTargetLabel")}
+              <select
+                value={googleTaskStatusQuery.data?.taskListId ?? ""}
+                disabled={taskAction === "saving"}
+                onChange={(event) =>
+                  void updateGoogleTaskTarget(event.target.value.length ? event.target.value : null)
+                }
+              >
+                {googleTaskStatusQuery.data?.taskListId ? null : (
+                  <option value="">
+                    {translate("features.tickets.TicketSchedulePlanner.googleTasksTargetPrompt")}
+                  </option>
+                )}
+                {googleConnectionQuery.data.tasks.taskLists
+                  .filter((list) => list.selected && list.syncState !== "unavailable")
+                  .map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.displayName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <p className="field-help">
+              {translate("features.tickets.TicketSchedulePlanner.googleTasksLocalFields")}
+            </p>
+            {googleTaskStatusQuery.data?.taskListId ? (
+              taskDeleteChoice ? (
+                <StatusMessage
+                  tone="warning"
+                  title={
+                    taskDeleteChoice === "delete"
+                      ? translate("features.tickets.TicketSchedulePlanner.googleTasksDeleteTitle")
+                      : translate("features.tickets.TicketSchedulePlanner.googleTasksDetachTitle")
+                  }
+                >
+                  {taskDeleteChoice === "delete"
+                    ? translate("features.tickets.TicketSchedulePlanner.googleTasksDeleteDetail")
+                    : translate("features.tickets.TicketSchedulePlanner.googleTasksDetachDetail")}
+                  <span className="button-row">
+                    <button
+                      className={
+                        taskDeleteChoice === "delete"
+                          ? "button button--danger"
+                          : "button button--primary"
+                      }
+                      type="button"
+                      disabled={taskAction === "saving"}
+                      onClick={() =>
+                        void updateGoogleTaskTarget(null, taskDeleteChoice === "delete")
+                      }
+                    >
+                      {translate("features.tickets.TicketSchedulePlanner.googleTasksConfirm")}
+                    </button>
+                    <button
+                      className="button"
+                      type="button"
+                      onClick={() => setTaskDeleteChoice(null)}
+                    >
+                      {translate("features.tickets.TicketSchedulePlanner.googleTasksCancel")}
+                    </button>
+                  </span>
+                </StatusMessage>
+              ) : (
+                <div className="button-row">
+                  <button
+                    className="button"
+                    type="button"
+                    onClick={() => setTaskDeleteChoice("detach")}
+                  >
+                    {translate("features.tickets.TicketSchedulePlanner.googleTasksDetach")}
+                  </button>
+                  <button
+                    className="button button--danger-outline"
+                    type="button"
+                    onClick={() => setTaskDeleteChoice("delete")}
+                  >
+                    {translate("features.tickets.TicketSchedulePlanner.googleTasksDelete")}
+                  </button>
+                </div>
+              )
+            ) : null}
+          </>
+        )}
+      </section>
+      {taskMessage ? (
+        <p className="success-text" role="status">
+          {taskMessage}
+        </p>
+      ) : null}
       <div className="ticket-planner__form">
         <label>
           {translate("features.tickets.TicketSchedulePlanner.008")}
@@ -361,4 +521,25 @@ export function TicketSchedulePlanner({
       </section>
     </section>
   );
+}
+
+function ticketGoogleTaskStateLabel(
+  state: Awaited<ReturnType<AppClient["ticketGoogleTaskStatuses"]>>[number]["state"] | undefined,
+): string {
+  if (!state) return translate("features.tickets.TicketSchedulePlanner.googleTasksChecking");
+  return {
+    not_connected: translate("features.tickets.TicketSchedulePlanner.googleTasksNotConnected"),
+    scope_missing: translate("features.tickets.TicketSchedulePlanner.googleTasksScopeMissing"),
+    disabled: translate("features.tickets.TicketSchedulePlanner.googleTasksDisabled"),
+    never: translate("features.tickets.TicketSchedulePlanner.googleTasksNever"),
+    syncing: translate("features.tickets.TicketSchedulePlanner.googleTasksSyncing"),
+    synced: translate("features.tickets.TicketSchedulePlanner.googleTasksSynced"),
+    pending: translate("features.tickets.TicketSchedulePlanner.googleTasksPending"),
+    offline: translate("features.tickets.TicketSchedulePlanner.googleTasksOffline"),
+    retry_scheduled: translate("features.tickets.TicketSchedulePlanner.googleTasksRetry"),
+    conflict: translate("features.tickets.TicketSchedulePlanner.googleTasksConflict"),
+    auth_required: translate("features.tickets.TicketSchedulePlanner.googleTasksAuthRequired"),
+    unsupported: translate("features.tickets.TicketSchedulePlanner.googleTasksUnsupported"),
+    validation_required: translate("features.tickets.TicketSchedulePlanner.googleTasksValidation"),
+  }[state];
 }

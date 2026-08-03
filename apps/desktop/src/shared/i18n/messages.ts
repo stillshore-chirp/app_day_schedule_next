@@ -1093,6 +1093,104 @@ export const jaMessages = {
   "features.views.OperationalViews.399":
     "一時的に同期できません。既存予定を保持して自動再試行します。",
   "features.views.OperationalViews.400": "Googleへの再接続後に同期を再開します。",
+  "features.views.OperationalViews.googleTasksEnabled":
+    "Google Tasks同期を有効にしました。同期対象Listを選んでください。",
+  "features.views.OperationalViews.googleTasksDisabled":
+    "Google Tasks同期だけを無効にしました。Calendar接続とtokenは保持されています。",
+  "features.views.OperationalViews.googleTasksToggleFailed":
+    "Google Tasks同期を変更できませんでした。",
+  "features.views.OperationalViews.googleTasksCalendarPreserved":
+    "Calendar接続は保持されています。権限と接続状態を確認してください。",
+  "features.views.OperationalViews.googleTasksListUpdateFailed":
+    "Google Task Listを更新できませんでした。",
+  "features.views.OperationalViews.googleTasksListUpdateRecovery":
+    "選択状態を確認して再試行してください。",
+  "features.views.OperationalViews.googleTasksSyncComplete":
+    "Google CalendarとTasksの同期が完了しました。",
+  "features.views.OperationalViews.googleTasksSyncFailed":
+    "Google Tasks同期を完了できませんでした。",
+  "features.views.OperationalViews.googleTasksLocalPreserved":
+    "ローカルTicketは保持されています。状態を確認して再試行してください。",
+  "features.views.OperationalViews.googleTasksReconcileComplete":
+    "選択したTask Listの完全照合が完了しました。",
+  "features.views.OperationalViews.googleTasksReconcileFailed":
+    "Google Tasksの完全照合を完了できませんでした。",
+  "features.views.OperationalViews.googleTasksConflictSaved":
+    "Google Tasks競合の選択を保存しました。",
+  "features.views.OperationalViews.googleTasksConflictFailed":
+    "Google Tasks競合を解決できませんでした。",
+  "features.views.OperationalViews.googleTasksConflictRecovery":
+    "現在値を更新してから、もう一度選択してください。",
+  "features.views.OperationalViews.googleTasksScope":
+    "Ticketを正本に、タイトル・説明・日付・完了・親子・Listだけを同期します。",
+  "features.views.OperationalViews.googleTasksConsentTitle": "Google Tasks権限の再同意が必要です",
+  "features.views.OperationalViews.googleTasksConsentAction": "Calendar + Tasksを再同意",
+  "features.views.OperationalViews.googleTasksConsentDetail":
+    "現在のCalendar接続は、新しい認可が完全に成功するまで保持されます。",
+  "features.views.OperationalViews.googleTasksDisableAction": "Tasks同期だけを無効化",
+  "features.views.OperationalViews.googleTasksEnableAction": "Tasks同期を有効化",
+  "features.views.OperationalViews.googleTasksSyncNow": "今すぐ同期",
+  "features.views.OperationalViews.googleTasksReconcile": "完全照合",
+  "features.views.OperationalViews.googleTasksLimitations":
+    "割り当てられたGoogleタスクは初期版の対象外です。dueは日付のみで、時刻はSchedule側に保持します。priority・見積・tags・Schedule・Focus実績はLocal専用です。",
+  "features.views.OperationalViews.googleTasksListLabel": "同期するGoogle Task List",
+  "features.views.OperationalViews.googleTasksListEmpty": "Task Listがありません",
+  "features.views.OperationalViews.googleTasksListEmptyDetail":
+    "再同意後に一覧を更新するか、Google Tasks側でListを確認してください。",
+  "features.views.OperationalViews.googleTasksSelect": "同期",
+  "features.views.OperationalViews.googleTasksDefaultTarget": "新規Ticketの同期先",
+  "features.views.OperationalViews.googleTasksSelectedLists": "選択List",
+  "features.views.OperationalViews.googleTasksMappedTickets": "同期Ticket",
+  "features.views.OperationalViews.googleTasksPending": "反映待ち",
+  "features.views.OperationalViews.googleTasksConflicts": "競合",
+  "features.views.OperationalViews.googleTasksConflictLabel": "Google Tasks競合",
+  "features.views.OperationalViews.googleTasksConflictItem":
+    "項目: {0}。無言で上書きせず停止しています。",
+  "features.views.OperationalViews.googleTasksBase": "基準",
+  "features.views.OperationalViews.googleTasksLocal": "Local",
+  "features.views.OperationalViews.googleTasksGoogle": "Google",
+  "features.views.OperationalViews.googleTasksKeepLocal": "Localを残す",
+  "features.views.OperationalViews.googleTasksUseGoogle": "Googleを採用",
+  "features.views.OperationalViews.googleTasksDetach": "同期を解除してLocalに残す",
+  "features.views.OperationalViews.googleTasksAccessDeniedTitle":
+    "Google接続は許可されませんでした",
+  "features.views.OperationalViews.googleTasksAccessDeniedDetail":
+    "既存のCalendar接続とLocalデータは保持されています。必要な場合だけ再同意してください。",
+  "features.views.OperationalViews.googleTasksPolicyDeniedTitle":
+    "組織ポリシーによりGoogle接続が拒否されました",
+  "features.views.OperationalViews.googleTasksPolicyDeniedDetail":
+    "Google Workspace管理者へCalendarとTasks scopeの許可を確認してください。既存接続は保持されています。",
+  "features.views.OperationalViews.googleTasksFetchFailedTitle":
+    "Google Task Listを確認できませんでした",
+  "features.views.OperationalViews.googleTasksFetchFailedDetail":
+    "新しい認証情報へは切り替えていません。Tasks APIとscopeを確認して再同意してください。",
+  "features.views.OperationalViews.googleTasksDiagnosticLists":
+    "Google Tasks（選択List / 同期Ticket）",
+  "features.views.OperationalViews.googleTasksDiagnosticPending": "Google Tasks（反映待ち / 競合）",
+  "features.views.OperationalViews.googleTasksDiagnosticSuccess": "Google Tasks 最終成功",
+  "features.views.OperationalViews.googleTasksDiagnosticError": "Google Tasks エラー分類",
+  "features.views.OperationalViews.googleTasksDiagnosticRetry": "Google Tasks 次回再試行",
+  "features.views.OperationalViews.googleTasksNone": "なし",
+  "features.views.OperationalViews.googleTasksNoRetry": "予定なし",
+  "features.views.OperationalViews.googleTasksNotConnected": "未接続",
+  "features.views.OperationalViews.googleTasksScopeMissing": "再同意が必要",
+  "features.views.OperationalViews.googleTasksDisabledState": "無効",
+  "features.views.OperationalViews.googleTasksNever": "未同期",
+  "features.views.OperationalViews.googleTasksSyncing": "同期中",
+  "features.views.OperationalViews.googleTasksSynced": "同期済み",
+  "features.views.OperationalViews.googleTasksOffline": "オフライン",
+  "features.views.OperationalViews.googleTasksRetry": "再試行待ち",
+  "features.views.OperationalViews.googleTasksConflictState": "競合あり",
+  "features.views.OperationalViews.googleTasksAuthRequired": "再認証が必要",
+  "features.views.OperationalViews.googleTasksUnsupported": "未対応操作",
+  "features.views.OperationalViews.googleTasksValidation": "入力確認が必要",
+  "features.views.OperationalViews.googleTasksUnavailable": "Google側で利用できません",
+  "features.views.OperationalViews.googleTasksFieldTitle": "タイトル",
+  "features.views.OperationalViews.googleTasksFieldNotes": "説明",
+  "features.views.OperationalViews.googleTasksFieldDue": "日付",
+  "features.views.OperationalViews.googleTasksFieldCompleted": "完了状態",
+  "features.views.OperationalViews.googleTasksFieldParent": "親Ticket",
+  "features.views.OperationalViews.googleTasksFieldDelete": "削除",
   "main.001": "Day Schedule Next の画面を開始できませんでした。再起動してください。",
   "shared.contracts.001": "終了時刻は開始時刻より後にしてください。",
   "shared.contracts.002": "終日予定の終了日は開始日より後にしてください。",
@@ -1396,6 +1494,52 @@ export const jaMessages = {
   "features.tickets.TicketSchedulePlanner.037": "別のFocusセッションが継続中です。",
   "features.tickets.TicketSchedulePlanner.038":
     "Focus画面で現在のセッションを終了してから、この予定で開始してください。",
+  "features.tickets.TicketSchedulePlanner.googleTasksTargetSaved":
+    "Google Tasks同期先を保存しました。反映状態はこの欄で確認できます。",
+  "features.tickets.TicketSchedulePlanner.googleTasksDeletePending":
+    "Google側Taskの削除を反映待ちにしました。Local Ticketは保持されています。",
+  "features.tickets.TicketSchedulePlanner.googleTasksDetached":
+    "Google Tasks同期を解除しました。Local TicketとGoogle側Taskは保持されています。",
+  "features.tickets.TicketSchedulePlanner.googleTasksTargetFailed":
+    "Google Tasks同期先を変更できませんでした。",
+  "features.tickets.TicketSchedulePlanner.googleTasksScope":
+    "タイトル・説明・日付・完了・親子・Listだけを同期します。",
+  "features.tickets.TicketSchedulePlanner.googleTasksConsentTitle":
+    "Google Tasksの再同意が必要です",
+  "features.tickets.TicketSchedulePlanner.googleTasksConsentDetail":
+    "設定でCalendar + Tasksをまとめて再同意してください。現在のCalendar接続は成功まで保持されます。",
+  "features.tickets.TicketSchedulePlanner.googleTasksDisabledTitle": "Google Tasks同期は無効です",
+  "features.tickets.TicketSchedulePlanner.googleTasksDisabledDetail":
+    "設定でTasks同期を有効にしてから、このTicketの同期先を選んでください。",
+  "features.tickets.TicketSchedulePlanner.googleTasksTargetLabel": "同期先Task List",
+  "features.tickets.TicketSchedulePlanner.googleTasksTargetPrompt": "同期先を選択",
+  "features.tickets.TicketSchedulePlanner.googleTasksLocalFields":
+    "priority・見積・tags・Schedule・Focus実績はLocal専用で、Google notesへ埋め込みません。",
+  "features.tickets.TicketSchedulePlanner.googleTasksDeleteTitle":
+    "Google Tasksからも削除しますか？",
+  "features.tickets.TicketSchedulePlanner.googleTasksDetachTitle": "同期だけを解除しますか？",
+  "features.tickets.TicketSchedulePlanner.googleTasksDeleteDetail":
+    "Local Ticketは削除せず、Google側のTaskだけを明示的に削除します。失敗時はOutboxで再試行します。",
+  "features.tickets.TicketSchedulePlanner.googleTasksDetachDetail":
+    "Local TicketとLocal専用項目はすべて保持されます。Google側のTaskは残ります。",
+  "features.tickets.TicketSchedulePlanner.googleTasksConfirm": "この操作を実行",
+  "features.tickets.TicketSchedulePlanner.googleTasksCancel": "取消",
+  "features.tickets.TicketSchedulePlanner.googleTasksDetach": "同期を解除してLocalに残す",
+  "features.tickets.TicketSchedulePlanner.googleTasksDelete": "Google Tasksからも削除",
+  "features.tickets.TicketSchedulePlanner.googleTasksChecking": "確認中",
+  "features.tickets.TicketSchedulePlanner.googleTasksNotConnected": "未接続",
+  "features.tickets.TicketSchedulePlanner.googleTasksScopeMissing": "再同意が必要",
+  "features.tickets.TicketSchedulePlanner.googleTasksDisabled": "無効",
+  "features.tickets.TicketSchedulePlanner.googleTasksNever": "未同期",
+  "features.tickets.TicketSchedulePlanner.googleTasksSyncing": "同期中",
+  "features.tickets.TicketSchedulePlanner.googleTasksSynced": "同期済み",
+  "features.tickets.TicketSchedulePlanner.googleTasksPending": "反映待ち",
+  "features.tickets.TicketSchedulePlanner.googleTasksOffline": "オフライン",
+  "features.tickets.TicketSchedulePlanner.googleTasksRetry": "再試行待ち",
+  "features.tickets.TicketSchedulePlanner.googleTasksConflict": "競合あり",
+  "features.tickets.TicketSchedulePlanner.googleTasksAuthRequired": "再認証が必要",
+  "features.tickets.TicketSchedulePlanner.googleTasksUnsupported": "未対応操作",
+  "features.tickets.TicketSchedulePlanner.googleTasksValidation": "入力確認が必要",
   "shared.time.001": "{0}分",
   "shared.time.002": "{0}時間",
   "shared.time.003": "{0}時間{1}分",
