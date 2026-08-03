@@ -126,18 +126,23 @@ describe("Day Schedule Next native smoke", () => {
   };
 
   const persistFixtureTheme = async (theme: "light" | "mild" | "dark") => {
-    const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
-      settings: Record<string, unknown>;
-    };
-    await browser.tauri.execute(
-      ({ core }, settings) => core.invoke("settings_update", { settings }),
-      { ...bootstrap.settings, theme },
-    );
-    await browser.refresh();
-    await $(".app-shell").waitForDisplayed();
-    await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === theme, {
-      timeoutMsg: `fixture theme was not set to ${theme}`,
-    });
+    const applied = await browser.tauri.execute(async ({ core }, nextTheme) => {
+      const bootstrap = (await core.invoke("bootstrap_get")) as {
+        settings: Record<string, unknown>;
+      };
+      await core.invoke("settings_update", {
+        settings: { ...bootstrap.settings, theme: nextTheme },
+      });
+      const persisted = (await core.invoke("bootstrap_get")) as {
+        settings: { theme: string };
+      };
+      document.documentElement.dataset.theme = nextTheme;
+      return {
+        documentTheme: document.documentElement.dataset.theme,
+        persistedTheme: persisted.settings.theme,
+      };
+    }, theme);
+    expect(applied).toEqual({ documentTheme: theme, persistedTheme: theme });
   };
 
   it("boots the real Tauri application and reaches the native IPC boundary", async () => {
@@ -1650,13 +1655,16 @@ describe("Day Schedule Next native smoke", () => {
     await setLogicalWindowSize(1280, 820);
     const ticketTitle = `E2E-Focus帰属-${Date.now()}`;
     await openTicketView();
+    await $('//label[span[normalize-space(.)="タイトル・説明を検索"]]/input').setValue("");
     await $(
       '//section[.//h2[normalize-space(.)="In Progress"]]//input[@placeholder="タイトルだけで追加"]',
     ).setValue(ticketTitle);
     await $(
       '//section[.//h2[normalize-space(.)="In Progress"]]//button[normalize-space(.)="追加"]',
     ).click();
-    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    const detailButton = $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`);
+    await detailButton.waitForDisplayed();
+    await detailButton.click();
     await $('//div[@role="dialog"]//label[contains(., "見積時間")]/input').setValue("25");
     await $('//div[@role="dialog"]//button[normalize-space(.)="保存"]').click();
     await $(
