@@ -70,6 +70,13 @@ pub struct DiagnosticsSnapshot {
     pub deleted_count: u64,
     pub outbox_count: u64,
     pub conflict_count: u64,
+    pub google_tasks_selected_list_count: u64,
+    pub google_tasks_mapped_ticket_count: u64,
+    pub google_tasks_pending_outbox_count: u64,
+    pub google_tasks_conflict_count: u64,
+    pub google_tasks_last_success_at: Option<DateTime<Utc>>,
+    pub google_tasks_last_error_category: Option<String>,
+    pub google_tasks_next_retry_at: Option<DateTime<Utc>>,
     pub last_backup_at: Option<DateTime<Utc>>,
     pub integrity: &'static str,
 }
@@ -713,6 +720,114 @@ impl Database {
             .commit()
             .await
             .map_err(|error| AppError::database("e2e-google-fixture-commit", error))
+    }
+
+    #[cfg(feature = "e2e")]
+    pub async fn seed_google_tasks_fixture(&self) -> AppResult<Uuid> {
+        self.seed_google_calendar_recovery_fixture().await?;
+        let existing: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM tickets WHERE title = 'Google Tasks同期確認' AND deleted_at_utc IS NULL LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| AppError::database("e2e-google-tasks-ticket-read", error))?
+        .flatten();
+        let ticket_id = if let Some(id) = existing {
+            Uuid::parse_str(&id)
+                .map_err(|error| AppError::database("e2e-google-tasks-ticket-id", error))?
+        } else {
+            self.create_ticket(
+                Uuid::new_v4(),
+                crate::domain::TicketDraft {
+                    board_id: crate::infrastructure::ticket_repository::DEFAULT_TICKET_BOARD_ID,
+                    column_id: crate::infrastructure::ticket_repository::INBOX_TICKET_COLUMN_ID,
+                    parent_ticket_id: None,
+                    title: "Google Tasks同期確認".into(),
+                    description: "Synthetic conflict fixture".into(),
+                    priority: crate::domain::TicketPriority::High,
+                    due_date: chrono::NaiveDate::from_ymd_opt(2026, 8, 5),
+                    estimate_minutes: Some(30),
+                    tags: vec!["local-only".into()],
+                    checklist: Vec::new(),
+                },
+                Utc::now(),
+            )
+            .await?
+            .id
+        };
+        let now = "2026-08-03T00:00:00.000Z";
+        let list_id = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+        let base = serde_json::json!({
+            "title": "Google Tasks同期確認",
+            "notes": "Base notes",
+            "due_date": "2026-08-05",
+            "completed": false,
+            "parent_ticket_id": null,
+            "task_list_id": list_id
+        });
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| AppError::database("e2e-google-tasks-begin", error))?;
+        sqlx::query(
+            "UPDATE google_accounts SET scopes_json = ?, status = 'connected', updated_at_utc = ? WHERE id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'",
+        )
+        .bind(serde_json::json!([
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+            "https://www.googleapis.com/auth/tasks"
+        ]).to_string())
+        .bind(now)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("e2e-google-tasks-scopes", error))?;
+        sqlx::query(
+            "INSERT INTO google_task_lists(id, google_account_id, remote_list_id, display_name, selected, default_write_target, sync_state, last_success_at_utc, created_at_utc, updated_at_utc) VALUES (?, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'synthetic-task-list', '同期確認用Task List', 1, 1, 'conflict', ?, ?, ?) ON CONFLICT(id) DO UPDATE SET display_name = excluded.display_name, selected = 1, default_write_target = 1, sync_state = 'conflict', updated_at_utc = excluded.updated_at_utc",
+        )
+        .bind(list_id)
+        .bind(now)
+        .bind(now)
+        .bind(now)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("e2e-google-tasks-list", error))?;
+        sqlx::query(
+            "UPDATE google_tasks_config SET enabled = 1, updated_at_utc = ? WHERE singleton = 1",
+        )
+        .bind(now)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("e2e-google-tasks-enable", error))?;
+        sqlx::query(
+            "INSERT INTO google_task_mappings(ticket_id, google_task_list_id, remote_task_id, remote_etag, remote_updated_at_utc, base_snapshot_json, last_pulled_at_utc, created_at_utc, updated_at_utc) VALUES (?, ?, 'synthetic-task', 'synthetic-etag', ?, ?, ?, ?, ?) ON CONFLICT(ticket_id) DO UPDATE SET google_task_list_id = excluded.google_task_list_id, base_snapshot_json = excluded.base_snapshot_json, updated_at_utc = excluded.updated_at_utc",
+        )
+        .bind(ticket_id.to_string())
+        .bind(list_id)
+        .bind(now)
+        .bind(base.to_string())
+        .bind(now)
+        .bind(now)
+        .bind(now)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("e2e-google-tasks-mapping", error))?;
+        sqlx::query(
+            "INSERT INTO google_task_conflicts(id, ticket_id, field_name, base_value_json, local_value_json, remote_value_json, conflict_type, detected_at_utc) VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', ?, 'notes', ?, ?, ?, 'same_field', ?) ON CONFLICT(ticket_id, field_name) WHERE resolved_at_utc IS NULL DO UPDATE SET base_value_json = excluded.base_value_json, local_value_json = excluded.local_value_json, remote_value_json = excluded.remote_value_json, detected_at_utc = excluded.detected_at_utc",
+        )
+        .bind(ticket_id.to_string())
+        .bind(serde_json::json!("Base notes").to_string())
+        .bind(serde_json::json!("Local notes").to_string())
+        .bind(serde_json::json!("Google notes").to_string())
+        .bind(now)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|error| AppError::database("e2e-google-tasks-conflict", error))?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| AppError::database("e2e-google-tasks-commit", error))?;
+        Ok(ticket_id)
     }
 
     #[cfg(test)]
@@ -1479,6 +1594,46 @@ impl Database {
                 .fetch_one(&self.pool)
                 .await
                 .map_err(|error| AppError::database("diagnostics-conflicts", error))?;
+        let google_tasks_selected_list_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM google_task_lists WHERE selected = 1")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|error| AppError::database("diagnostics-google-tasks-lists", error))?;
+        let google_tasks_mapped_ticket_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM google_task_mappings")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|error| AppError::database("diagnostics-google-tasks-mappings", error))?;
+        let google_tasks_pending_outbox_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM google_task_outbox WHERE completed_at_utc IS NULL",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| AppError::database("diagnostics-google-tasks-outbox", error))?;
+        let google_tasks_conflict_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM google_task_conflicts WHERE resolved_at_utc IS NULL",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| AppError::database("diagnostics-google-tasks-conflicts", error))?;
+        let google_tasks_last_success: Option<String> =
+            sqlx::query_scalar("SELECT MAX(last_success_at_utc) FROM google_task_lists")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(|error| AppError::database("diagnostics-google-tasks-success", error))?;
+        let google_tasks_last_error_category: Option<String> = sqlx::query_scalar(
+            "SELECT last_error_category FROM google_task_lists WHERE last_error_category IS NOT NULL ORDER BY updated_at_utc DESC LIMIT 1",
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| AppError::database("diagnostics-google-tasks-error", error))?
+        .flatten();
+        let google_tasks_next_retry: Option<String> = sqlx::query_scalar(
+            "SELECT MIN(next_retry_at_utc) FROM google_task_lists WHERE next_retry_at_utc IS NOT NULL",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|error| AppError::database("diagnostics-google-tasks-retry", error))?;
         let last_backup: Option<String> =
             sqlx::query_scalar("SELECT MAX(created_at_utc) FROM backup_history WHERE verified = 1")
                 .fetch_one(&self.pool)
@@ -1487,12 +1642,25 @@ impl Database {
         self.integrity_check().await?;
         Ok(DiagnosticsSnapshot {
             app_version: app_version.into(),
-            schema_version: 16,
+            schema_version: 17,
             database_state: "ready",
             schedule_count: schedule_count.max(0) as u64,
             deleted_count: deleted_count.max(0) as u64,
             outbox_count: outbox_count.max(0) as u64,
             conflict_count: conflict_count.max(0) as u64,
+            google_tasks_selected_list_count: google_tasks_selected_list_count.max(0) as u64,
+            google_tasks_mapped_ticket_count: google_tasks_mapped_ticket_count.max(0) as u64,
+            google_tasks_pending_outbox_count: google_tasks_pending_outbox_count.max(0) as u64,
+            google_tasks_conflict_count: google_tasks_conflict_count.max(0) as u64,
+            google_tasks_last_success_at: google_tasks_last_success
+                .as_deref()
+                .map(|value| parse_datetime(value, "diagnostics-google-tasks-success-date"))
+                .transpose()?,
+            google_tasks_last_error_category,
+            google_tasks_next_retry_at: google_tasks_next_retry
+                .as_deref()
+                .map(|value| parse_datetime(value, "diagnostics-google-tasks-retry-date"))
+                .transpose()?,
             last_backup_at: last_backup
                 .as_deref()
                 .map(|value| parse_datetime(value, "diagnostics-backup-date"))
@@ -2943,7 +3111,7 @@ mod tests {
             )
         );
         assert_eq!(never, ("never".into(), None, None));
-        assert_eq!(schema_version, "16");
+        assert_eq!(schema_version, "17");
     }
 
     #[tokio::test]
@@ -3010,7 +3178,7 @@ mod tests {
                 "[]".into()
             )
         );
-        assert_eq!(schema_version, "16");
+        assert_eq!(schema_version, "17");
         assert!(invalid.is_err());
     }
 

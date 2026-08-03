@@ -1307,7 +1307,7 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        assert_eq!(version, "16");
+        assert_eq!(version, "17");
         assert_eq!((schedules, tickets, links), (1, 1, 0));
     }
 

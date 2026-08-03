@@ -30,6 +30,9 @@ export function TicketSchedulePlanner({
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState("");
   const [focusState, setFocusState] = useState<"idle" | "starting" | "started">("idle");
+  const [taskAction, setTaskAction] = useState<"idle" | "saving">("idle");
+  const [taskMessage, setTaskMessage] = useState("");
+  const [taskDeleteChoice, setTaskDeleteChoice] = useState<"detach" | "delete" | null>(null);
   const linksQuery = useQuery({
     queryKey: ["ticket-schedules", ticket.id],
     queryFn: () => client.ticketSchedules(ticket.id),
@@ -41,6 +44,14 @@ export function TicketSchedulePlanner({
   const focusHistoryQuery = useQuery({
     queryKey: ["ticket-focus-history", ticket.id],
     queryFn: () => client.ticketFocusHistory(ticket.id, 20),
+  });
+  const googleConnectionQuery = useQuery({
+    queryKey: ["google-connection"],
+    queryFn: () => client.googleConnection(),
+  });
+  const googleTaskStatusQuery = useQuery({
+    queryKey: ["ticket-google-task-status", ticket.id],
+    queryFn: async () => (await client.ticketGoogleTaskStatuses([ticket.id]))[0],
   });
   useEffect(() => {
     setDuration(ticket.estimateMinutes === null ? "" : String(ticket.estimateMinutes));
@@ -157,6 +168,40 @@ export function TicketSchedulePlanner({
     }
   }
 
+  async function updateGoogleTaskTarget(taskListId: string | null, deleteRemote = false) {
+    setTaskAction("saving");
+    setError("");
+    setTaskMessage("");
+    try {
+      await client.updateTicketGoogleTaskTarget({
+        ticketId: ticket.id,
+        taskListId,
+        deleteRemote,
+        operationId: crypto.randomUUID(),
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["ticket-google-task-status", ticket.id] }),
+        queryClient.invalidateQueries({ queryKey: ["google-connection"] }),
+      ]);
+      setTaskDeleteChoice(null);
+      setTaskMessage(
+        taskListId
+          ? "Google Tasks同期先を保存しました。反映状態はこの欄で確認できます。"
+          : deleteRemote
+            ? "Google側Taskの削除を反映待ちにしました。Local Ticketは保持されています。"
+            : "Google Tasks同期を解除しました。Local TicketとGoogle側Taskは保持されています。",
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof AppClientError
+          ? `${caught.detail.message} ${caught.detail.recovery}`
+          : "Google Tasks同期先を変更できませんでした。",
+      );
+    } finally {
+      setTaskAction("idle");
+    }
+  }
+
   return (
     <section className="ticket-planner" aria-labelledby={`ticket-planner-${ticket.id}`}>
       <div className="ticket-planner__heading">
@@ -203,6 +248,115 @@ export function TicketSchedulePlanner({
         </div>
       </dl>
       <p className="field-help">{translate("features.tickets.TicketSchedulePlanner.027")}</p>
+      <section className="ticket-google-task" aria-labelledby={`ticket-google-task-${ticket.id}`}>
+        <div className="ticket-planner__heading">
+          <div>
+            <h4 id={`ticket-google-task-${ticket.id}`}>Google Tasks</h4>
+            <p>タイトル・説明・日付・完了・親子・Listだけを同期します。</p>
+          </div>
+          <span className="state-chip" data-state={googleTaskStatusQuery.data?.state ?? "loading"}>
+            {ticketGoogleTaskStateLabel(googleTaskStatusQuery.data?.state)}
+          </span>
+        </div>
+        {!googleConnectionQuery.data?.tasks.scopeGranted ? (
+          <StatusMessage tone="warning" title="Google Tasksの再同意が必要です">
+            設定でCalendar +
+            Tasksをまとめて再同意してください。現在のCalendar接続は成功まで保持されます。
+          </StatusMessage>
+        ) : !googleConnectionQuery.data.tasks.enabled ? (
+          <StatusMessage title="Google Tasks同期は無効です">
+            設定でTasks同期を有効にしてから、このTicketの同期先を選んでください。
+          </StatusMessage>
+        ) : (
+          <>
+            <label>
+              同期先Task List
+              <select
+                value={googleTaskStatusQuery.data?.taskListId ?? ""}
+                disabled={taskAction === "saving"}
+                onChange={(event) =>
+                  void updateGoogleTaskTarget(event.target.value.length ? event.target.value : null)
+                }
+              >
+                {googleTaskStatusQuery.data?.taskListId ? null : (
+                  <option value="">同期先を選択</option>
+                )}
+                {googleConnectionQuery.data.tasks.taskLists
+                  .filter((list) => list.selected && list.syncState !== "unavailable")
+                  .map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.displayName}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <p className="field-help">
+              priority・見積・tags・Schedule・Focus実績はLocal専用で、Google notesへ埋め込みません。
+            </p>
+            {googleTaskStatusQuery.data?.taskListId ? (
+              taskDeleteChoice ? (
+                <StatusMessage
+                  tone="warning"
+                  title={
+                    taskDeleteChoice === "delete"
+                      ? "Google Tasksからも削除しますか？"
+                      : "同期だけを解除しますか？"
+                  }
+                >
+                  {taskDeleteChoice === "delete"
+                    ? "Local Ticketは削除せず、Google側のTaskだけを明示的に削除します。失敗時はOutboxで再試行します。"
+                    : "Local TicketとLocal専用項目はすべて保持されます。Google側のTaskは残ります。"}
+                  <span className="button-row">
+                    <button
+                      className={
+                        taskDeleteChoice === "delete"
+                          ? "button button--danger"
+                          : "button button--primary"
+                      }
+                      type="button"
+                      disabled={taskAction === "saving"}
+                      onClick={() =>
+                        void updateGoogleTaskTarget(null, taskDeleteChoice === "delete")
+                      }
+                    >
+                      この操作を実行
+                    </button>
+                    <button
+                      className="button"
+                      type="button"
+                      onClick={() => setTaskDeleteChoice(null)}
+                    >
+                      取消
+                    </button>
+                  </span>
+                </StatusMessage>
+              ) : (
+                <div className="button-row">
+                  <button
+                    className="button"
+                    type="button"
+                    onClick={() => setTaskDeleteChoice("detach")}
+                  >
+                    同期を解除してLocalに残す
+                  </button>
+                  <button
+                    className="button button--danger-outline"
+                    type="button"
+                    onClick={() => setTaskDeleteChoice("delete")}
+                  >
+                    Google Tasksからも削除
+                  </button>
+                </div>
+              )
+            ) : null}
+          </>
+        )}
+      </section>
+      {taskMessage ? (
+        <p className="success-text" role="status">
+          {taskMessage}
+        </p>
+      ) : null}
       <div className="ticket-planner__form">
         <label>
           {translate("features.tickets.TicketSchedulePlanner.008")}
@@ -361,4 +515,25 @@ export function TicketSchedulePlanner({
       </section>
     </section>
   );
+}
+
+function ticketGoogleTaskStateLabel(
+  state: Awaited<ReturnType<AppClient["ticketGoogleTaskStatuses"]>>[number]["state"] | undefined,
+): string {
+  if (!state) return "確認中";
+  return {
+    not_connected: "未接続",
+    scope_missing: "再同意が必要",
+    disabled: "無効",
+    never: "未同期",
+    syncing: "同期中",
+    synced: "同期済み",
+    pending: "反映待ち",
+    offline: "オフライン",
+    retry_scheduled: "再試行待ち",
+    conflict: "競合あり",
+    auth_required: "再認証が必要",
+    unsupported: "未対応操作",
+    validation_required: "入力確認が必要",
+  }[state];
 }

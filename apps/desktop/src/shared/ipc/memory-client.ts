@@ -15,6 +15,10 @@ import {
   type FocusScheduleSummary,
   type GoogleCalendar,
   type GoogleConnection,
+  type GoogleTasksConnection,
+  type GoogleTaskList,
+  type TicketGoogleTaskStatus,
+  type GoogleTaskConflict,
   type ImportPreview,
   type ImportResult,
   type LegacyImportPreview,
@@ -251,7 +255,7 @@ export class MemoryAppClient implements AppClient {
   async bootstrap(): Promise<Bootstrap> {
     const now = new Date();
     return {
-      schemaVersion: 16,
+      schemaVersion: 17,
       appVersion: "0.1.0-test",
       today: now.toISOString().slice(0, 10),
       timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo",
@@ -1119,12 +1123,19 @@ export class MemoryAppClient implements AppClient {
   async diagnostics(): Promise<DiagnosticsSnapshot> {
     return {
       appVersion: "0.1.0-test",
-      schemaVersion: 16,
+      schemaVersion: 17,
       databaseState: "ready",
       scheduleCount: this.schedules.filter((item) => item.deletedAt === null).length,
       deletedCount: this.schedules.filter((item) => item.deletedAt !== null).length,
       outboxCount: 0,
       conflictCount: 0,
+      googleTasksSelectedListCount: 0,
+      googleTasksMappedTicketCount: 0,
+      googleTasksPendingOutboxCount: 0,
+      googleTasksConflictCount: 0,
+      googleTasksLastSuccessAt: null,
+      googleTasksLastErrorCategory: null,
+      googleTasksNextRetryAt: null,
       lastBackupAt: null,
       integrity: "ok",
     };
@@ -1435,7 +1446,7 @@ export class MemoryAppClient implements AppClient {
       id: crypto.randomUUID(),
       fileName: "synthetic-backup.sqlite3",
       sizeBytes: 0,
-      schemaVersion: 16,
+      schemaVersion: 17,
       appVersion: "demo",
       verified: true,
       createdAt: new Date().toISOString(),
@@ -1473,6 +1484,7 @@ export class MemoryAppClient implements AppClient {
       scopes: [
         "https://www.googleapis.com/auth/calendar.events",
         "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+        "https://www.googleapis.com/auth/tasks",
       ],
     };
   }
@@ -1493,6 +1505,7 @@ export class MemoryAppClient implements AppClient {
       calendars: [],
       lastError: null,
       mappedScheduleCount: 0,
+      tasks: this.emptyGoogleTasksConnection(),
     };
   }
 
@@ -1500,8 +1513,66 @@ export class MemoryAppClient implements AppClient {
     throw new Error("calendar_not_found");
   }
 
+  async googleTasksConnection(): Promise<GoogleTasksConnection> {
+    return this.emptyGoogleTasksConnection();
+  }
+
+  async reconcileGoogleTasksFull(): Promise<GoogleTasksConnection> {
+    return this.emptyGoogleTasksConnection();
+  }
+
+  async setGoogleTasksEnabled(enabled: boolean): Promise<GoogleTasksConnection> {
+    return { ...this.emptyGoogleTasksConnection(), enabled, state: enabled ? "never" : "disabled" };
+  }
+
+  async updateGoogleTaskList(): Promise<GoogleTaskList> {
+    throw new Error("task_list_not_found");
+  }
+
+  async ticketGoogleTaskStatuses(ticketIds: string[]): Promise<TicketGoogleTaskStatus[]> {
+    return ticketIds.map((ticketId) => ({
+      ticketId,
+      state: "disabled",
+      taskListId: null,
+      taskListName: null,
+      lastSyncAt: null,
+      errorCategory: null,
+      pendingOperation: null,
+      conflictCount: 0,
+    }));
+  }
+
+  async updateTicketGoogleTaskTarget(request: {
+    ticketId: string;
+  }): Promise<TicketGoogleTaskStatus> {
+    return (await this.ticketGoogleTaskStatuses([request.ticketId]))[0]!;
+  }
+
+  async googleTaskConflicts(): Promise<GoogleTaskConflict[]> {
+    return [];
+  }
+
+  async resolveGoogleTaskConflict(): Promise<TicketGoogleTaskStatus> {
+    throw new Error("task_conflict_not_found");
+  }
+
   async disconnectGoogle(): Promise<number> {
     return 0;
+  }
+
+  private emptyGoogleTasksConnection(): GoogleTasksConnection {
+    return {
+      enabled: false,
+      scopeGranted: false,
+      state: "not_connected",
+      taskLists: [],
+      mappedTicketCount: 0,
+      pendingOutboxCount: 0,
+      conflictCount: 0,
+      selectedListCount: 0,
+      lastSuccessAt: null,
+      nextRetryAt: null,
+    };
   }
 
   private checkpoint(): void {

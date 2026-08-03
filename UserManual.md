@@ -150,6 +150,20 @@ Googleの複数ルール、追加日、除外日を含む繰り返し予定も�
 
 同じフィールドを両側で変更した場合や削除競合は自動上書きせず、競合画面でフィールドごとにローカル／Google を選びます。認証失効時は再接続、レート制限や一時障害は次回時刻付きで再試行します。
 
+### Google Tasks とTicketを同期する
+
+Google Tasks同期は、Google側でも確認したい行動項目をTicketと対応させる機能です。Google Tasksを使わない場合は無効のままにでき、Calendar同期とLocal Ticketは変わりません。
+
+1. 既存のCalendar接続にTasks権限がない場合は「Calendar + Tasksを再同意」を選びます。新しい権限とCalendar／Task List取得がすべて成功するまで、以前のCalendar認証情報を置き換えません。
+2. 「Tasks同期を有効化」し、同期するTask Listと「新規Ticketの同期先」を選びます。
+3. Ticket詳細で同期先Task Listを選びます。設定後は反映待ち、同期済み、オフライン、再試行待ち、競合などを同じ欄で確認できます。
+
+同期するのはtitle、notes、dueの日付、完了、親子、Task Listです。priority、見積、tags、Scheduleとの関連、Focus実績はLocal専用で、Google notesへ埋め込みません。Googleのdueは時刻を保持しないため、作業時刻はScheduleで管理します。割り当てられたGoogleタスクは初期版の対象外です。
+
+通常は起動時、アプリ復帰時、5分間隔で差分同期します。「今すぐ同期」はCalendarとTasksの通常同期、「完全照合」は選択Listの全件を再確認します。全ページ取得とローカルtransactionが完了するまでwatermarkを更新しません。
+
+同じ項目を両側で変えた場合は、基準／Local／Googleを確認し、Localを再送、Googleを採用、または同期解除を選びます。作成結果が通信切断で不明な場合は重複防止のため自動再作成せず、Google側を確認してから同期解除します。同期解除は両側を保持します。Google側Taskの削除は別の確認操作で、Local Ticketは保持します。
+
 Google 接続を解除すると、その接続に残る未送信 Outbox は無効化され、未送信の予定はこの端末だけの予定へ戻ります。後から別の Google アカウントやカレンダーへ接続しても、以前の未送信操作を自動転送しません。
 
 ## 9. Compact Window とトレイ
@@ -166,7 +180,7 @@ Google 接続を解除すると、その接続に残る未送信 Outbox は無�
 - 復元準備では検証済みバックアップを次回起動用に staging します。再起動時は staging 上の候補へ integrity check、migration、smoke query を実行し、すべて通過してから現在 DB を一時退避して切り替えます。候補の migration に失敗した場合は現在 DB を切り替えません。切替途中で中断した場合は次回起動時に退避済み DB を回復します。
 - 全データ削除は画面に示された確認文の完全一致が必要です。Google credential も OS 秘密ストアから削除します。
 
-「データと診断」にはアプリ／DB version、予定件数、削除待ち、Outbox、競合、整合性、最終バックアップ、通知台帳を表示します。「バージョン情報をコピー」と「マスク済み診断 JSON」には予定本文、メール、calendar / event ID、token、絶対パスを含めません。
+「データと診断」にはアプリ／DB version、予定件数、削除待ち、Outbox、競合、整合性、最終バックアップ、通知台帳に加え、Google Tasksの選択List数、同期Ticket数、反映待ち、競合、最終成功、エラー分類、次回再試行を表示します。「バージョン情報をコピー」と「マスク済み診断 JSON」には予定／Ticket本文、メール、calendar / event / task / list ID、token、絶対パスを含めません。
 
 ## 11. 既知の配布制約
 

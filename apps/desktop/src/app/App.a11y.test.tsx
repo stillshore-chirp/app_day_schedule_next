@@ -73,6 +73,18 @@ describe("App accessibility", () => {
           calendars: [],
           lastError: null,
           mappedScheduleCount: 0,
+          tasks: {
+            enabled: false,
+            scopeGranted: false,
+            state: "not_connected",
+            taskLists: [],
+            mappedTicketCount: 0,
+            pendingOutboxCount: 0,
+            conflictCount: 0,
+            selectedListCount: 0,
+            lastSuccessAt: null,
+            nextRetryAt: null,
+          },
         });
       }
     }
@@ -144,6 +156,18 @@ describe("App accessibility", () => {
           ],
           lastError: null,
           mappedScheduleCount: 0,
+          tasks: {
+            enabled: false,
+            scopeGranted: false,
+            state: "not_connected",
+            taskLists: [],
+            mappedTicketCount: 0,
+            pendingOutboxCount: 0,
+            conflictCount: 0,
+            selectedListCount: 0,
+            lastSuccessAt: null,
+            nextRetryAt: null,
+          },
         });
       }
     }

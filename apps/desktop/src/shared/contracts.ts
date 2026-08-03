@@ -684,6 +684,86 @@ export const googleCalendarSchema = z.object({
   nextRetryAt: z.iso.datetime({ offset: true }).nullable(),
 });
 
+export const googleTaskSyncStateSchema = z.enum([
+  "not_connected",
+  "scope_missing",
+  "disabled",
+  "never",
+  "syncing",
+  "synced",
+  "pending",
+  "offline",
+  "retry_scheduled",
+  "conflict",
+  "auth_required",
+  "unsupported",
+  "validation_required",
+]);
+
+export const googleTaskListSchema = z.object({
+  id: z.uuid(),
+  displayName: z.string().min(1).max(1_024),
+  selected: z.boolean(),
+  defaultWriteTarget: z.boolean(),
+  syncState: z.enum([
+    "never",
+    "syncing",
+    "synced",
+    "offline",
+    "retry_scheduled",
+    "auth_required",
+    "conflict",
+    "unavailable",
+  ]),
+  lastSuccessAt: z.iso.datetime({ offset: true }).nullable(),
+  nextRetryAt: z.iso.datetime({ offset: true }).nullable(),
+  lastErrorCategory: z.string().max(80).nullable(),
+});
+
+export const googleTasksConnectionSchema = z.object({
+  enabled: z.boolean(),
+  scopeGranted: z.boolean(),
+  state: googleTaskSyncStateSchema,
+  taskLists: z.array(googleTaskListSchema).max(2_000),
+  mappedTicketCount: z.number().int().nonnegative(),
+  pendingOutboxCount: z.number().int().nonnegative(),
+  conflictCount: z.number().int().nonnegative(),
+  selectedListCount: z.number().int().nonnegative(),
+  lastSuccessAt: z.iso.datetime({ offset: true }).nullable(),
+  nextRetryAt: z.iso.datetime({ offset: true }).nullable(),
+});
+
+export const ticketGoogleTaskStatusSchema = z.object({
+  ticketId: z.uuid(),
+  state: googleTaskSyncStateSchema,
+  taskListId: z.uuid().nullable(),
+  taskListName: z.string().min(1).max(1_024).nullable(),
+  lastSyncAt: z.iso.datetime({ offset: true }).nullable(),
+  errorCategory: z.string().max(80).nullable(),
+  pendingOperation: z.string().max(40).nullable(),
+  conflictCount: z.number().int().nonnegative(),
+});
+
+export const googleTaskConflictSchema = z.object({
+  id: z.uuid(),
+  ticketId: z.uuid(),
+  ticketTitle: z.string().min(1).max(1_024),
+  fieldName: z.enum(["title", "notes", "due", "completed", "parent", "tasklist", "delete"]),
+  baseValue: z.unknown(),
+  localValue: z.unknown(),
+  googleValue: z.unknown(),
+  conflictType: z.enum([
+    "same_field",
+    "remote_delete",
+    "local_delete",
+    "complete_column",
+    "parent_move",
+    "list_move",
+    "uncertain_create",
+  ]),
+  detectedAt: z.iso.datetime({ offset: true }),
+});
+
 export const googleConnectionSchema = z.object({
   configured: z.boolean(),
   state: z.enum([
@@ -699,6 +779,7 @@ export const googleConnectionSchema = z.object({
   calendars: z.array(googleCalendarSchema).max(10_000),
   lastError: z.string().max(100).nullable(),
   mappedScheduleCount: z.number().int().nonnegative(),
+  tasks: googleTasksConnectionSchema,
 });
 
 export const oauthConfigResultSchema = z.object({
@@ -707,6 +788,7 @@ export const oauthConfigResultSchema = z.object({
   scopes: z.tuple([
     z.literal("https://www.googleapis.com/auth/calendar.events"),
     z.literal("https://www.googleapis.com/auth/calendar.calendarlist.readonly"),
+    z.literal("https://www.googleapis.com/auth/tasks"),
   ]),
 });
 
@@ -716,6 +798,10 @@ export const oauthLaunchResultSchema = z.object({
 });
 
 export type GoogleCalendar = z.infer<typeof googleCalendarSchema>;
+export type GoogleTaskList = z.infer<typeof googleTaskListSchema>;
+export type GoogleTasksConnection = z.infer<typeof googleTasksConnectionSchema>;
+export type TicketGoogleTaskStatus = z.infer<typeof ticketGoogleTaskStatusSchema>;
+export type GoogleTaskConflict = z.infer<typeof googleTaskConflictSchema>;
 export type GoogleConnection = z.infer<typeof googleConnectionSchema>;
 export type OAuthConfigResult = z.infer<typeof oauthConfigResultSchema>;
 export type OAuthLaunchResult = z.infer<typeof oauthLaunchResultSchema>;

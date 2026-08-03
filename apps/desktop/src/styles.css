@@ -2493,6 +2493,77 @@ tbody tr:focus {
   color: var(--text-muted);
 }
 
+.google-tasks-panel {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.google-tasks-panel h3,
+.google-tasks-panel h4,
+.google-tasks-panel p {
+  margin: 0;
+}
+
+.google-tasks-panel .google-calendar-list article {
+  grid-template-columns: minmax(160px, 1fr) auto auto;
+}
+
+.google-tasks-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(90px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.google-tasks-counts > div {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.google-tasks-counts dd {
+  margin: 3px 0 0;
+  font-weight: 750;
+}
+
+.google-task-conflicts {
+  display: grid;
+  gap: 10px;
+}
+
+.google-task-conflicts .conflict-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.google-task-conflicts dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.google-task-conflicts dl > div {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.google-task-conflicts dt {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.google-task-conflicts dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
 .disconnect-confirm {
   display: grid;
   gap: 10px;
@@ -2515,8 +2586,16 @@ tbody tr:focus {
 }
 
 .section-heading-row h2,
+.section-heading-row h3,
 .section-heading-row p {
   margin: 0;
+}
+
+@media (max-width: 820px) {
+  .google-tasks-counts,
+  .google-task-conflicts dl {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 .section-heading-row p {
@@ -3718,6 +3797,26 @@ tbody tr:focus {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin: 0;
+}
+
+.ticket-google-task {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-soft);
+}
+
+.ticket-google-task h4,
+.ticket-google-task p {
+  margin: 0;
+}
+
+.ticket-google-task > label {
+  display: grid;
+  gap: 6px;
+  max-width: 460px;
 }
 
 .ticket-focus-metrics > div {

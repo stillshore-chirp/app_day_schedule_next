@@ -10,21 +10,22 @@ use crate::{
     application::{AppService, Bootstrap},
     domain::{
         AssignTicketScheduleRequest, DayTemplate, DayTemplateDraft, FocusCommand, FocusState,
-        FreeAlarm, FreeAlarmDraft, LinkTicketScheduleRequest, LocalTimeResolution, Priority,
-        QuickBlock, QuickBlockDraft, RecurrenceEditScope, RecurrencePreview, Schedule,
-        ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery, ScheduleStatus, Settings,
-        StopwatchCommand, StopwatchState, SyncStatus, SyncSummary, TemplateApplyMode,
-        TemplatePreview, Ticket, TicketBoard, TicketDraft, TicketFocusHistoryItem,
-        TicketHistoryItem, TicketPage, TicketPatch, TicketPlanningSummary, TicketQuery,
-        TicketScheduleLink, TimerCommand, TimerDraft, TimerSet, TimerState,
-        UnlinkTicketScheduleRequest, UserSafeError,
+        FreeAlarm, FreeAlarmDraft, GoogleTaskConflict, GoogleTaskList, GoogleTasksConnection,
+        LinkTicketScheduleRequest, LocalTimeResolution, Priority, QuickBlock, QuickBlockDraft,
+        RecurrenceEditScope, RecurrencePreview, Schedule, ScheduleClassificationPatch,
+        ScheduleDraft, ScheduleQuery, ScheduleStatus, Settings, StopwatchCommand, StopwatchState,
+        SyncStatus, SyncSummary, TemplateApplyMode, TemplatePreview, Ticket, TicketBoard,
+        TicketDraft, TicketFocusHistoryItem, TicketGoogleTaskStatus, TicketHistoryItem, TicketPage,
+        TicketPatch, TicketPlanningSummary, TicketQuery, TicketScheduleLink, TimerCommand,
+        TimerDraft, TimerSet, TimerState, UnlinkTicketScheduleRequest, UserSafeError,
     },
     infrastructure::{
         BackupRecord, ChangeResult, ConflictChoice, DeliveryResult, DiagnosticsExportResult,
         DiagnosticsSnapshot, DisconnectMode, ExportResult, FocusHistoryReport, GoogleCalendar,
-        GoogleConnection, ImportMode, ImportPreview, ImportResult, LegacyImportPreview,
-        LegacyImportResult, NotificationDelivery, NotificationLedgerItem, OAuthConfigResult,
-        RestoreStageResult, SyncConflictItem, SyncQueueItem,
+        GoogleConnection, GoogleTaskConflictResolveRequest, GoogleTaskListUpdate, ImportMode,
+        ImportPreview, ImportResult, LegacyImportPreview, LegacyImportResult, NotificationDelivery,
+        NotificationLedgerItem, OAuthConfigResult, RestoreStageResult, SyncConflictItem,
+        SyncQueueItem, TicketGoogleTaskTargetUpdate,
     },
 };
 
@@ -301,6 +302,18 @@ pub struct GoogleCalendarUpdateRequest {
     id: Uuid,
     selected: bool,
     default_write_target: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GoogleTasksEnableRequest {
+    enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TicketGoogleTaskStatusRequest {
+    ticket_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -621,6 +634,15 @@ pub async fn e2e_google_calendar_recovery_seed(
 ) -> CommandResult<()> {
     service
         .seed_google_calendar_recovery_fixture()
+        .await
+        .map_err(Into::into)
+}
+
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn e2e_google_tasks_seed(service: State<'_, AppService>) -> CommandResult<Uuid> {
+    service
+        .seed_google_tasks_fixture()
         .await
         .map_err(Into::into)
 }
@@ -1078,6 +1100,86 @@ pub async fn google_calendar_update(
 ) -> CommandResult<GoogleCalendar> {
     service
         .update_google_calendar(request.id, request.selected, request.default_write_target)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_tasks_connection_get(
+    service: State<'_, AppService>,
+) -> CommandResult<GoogleTasksConnection> {
+    service.google_tasks_connection().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_tasks_full_reconcile(
+    service: State<'_, AppService>,
+    request: OperationRequest,
+) -> CommandResult<GoogleTasksConnection> {
+    service
+        .reconcile_google_tasks_full(request.operation_id)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_tasks_enabled_set(
+    service: State<'_, AppService>,
+    request: GoogleTasksEnableRequest,
+) -> CommandResult<GoogleTasksConnection> {
+    service
+        .set_google_tasks_enabled(request.enabled)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_task_list_update(
+    service: State<'_, AppService>,
+    request: GoogleTaskListUpdate,
+) -> CommandResult<GoogleTaskList> {
+    service
+        .update_google_task_list(request)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_google_task_status_list(
+    service: State<'_, AppService>,
+    request: TicketGoogleTaskStatusRequest,
+) -> CommandResult<Vec<TicketGoogleTaskStatus>> {
+    service
+        .ticket_google_task_statuses(&request.ticket_ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_google_task_target_update(
+    service: State<'_, AppService>,
+    request: TicketGoogleTaskTargetUpdate,
+) -> CommandResult<TicketGoogleTaskStatus> {
+    service
+        .update_ticket_google_task_target(request)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_task_conflict_list(
+    service: State<'_, AppService>,
+) -> CommandResult<Vec<GoogleTaskConflict>> {
+    service.google_task_conflicts().await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn google_task_conflict_resolve(
+    service: State<'_, AppService>,
+    request: GoogleTaskConflictResolveRequest,
+) -> CommandResult<TicketGoogleTaskStatus> {
+    service
+        .resolve_google_task_conflict(request)
         .await
         .map_err(Into::into)
 }

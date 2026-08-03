@@ -12,6 +12,10 @@ import {
   focusScheduleSummarySchema,
   googleCalendarSchema,
   googleConnectionSchema,
+  googleTasksConnectionSchema,
+  googleTaskListSchema,
+  ticketGoogleTaskStatusSchema,
+  googleTaskConflictSchema,
   importPreviewSchema,
   importResultSchema,
   legacyImportPreviewSchema,
@@ -58,6 +62,10 @@ import {
   type FocusScheduleSummary,
   type GoogleCalendar,
   type GoogleConnection,
+  type GoogleTasksConnection,
+  type GoogleTaskList,
+  type TicketGoogleTaskStatus,
+  type GoogleTaskConflict,
   type ImportPreview,
   type ImportResult,
   type LegacyImportPreview,
@@ -115,6 +123,13 @@ export interface DiagnosticsSnapshot {
   deletedCount: number;
   outboxCount: number;
   conflictCount: number;
+  googleTasksSelectedListCount: number;
+  googleTasksMappedTicketCount: number;
+  googleTasksPendingOutboxCount: number;
+  googleTasksConflictCount: number;
+  googleTasksLastSuccessAt: string | null;
+  googleTasksLastErrorCategory: string | null;
+  googleTasksNextRetryAt: string | null;
   lastBackupAt: string | null;
   integrity: "ok" | "check_required";
 }
@@ -227,6 +242,27 @@ export interface AppClient {
     selected: boolean,
     defaultWriteTarget: boolean,
   ): Promise<GoogleCalendar>;
+  googleTasksConnection(): Promise<GoogleTasksConnection>;
+  reconcileGoogleTasksFull(operationId: string): Promise<GoogleTasksConnection>;
+  setGoogleTasksEnabled(enabled: boolean): Promise<GoogleTasksConnection>;
+  updateGoogleTaskList(
+    id: string,
+    selected: boolean,
+    defaultWriteTarget: boolean,
+  ): Promise<GoogleTaskList>;
+  ticketGoogleTaskStatuses(ticketIds: string[]): Promise<TicketGoogleTaskStatus[]>;
+  updateTicketGoogleTaskTarget(request: {
+    ticketId: string;
+    taskListId: string | null;
+    deleteRemote: boolean;
+    operationId: string;
+  }): Promise<TicketGoogleTaskStatus>;
+  googleTaskConflicts(): Promise<GoogleTaskConflict[]>;
+  resolveGoogleTaskConflict(request: {
+    conflictId: string;
+    resolution: "local" | "google" | "detach" | "delete_local";
+    operationId: string;
+  }): Promise<TicketGoogleTaskStatus>;
   disconnectGoogle(mode: "keep_local" | "delete_mapped_local"): Promise<number>;
 }
 
@@ -714,6 +750,63 @@ export class TauriAppClient implements AppClient {
     );
   }
 
+  async googleTasksConnection(): Promise<GoogleTasksConnection> {
+    return googleTasksConnectionSchema.parse(await call("google_tasks_connection_get"));
+  }
+
+  async reconcileGoogleTasksFull(operationId: string): Promise<GoogleTasksConnection> {
+    return googleTasksConnectionSchema.parse(
+      await call("google_tasks_full_reconcile", { request: { operationId } }),
+    );
+  }
+
+  async setGoogleTasksEnabled(enabled: boolean): Promise<GoogleTasksConnection> {
+    return googleTasksConnectionSchema.parse(
+      await call("google_tasks_enabled_set", { request: { enabled } }),
+    );
+  }
+
+  async updateGoogleTaskList(
+    id: string,
+    selected: boolean,
+    defaultWriteTarget: boolean,
+  ): Promise<GoogleTaskList> {
+    return googleTaskListSchema.parse(
+      await call("google_task_list_update", { request: { id, selected, defaultWriteTarget } }),
+    );
+  }
+
+  async ticketGoogleTaskStatuses(ticketIds: string[]): Promise<TicketGoogleTaskStatus[]> {
+    return ticketGoogleTaskStatusSchema
+      .array()
+      .parse(await call("ticket_google_task_status_list", { request: { ticketIds } }));
+  }
+
+  async updateTicketGoogleTaskTarget(request: {
+    ticketId: string;
+    taskListId: string | null;
+    deleteRemote: boolean;
+    operationId: string;
+  }): Promise<TicketGoogleTaskStatus> {
+    return ticketGoogleTaskStatusSchema.parse(
+      await call("ticket_google_task_target_update", { request }),
+    );
+  }
+
+  async googleTaskConflicts(): Promise<GoogleTaskConflict[]> {
+    return googleTaskConflictSchema.array().parse(await call("google_task_conflict_list"));
+  }
+
+  async resolveGoogleTaskConflict(request: {
+    conflictId: string;
+    resolution: "local" | "google" | "detach" | "delete_local";
+    operationId: string;
+  }): Promise<TicketGoogleTaskStatus> {
+    return ticketGoogleTaskStatusSchema.parse(
+      await call("google_task_conflict_resolve", { request }),
+    );
+  }
+
   async disconnectGoogle(mode: "keep_local" | "delete_mapped_local"): Promise<number> {
     return call("google_disconnect", { mode });
   }
@@ -986,6 +1079,30 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   updateGoogleCalendar(): Promise<GoogleCalendar> {
+    return Promise.reject(this.unavailable());
+  }
+  googleTasksConnection(): Promise<GoogleTasksConnection> {
+    return Promise.reject(this.unavailable());
+  }
+  reconcileGoogleTasksFull(): Promise<GoogleTasksConnection> {
+    return Promise.reject(this.unavailable());
+  }
+  setGoogleTasksEnabled(): Promise<GoogleTasksConnection> {
+    return Promise.reject(this.unavailable());
+  }
+  updateGoogleTaskList(): Promise<GoogleTaskList> {
+    return Promise.reject(this.unavailable());
+  }
+  ticketGoogleTaskStatuses(): Promise<TicketGoogleTaskStatus[]> {
+    return Promise.reject(this.unavailable());
+  }
+  updateTicketGoogleTaskTarget(): Promise<TicketGoogleTaskStatus> {
+    return Promise.reject(this.unavailable());
+  }
+  googleTaskConflicts(): Promise<GoogleTaskConflict[]> {
+    return Promise.reject(this.unavailable());
+  }
+  resolveGoogleTaskConflict(): Promise<TicketGoogleTaskStatus> {
     return Promise.reject(this.unavailable());
   }
   disconnectGoogle(): Promise<number> {

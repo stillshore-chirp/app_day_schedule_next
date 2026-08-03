@@ -1,5 +1,6 @@
 pub mod error;
 pub mod focus;
+pub mod google_tasks;
 pub mod library;
 pub mod notification;
 pub mod recurrence;
@@ -13,6 +14,10 @@ pub mod timer;
 pub use error::{AppError, AppResult, UserSafeError};
 pub use focus::validate_transition as validate_focus_transition;
 pub use focus::{FocusCommand, FocusPhase, FocusState};
+pub use google_tasks::{
+    GoogleTaskConflict, GoogleTaskConflictResolution, GoogleTaskList, GoogleTaskSyncState,
+    GoogleTasksConnection, TicketGoogleTaskStatus,
+};
 pub use library::{
     DayTemplate, DayTemplateDraft, FreeAlarm, FreeAlarmDraft, QuickBlock, QuickBlockDraft,
     TemplateApplyMode, TemplateBlock, TemplateBlockDraft, TemplatePreview, TemplatePreviewItem,

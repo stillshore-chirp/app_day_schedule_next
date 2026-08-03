@@ -26,14 +26,18 @@ use uuid::Uuid;
 use crate::{
     application::OperationCancellation,
     domain::{
-        AppError, AppResult, Priority, Schedule, ScheduleDraft, ScheduleStatus, SyncStatus,
-        SyncSummary,
+        AppError, AppResult, GoogleTasksConnection, Priority, Schedule, ScheduleDraft,
+        ScheduleStatus, SyncStatus, SyncSummary,
     },
 };
 
 use super::{
     Database,
     database::{insert_schedule, row_to_schedule, update_schedule_row},
+    google_tasks::{
+        TASKS_SCOPE, fetch_and_persist_task_lists_for_oauth, reconcile_google_tasks_full,
+        sync_google_tasks,
+    },
 };
 
 const KEYRING_SERVICE: &str = "com.stillshorechirp.dayschedulenext.google";
@@ -59,7 +63,7 @@ static OAUTH_ATTEMPT_GENERATION: AtomicU64 = AtomicU64::new(0);
 pub struct OAuthConfigResult {
     pub configured: bool,
     pub client_id_hint: String,
-    pub scopes: [&'static str; 2],
+    pub scopes: [&'static str; 3],
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -79,6 +83,7 @@ pub struct GoogleConnection {
     pub calendars: Vec<GoogleCalendar>,
     pub last_error: Option<String>,
     pub mapped_schedule_count: u64,
+    pub tasks: GoogleTasksConnection,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -162,6 +167,8 @@ struct TokenResponse {
 enum OAuthFailureCategory {
     CallbackTimeout,
     CallbackInvalid,
+    AccessDenied,
+    PolicyDenied,
     AttemptCancelled,
     TokenNetwork,
     TokenInvalidClient,
@@ -174,6 +181,7 @@ enum OAuthFailureCategory {
     CredentialStoreFailed,
     AccountPersistenceFailed,
     CalendarFetchFailed,
+    TasksFetchFailed,
 }
 
 impl OAuthFailureCategory {
@@ -181,6 +189,8 @@ impl OAuthFailureCategory {
         match self {
             Self::CallbackTimeout => "oauth_callback_timeout",
             Self::CallbackInvalid => "oauth_callback_invalid",
+            Self::AccessDenied => "oauth_access_denied",
+            Self::PolicyDenied => "oauth_policy_denied",
             Self::AttemptCancelled => "oauth_attempt_cancelled",
             Self::TokenNetwork => "oauth_token_network",
             Self::TokenInvalidClient => "oauth_token_invalid_client",
@@ -193,6 +203,7 @@ impl OAuthFailureCategory {
             Self::CredentialStoreFailed => "oauth_credential_store_failed",
             Self::AccountPersistenceFailed => "oauth_account_persistence_failed",
             Self::CalendarFetchFailed => "oauth_calendar_fetch_failed",
+            Self::TasksFetchFailed => "oauth_tasks_fetch_failed",
         }
     }
 }
@@ -292,7 +303,7 @@ impl Database {
         Ok(OAuthConfigResult {
             configured: true,
             client_id_hint: client_id_hint(&parsed.installed.client_id),
-            scopes: [CALENDAR_SCOPE, CALENDAR_LIST_SCOPE],
+            scopes: [CALENDAR_SCOPE, CALENDAR_LIST_SCOPE, TASKS_SCOPE],
         })
     }
 
@@ -351,7 +362,10 @@ impl Database {
             .append_pair("client_id", &config.client_id)
             .append_pair("redirect_uri", &redirect_uri)
             .append_pair("response_type", "code")
-            .append_pair("scope", &format!("{CALENDAR_SCOPE} {CALENDAR_LIST_SCOPE}"))
+            .append_pair(
+                "scope",
+                &format!("{CALENDAR_SCOPE} {CALENDAR_LIST_SCOPE} {TASKS_SCOPE}"),
+            )
             .append_pair("access_type", "offline")
             .append_pair("prompt", "consent")
             .append_pair("code_challenge", &challenge)
@@ -443,6 +457,7 @@ impl Database {
             calendars,
             last_error,
             mapped_schedule_count: mapped_schedule_count.max(0) as u64,
+            tasks: self.google_tasks_connection().await?,
         })
     }
 
@@ -648,17 +663,23 @@ impl Database {
             push_due_outbox(self, &client, &access_token, cancellation).await?;
             record_google_sync_stage(self, "pull").await?;
             pull_selected_calendars(self, &client, &access_token, cancellation).await?;
+            record_google_sync_stage(self, "tasks").await?;
+            sync_google_tasks(self, &client, account_id, &access_token, cancellation).await?;
             cancellation.check()?;
             record_google_sync_stage(self, "finalize").await?;
             let now = Utc::now().to_rfc3339();
-            let has_incomplete_calendar: bool = sqlx::query_scalar(
-                "SELECT EXISTS(SELECT 1 FROM google_calendars WHERE account_id = ? AND selected = 1 AND sync_state != 'synced')",
+            let has_incomplete_remote: bool = sqlx::query_scalar(
+                "SELECT EXISTS(SELECT 1 FROM google_calendars WHERE account_id = ? AND selected = 1 AND sync_state != 'synced')
+                 OR EXISTS(SELECT 1 FROM google_task_lists l JOIN google_tasks_config c ON c.singleton = 1 WHERE l.google_account_id = ? AND c.enabled = 1 AND l.selected = 1 AND l.sync_state != 'synced')
+                 OR EXISTS(SELECT 1 FROM google_task_outbox WHERE completed_at_utc IS NULL)
+                 OR EXISTS(SELECT 1 FROM google_task_conflicts WHERE resolved_at_utc IS NULL)",
             )
+            .bind(account_id.to_string())
             .bind(account_id.to_string())
             .fetch_one(&self.pool)
             .await
-            .map_err(|error| AppError::database("sync-account-calendar-state", error))?;
-            if has_incomplete_calendar {
+            .map_err(|error| AppError::database("sync-account-remote-state", error))?;
+            if has_incomplete_remote {
                 sqlx::query(
                     "UPDATE google_accounts SET status = 'connected', next_retry_at_utc = NULL, updated_at_utc = ? WHERE id = ?",
                 )
@@ -698,6 +719,19 @@ impl Database {
             }
         }
         result
+    }
+
+    pub async fn run_google_tasks_full_reconcile(
+        &self,
+        cancellation: &OperationCancellation,
+    ) -> AppResult<GoogleTasksConnection> {
+        let client = Client::builder()
+            .timeout(StdDuration::from_secs(30))
+            .build()
+            .map_err(|error| AppError::database("tasks-reconcile-http-client", error))?;
+        let (account_id, access_token) = self.valid_access_token(&client).await?;
+        reconcile_google_tasks_full(self, &client, account_id, &access_token, cancellation).await?;
+        self.google_tasks_connection().await
     }
 
     async fn valid_access_token(&self, client: &Client) -> AppResult<(Uuid, String)> {
@@ -864,7 +898,10 @@ async fn complete_oauth(
         .get("code")
         .map(|value| value.as_ref())
         .unwrap_or("");
-    let success = !code.is_empty() && constant_time_eq(state.as_bytes(), expected_state.as_bytes());
+    let callback_error = parameters.get("error").map(|value| value.as_ref());
+    let success = callback_error.is_none()
+        && !code.is_empty()
+        && constant_time_eq(state.as_bytes(), expected_state.as_bytes());
     let response_body = if success {
         "<!doctype html><meta charset=utf-8><title>接続を確認中</title><p>Day Schedule Next で接続を確認しています。このタブは閉じられます。</p>"
     } else {
@@ -881,7 +918,11 @@ async fn complete_oauth(
         .await
         .map_err(|_| OAuthFailureCategory::CallbackInvalid)?;
     if !success {
-        return Err(OAuthFailureCategory::CallbackInvalid);
+        return Err(match callback_error {
+            Some("access_denied") => OAuthFailureCategory::AccessDenied,
+            Some("admin_policy_enforced" | "org_internal") => OAuthFailureCategory::PolicyDenied,
+            _ => OAuthFailureCategory::CallbackInvalid,
+        });
     }
     ensure_oauth_attempt_is_current(attempt_id)
         .map_err(|_| OAuthFailureCategory::AttemptCancelled)?;
@@ -921,35 +962,101 @@ async fn complete_oauth(
     validate_token_response(&token).map_err(|_| OAuthFailureCategory::TokenScopeInvalid)?;
     ensure_oauth_attempt_is_current(attempt_id)
         .map_err(|_| OAuthFailureCategory::AttemptCancelled)?;
-    let refresh_token = token
-        .refresh_token
-        .ok_or(OAuthFailureCategory::RefreshTokenMissing)?;
     let account = oauth_account_target(&database)
         .await
         .map_err(|_| OAuthFailureCategory::AccountPersistenceFailed)?;
+    let refresh_token = match token.refresh_token {
+        Some(value) => value,
+        None if account.existing => {
+            let previous = load_keyring(account.credential_key.clone())
+                .await
+                .map_err(|_| OAuthFailureCategory::RefreshTokenMissing)?;
+            serde_json::from_str::<TokenSecret>(&previous)
+                .map_err(|_| OAuthFailureCategory::RefreshTokenMissing)?
+                .refresh_token
+        }
+        None => return Err(OAuthFailureCategory::RefreshTokenMissing),
+    };
     let secret = TokenSecret {
         access_token: token.access_token,
         refresh_token,
         expires_at: Utc::now() + Duration::seconds(token.expires_in.max(60)),
     };
-    store_keyring(
-        account.credential_key.clone(),
-        serde_json::to_string(&secret).map_err(|_| OAuthFailureCategory::CredentialStoreFailed)?,
-    )
-    .await
-    .map_err(|_| OAuthFailureCategory::CredentialStoreFailed)?;
-    persist_connected_account(&database, &account, &Utc::now().to_rfc3339())
+    if account.existing {
+        // Validate both APIs before replacing the credential used by an existing
+        // Calendar connection. A partial grant or Tasks failure keeps the old
+        // credential usable.
+        fetch_and_persist_calendars(
+            &database,
+            &client,
+            account.account_id,
+            &secret.access_token,
+            None,
+        )
         .await
-        .map_err(|_| OAuthFailureCategory::AccountPersistenceFailed)?;
-    fetch_and_persist_calendars(
-        &database,
-        &client,
-        account.account_id,
-        &secret.access_token,
-        None,
-    )
-    .await
-    .map_err(|_| OAuthFailureCategory::CalendarFetchFailed)
+        .map_err(|_| OAuthFailureCategory::CalendarFetchFailed)?;
+        fetch_and_persist_task_lists_for_oauth(
+            &database,
+            &client,
+            account.account_id,
+            &secret.access_token,
+        )
+        .await
+        .map_err(|_| OAuthFailureCategory::TasksFetchFailed)?;
+        store_keyring(
+            account.credential_key.clone(),
+            serde_json::to_string(&secret)
+                .map_err(|_| OAuthFailureCategory::CredentialStoreFailed)?,
+        )
+        .await
+        .map_err(|_| OAuthFailureCategory::CredentialStoreFailed)?;
+        persist_connected_account(&database, &account, &Utc::now().to_rfc3339())
+            .await
+            .map_err(|_| OAuthFailureCategory::AccountPersistenceFailed)
+    } else {
+        if store_keyring(
+            account.credential_key.clone(),
+            serde_json::to_string(&secret)
+                .map_err(|_| OAuthFailureCategory::CredentialStoreFailed)?,
+        )
+        .await
+        .is_err()
+        {
+            return Err(OAuthFailureCategory::CredentialStoreFailed);
+        }
+        let provision_result = async {
+            persist_connected_account(&database, &account, &Utc::now().to_rfc3339())
+                .await
+                .map_err(|_| OAuthFailureCategory::AccountPersistenceFailed)?;
+            fetch_and_persist_calendars(
+                &database,
+                &client,
+                account.account_id,
+                &secret.access_token,
+                None,
+            )
+            .await
+            .map_err(|_| OAuthFailureCategory::CalendarFetchFailed)?;
+            fetch_and_persist_task_lists_for_oauth(
+                &database,
+                &client,
+                account.account_id,
+                &secret.access_token,
+            )
+            .await
+            .map_err(|_| OAuthFailureCategory::TasksFetchFailed)
+        }
+        .await;
+        if let Err(category) = provision_result {
+            let _ = sqlx::query("DELETE FROM google_accounts WHERE id = ?")
+                .bind(account.account_id.to_string())
+                .execute(&database.pool)
+                .await;
+            let _ = delete_keyring(account.credential_key).await;
+            return Err(category);
+        }
+        Ok(())
+    }
 }
 
 async fn oauth_account_target(database: &Database) -> AppResult<OAuthAccountTarget> {
@@ -983,7 +1090,7 @@ async fn persist_connected_account(
     account: &OAuthAccountTarget,
     now: &str,
 ) -> AppResult<()> {
-    let scopes = serde_json::json!([CALENDAR_SCOPE, CALENDAR_LIST_SCOPE]).to_string();
+    let scopes = serde_json::json!([CALENDAR_SCOPE, CALENDAR_LIST_SCOPE, TASKS_SCOPE]).to_string();
     let mut transaction = database
         .pool
         .begin()
@@ -3411,18 +3518,15 @@ fn validate_google_endpoint(value: &str, expected_host: &str) -> AppResult<()> {
 }
 
 fn validate_token_response(token: &TokenResponse) -> AppResult<()> {
+    let granted: HashSet<&str> = token.scope.split_whitespace().collect();
+    let missing_required_scope = !token.scope.is_empty()
+        && ![CALENDAR_SCOPE, CALENDAR_LIST_SCOPE, TASKS_SCOPE]
+            .iter()
+            .all(|scope| granted.contains(scope));
     if token.access_token.is_empty()
         || token.access_token.len() > 16_384
         || token.expires_in <= 0
-        || (!token.scope.is_empty()
-            && (!token
-                .scope
-                .split_whitespace()
-                .any(|scope| scope == CALENDAR_SCOPE)
-                || !token
-                    .scope
-                    .split_whitespace()
-                    .any(|scope| scope == CALENDAR_LIST_SCOPE)))
+        || missing_required_scope
     {
         return Err(unavailable(
             "Googleから必要な権限のトークンを受け取れませんでした。",
