@@ -119,3 +119,11 @@ Rules:
 - 解除と付け替えは過去の関連行を消さず、`unlinked_at_utc`とversionを更新して専用履歴を残す。
 - SQLite backup / restoreは関連と専用履歴をDB全体としてround-tripする。JSON format version 1 / 2にはTicketと関連を追加せず、previewとUserManualでSQLite backupが必要なことを明示する。
 - downgradeは非対応とし、v15 DBを古いbinaryで開かない。
+
+## 14. Ticket―Focus attribution compatibility
+
+- schema version 16は`ticket_focus_attributions`を追加する。既存Focus履歴は推測で帰属せず未帰属のまま保持する。
+- Focus session作成、開始履歴、開始時点の有効なTicket―Schedule関連snapshotを単一transactionで確定する。帰属行はsessionごとに最大1件とする。
+- 作業秒は`focus_history`を正本とし、帰属表へdurationを複製しない。pause、break、重複終了で実績を二重加算しない。
+- SQLite backup / restoreは帰属snapshotとFocus履歴をDB全体としてround-tripする。JSON format version 1 / 2はTicket、関連、帰属を対象外とし、移行には検証済みSQLite backupを使う。
+- downgradeは非対応とし、v16 DBを古いbinaryで開かない。

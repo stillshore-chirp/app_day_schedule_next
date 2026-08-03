@@ -14,9 +14,10 @@ use crate::{
         QuickBlock, QuickBlockDraft, RecurrenceEditScope, RecurrencePreview, Schedule,
         ScheduleClassificationPatch, ScheduleDraft, ScheduleQuery, ScheduleStatus, Settings,
         StopwatchCommand, StopwatchState, SyncStatus, SyncSummary, TemplateApplyMode,
-        TemplatePreview, Ticket, TicketBoard, TicketDraft, TicketHistoryItem, TicketPage,
-        TicketPatch, TicketPlanningSummary, TicketQuery, TicketScheduleLink, TimerCommand,
-        TimerDraft, TimerSet, TimerState, UnlinkTicketScheduleRequest, UserSafeError,
+        TemplatePreview, Ticket, TicketBoard, TicketDraft, TicketFocusHistoryItem,
+        TicketHistoryItem, TicketPage, TicketPatch, TicketPlanningSummary, TicketQuery,
+        TicketScheduleLink, TimerCommand, TimerDraft, TimerSet, TimerState,
+        UnlinkTicketScheduleRequest, UserSafeError,
     },
     infrastructure::{
         BackupRecord, ChangeResult, ConflictChoice, DeliveryResult, DiagnosticsExportResult,
@@ -565,6 +566,18 @@ pub async fn ticket_planning_summaries_get(
 ) -> CommandResult<Vec<TicketPlanningSummary>> {
     service
         .ticket_planning_summaries(ticket_ids)
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn ticket_focus_history_list(
+    service: State<'_, AppService>,
+    ticket_id: Uuid,
+    limit: Option<u32>,
+) -> CommandResult<Vec<TicketFocusHistoryItem>> {
+    service
+        .ticket_focus_history(ticket_id, limit.unwrap_or(100))
         .await
         .map_err(Into::into)
 }

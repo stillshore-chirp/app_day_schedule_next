@@ -6,8 +6,8 @@ use uuid::Uuid;
 
 use crate::domain::{
     AppError, AppResult, AssignTicketScheduleRequest, LinkTicketScheduleRequest, Priority,
-    Schedule, ScheduleDraft, ScheduleStatus, SyncStatus, TicketPlanningSummary, TicketScheduleLink,
-    TicketScheduleSource, UnlinkTicketScheduleRequest,
+    Schedule, ScheduleDraft, ScheduleStatus, SyncStatus, TicketFocusHistoryItem,
+    TicketPlanningSummary, TicketScheduleLink, TicketScheduleSource, UnlinkTicketScheduleRequest,
 };
 
 use super::{
@@ -292,10 +292,14 @@ impl Database {
                     ticket_id,
                     TicketPlanningSummary {
                         ticket_id,
+                        estimate_minutes: None,
                         schedule_count: 0,
                         future_planned_minutes: 0,
                         total_planned_minutes: 0,
                         next_scheduled_at: None,
+                        actual_focus_seconds: 0,
+                        remaining_minutes: None,
+                        variance_minutes: None,
                     },
                 )
             })
@@ -307,11 +311,14 @@ impl Database {
             .collect::<Vec<_>>()
             .join(",");
         let sql = format!(
-            "SELECT l.ticket_id, s.start_at_utc, s.end_at_utc
-             FROM ticket_schedule_links l
-             JOIN schedule_items s ON s.id = l.schedule_id
-             WHERE l.unlinked_at_utc IS NULL AND s.deleted_at_utc IS NULL
-               AND l.ticket_id IN ({placeholders})"
+            "SELECT l.ticket_id, l.is_active, s.start_at_utc, s.end_at_utc
+             FROM (
+               SELECT ticket_id, schedule_id, MAX(unlinked_at_utc IS NULL) AS is_active
+               FROM ticket_schedule_links
+               WHERE ticket_id IN ({placeholders})
+               GROUP BY ticket_id, schedule_id
+             ) l
+             JOIN schedule_items s ON s.id = l.schedule_id"
         );
         let mut query = sqlx::query(&sql);
         for ticket_id in ticket_ids {
@@ -329,9 +336,12 @@ impl Database {
             let summary = summaries.get_mut(&ticket_id).ok_or_else(|| {
                 AppError::database("ticket-planning-unexpected-ticket", ticket_id)
             })?;
-            summary.schedule_count += 1;
             summary.total_planned_minutes = summary.total_planned_minutes.saturating_add(duration);
-            if end > now {
+            let is_active: i64 = row.get("is_active");
+            if is_active != 0 {
+                summary.schedule_count += 1;
+            }
+            if is_active != 0 && end > now {
                 summary.future_planned_minutes = summary.future_planned_minutes.saturating_add(
                     u64::try_from((end - start.max(now)).num_minutes().max(0)).unwrap_or(0),
                 );
@@ -344,10 +354,85 @@ impl Database {
                 }
             }
         }
+        let metrics_sql = format!(
+            "SELECT t.id AS ticket_id, t.estimate_minutes,
+                    COALESCE(SUM(CASE WHEN h.from_phase = 'working' THEN h.elapsed_seconds ELSE 0 END), 0) AS actual_seconds
+             FROM tickets t
+             LEFT JOIN ticket_focus_attributions a ON a.ticket_id = t.id
+             LEFT JOIN focus_history h ON h.session_id = a.focus_session_id
+             WHERE t.id IN ({placeholders})
+             GROUP BY t.id, t.estimate_minutes"
+        );
+        let mut metrics_query = sqlx::query(&metrics_sql);
+        for ticket_id in ticket_ids {
+            metrics_query = metrics_query.bind(ticket_id.to_string());
+        }
+        for row in metrics_query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|error| AppError::database("ticket-focus-summary", error))?
+        {
+            let ticket_id = parse_uuid(row.get("ticket_id"), "ticket-focus-ticket")?;
+            let estimate = row
+                .get::<Option<i64>, _>("estimate_minutes")
+                .map(|value| u64::try_from(value).unwrap_or(0));
+            let actual_seconds = u64::try_from(row.get::<i64, _>("actual_seconds")).unwrap_or(0);
+            let actual_minutes = actual_seconds.saturating_add(30) / 60;
+            let summary = summaries
+                .get_mut(&ticket_id)
+                .ok_or_else(|| AppError::database("ticket-focus-unexpected-ticket", ticket_id))?;
+            summary.estimate_minutes = estimate;
+            summary.actual_focus_seconds = actual_seconds;
+            summary.remaining_minutes = estimate.map(|value| value.saturating_sub(actual_minutes));
+            summary.variance_minutes = estimate.map(|value| {
+                i64::try_from(actual_minutes).unwrap_or(i64::MAX)
+                    - i64::try_from(value).unwrap_or(i64::MAX)
+            });
+        }
         Ok(ticket_ids
             .iter()
             .filter_map(|id| summaries.remove(id))
             .collect())
+    }
+
+    pub async fn ticket_focus_history(
+        &self,
+        ticket_id: Uuid,
+        limit: u32,
+    ) -> AppResult<Vec<TicketFocusHistoryItem>> {
+        let rows = sqlx::query(
+            "SELECT a.focus_session_id, a.schedule_id, f.started_at_utc, f.ended_at_utc,
+                    COALESCE(SUM(CASE WHEN h.from_phase = 'working' THEN h.elapsed_seconds ELSE 0 END), 0) AS work_seconds
+             FROM ticket_focus_attributions a
+             JOIN focus_sessions f ON f.id = a.focus_session_id
+             LEFT JOIN focus_history h ON h.session_id = a.focus_session_id
+             WHERE a.ticket_id = ?
+             GROUP BY a.focus_session_id, a.schedule_id, f.started_at_utc, f.ended_at_utc
+             ORDER BY f.started_at_utc DESC, a.focus_session_id DESC
+             LIMIT ?",
+        )
+        .bind(ticket_id.to_string())
+        .bind(i64::from(limit.clamp(1, 500)))
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| AppError::database("ticket-focus-history", error))?;
+        rows.iter()
+            .map(|row| {
+                Ok(TicketFocusHistoryItem {
+                    session_id: parse_uuid(row.get("focus_session_id"), "ticket-focus-session")?,
+                    schedule_id: row
+                        .get::<Option<String>, _>("schedule_id")
+                        .map(|value| parse_uuid(&value, "ticket-focus-schedule"))
+                        .transpose()?,
+                    started_at: parse_datetime(row.get("started_at_utc"), "ticket-focus-start")?,
+                    ended_at: row
+                        .get::<Option<String>, _>("ended_at_utc")
+                        .map(|value| parse_datetime(&value, "ticket-focus-end"))
+                        .transpose()?,
+                    work_seconds: u64::try_from(row.get::<i64, _>("work_seconds")).unwrap_or(0),
+                })
+            })
+            .collect()
     }
 
     async fn ticket_schedule_link(&self, link_id: Uuid) -> AppResult<TicketScheduleLink> {
@@ -717,11 +802,13 @@ mod tests {
     use chrono::{Duration, TimeZone};
     use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
     use std::str::FromStr;
+    use std::time::Instant;
     use tempfile::tempdir;
 
     use super::*;
     use crate::{
-        domain::{TicketDraft, TicketPriority},
+        domain::{FocusPhase, TicketDraft, TicketPriority},
+        infrastructure::FocusRecord,
         infrastructure::ticket_repository::{DEFAULT_TICKET_BOARD_ID, INBOX_TICKET_COLUMN_ID},
     };
 
@@ -907,7 +994,260 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn migration_v15_preserves_v14_ticket_and_schedule_data() {
+    async fn ticket_focus_attribution_is_captured_once_and_counts_only_work_seconds() {
+        let database = Database::open_memory().await.unwrap();
+        let now = Utc.with_ymd_and_hms(2026, 8, 3, 0, 0, 0).unwrap();
+        let first_ticket = database
+            .create_ticket(Uuid::new_v4(), ticket_draft("帰属元"), now)
+            .await
+            .unwrap();
+        let second_ticket = database
+            .create_ticket(Uuid::new_v4(), ticket_draft("付け替え先"), now)
+            .await
+            .unwrap();
+        let link = database
+            .assign_ticket_to_new_schedule(
+                &assignment(first_ticket.id, Uuid::new_v4()),
+                now + Duration::hours(1),
+                now + Duration::hours(2),
+                now,
+            )
+            .await
+            .unwrap();
+        let mut focus = FocusRecord {
+            id: Uuid::new_v4(),
+            schedule_item_id: Some(link.schedule.id),
+            ticket_id: None,
+            phase: FocusPhase::Working,
+            previous_phase: None,
+            started_at: now,
+            accumulated_seconds: 0,
+            cycle: 0,
+        };
+        database.insert_focus(&focus).await.unwrap();
+        assert_eq!(
+            database.active_focus().await.unwrap().unwrap().ticket_id,
+            Some(first_ticket.id)
+        );
+
+        focus.previous_phase = Some(FocusPhase::Working);
+        focus.phase = FocusPhase::Paused;
+        focus.started_at = now + Duration::minutes(20);
+        focus.accumulated_seconds = 1_200;
+        database.update_focus(&focus, "pause", 1_200).await.unwrap();
+        focus.previous_phase = None;
+        focus.phase = FocusPhase::Working;
+        focus.started_at = now + Duration::minutes(21);
+        database.update_focus(&focus, "resume", 0).await.unwrap();
+        focus.phase = FocusPhase::Break;
+        focus.started_at = now + Duration::minutes(31);
+        focus.accumulated_seconds = 0;
+        database.update_focus(&focus, "skip", 600).await.unwrap();
+        focus.phase = FocusPhase::WaitingNext;
+        focus.started_at = now + Duration::minutes(36);
+        database
+            .update_focus(&focus, "break_end", 300)
+            .await
+            .unwrap();
+        database
+            .end_focus(focus.id, now + Duration::minutes(36), 0)
+            .await
+            .unwrap();
+
+        database
+            .link_ticket_to_existing_schedule(
+                &LinkTicketScheduleRequest {
+                    operation_id: Uuid::new_v4(),
+                    ticket_id: second_ticket.id,
+                    expected_ticket_version: second_ticket.version,
+                    schedule_id: link.schedule.id,
+                    expected_schedule_version: link.schedule.version,
+                    source: TicketScheduleSource::Board,
+                    replace_existing: true,
+                },
+                now + Duration::hours(3),
+            )
+            .await
+            .unwrap();
+
+        let summaries = database
+            .ticket_planning_summaries(&[first_ticket.id, second_ticket.id], now)
+            .await
+            .unwrap();
+        assert_eq!(summaries[0].actual_focus_seconds, 1_800);
+        assert_eq!(summaries[0].remaining_minutes, Some(15));
+        assert_eq!(summaries[0].variance_minutes, Some(-15));
+        assert_eq!(summaries[1].actual_focus_seconds, 0);
+        let archived = database
+            .set_ticket_archived(
+                Uuid::new_v4(),
+                first_ticket.id,
+                first_ticket.version,
+                true,
+                now + Duration::hours(4),
+            )
+            .await
+            .unwrap();
+        database
+            .delete_ticket(
+                Uuid::new_v4(),
+                archived.id,
+                archived.version,
+                now + Duration::hours(5),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            database
+                .ticket_focus_history(first_ticket.id, 10)
+                .await
+                .unwrap()[0]
+                .work_seconds,
+            1_800
+        );
+        database
+            .delete_schedule_scoped(
+                link.schedule.id,
+                link.schedule.version,
+                crate::domain::RecurrenceEditScope::Series,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(
+            database
+                .end_focus(focus.id, now + Duration::minutes(40), 240)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            database
+                .ticket_planning_summaries(&[first_ticket.id], now)
+                .await
+                .unwrap()[0]
+                .actual_focus_seconds,
+            1_800
+        );
+    }
+
+    #[tokio::test]
+    async fn unlinked_focus_stays_unattributed() {
+        let database = Database::open_memory().await.unwrap();
+        let now = Utc.with_ymd_and_hms(2026, 8, 3, 0, 0, 0).unwrap();
+        let ticket = database
+            .create_ticket(Uuid::new_v4(), ticket_draft("未帰属"), now)
+            .await
+            .unwrap();
+        let focus = FocusRecord {
+            id: Uuid::new_v4(),
+            schedule_item_id: None,
+            ticket_id: None,
+            phase: FocusPhase::Working,
+            previous_phase: None,
+            started_at: now,
+            accumulated_seconds: 0,
+            cycle: 0,
+        };
+        database.insert_focus(&focus).await.unwrap();
+        database
+            .end_focus(focus.id, now + Duration::minutes(10), 600)
+            .await
+            .unwrap();
+        assert_eq!(
+            database
+                .ticket_planning_summaries(&[ticket.id], now)
+                .await
+                .unwrap()[0]
+                .actual_focus_seconds,
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn five_hundred_ticket_summary_scans_fifty_thousand_focus_rows_once() {
+        let database = Database::open_memory().await.unwrap();
+        let now = Utc.with_ymd_and_hms(2026, 8, 3, 0, 0, 0).unwrap();
+        let ticket = database
+            .create_ticket(Uuid::new_v4(), ticket_draft("大量履歴"), now)
+            .await
+            .unwrap();
+        let link = database
+            .assign_ticket_to_new_schedule(
+                &assignment(ticket.id, Uuid::new_v4()),
+                now + Duration::hours(1),
+                now + Duration::hours(2),
+                now,
+            )
+            .await
+            .unwrap();
+        let focus = FocusRecord {
+            id: Uuid::new_v4(),
+            schedule_item_id: Some(link.schedule.id),
+            ticket_id: None,
+            phase: FocusPhase::Working,
+            previous_phase: None,
+            started_at: now,
+            accumulated_seconds: 0,
+            cycle: 0,
+        };
+        database.insert_focus(&focus).await.unwrap();
+        sqlx::query("DELETE FROM focus_history WHERE session_id = ?")
+            .bind(focus.id.to_string())
+            .execute(&database.pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "WITH digits(x) AS (VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)),
+                  numbers AS (
+                    SELECT row_number() OVER () AS n
+                    FROM digits a CROSS JOIN digits b CROSS JOIN digits c
+                    CROSS JOIN digits d CROSS JOIN digits e LIMIT 50000
+                  )
+             INSERT INTO focus_history(
+               id, session_id, schedule_item_id, event, from_phase, to_phase,
+               elapsed_seconds, occurred_at_utc
+             )
+             SELECT printf('00000000-0000-4000-8000-%012d', n), ?, ?,
+                    'pause', 'working', 'paused', 1, ?
+             FROM numbers",
+        )
+        .bind(focus.id.to_string())
+        .bind(link.schedule.id.to_string())
+        .bind(now.to_rfc3339())
+        .execute(&database.pool)
+        .await
+        .unwrap();
+
+        let mut ticket_ids = vec![ticket.id];
+        let timestamp = now.to_rfc3339();
+        for index in 1..500 {
+            let id = Uuid::parse_str(&format!("10000000-0000-4000-8000-{index:012}")).unwrap();
+            sqlx::query("INSERT INTO tickets(id, board_id, column_id, title, description, priority, estimate_minutes, sort_key, version, created_at_utc, updated_at_utc) VALUES (?, ?, ?, ?, '', 'normal', 45, ?, 0, ?, ?)")
+                .bind(id.to_string())
+                .bind(DEFAULT_TICKET_BOARD_ID.to_string())
+                .bind(INBOX_TICKET_COLUMN_ID.to_string())
+                .bind(format!("synthetic {index}"))
+                .bind(i64::from(index) * 1_024 + 10_000)
+                .bind(&timestamp)
+                .bind(&timestamp)
+                .execute(&database.pool)
+                .await
+                .unwrap();
+            ticket_ids.push(id);
+        }
+
+        let started = Instant::now();
+        let summaries = database
+            .ticket_planning_summaries(&ticket_ids, now)
+            .await
+            .unwrap();
+        assert_eq!(summaries.len(), 500);
+        assert_eq!(summaries[0].actual_focus_seconds, 50_000);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[tokio::test]
+    async fn migration_v16_preserves_v15_ticket_and_schedule_data() {
         let options = SqliteConnectOptions::from_str("sqlite::memory:")
             .unwrap()
             .foreign_keys(true);
@@ -916,18 +1256,18 @@ mod tests {
             .connect_with(options)
             .await
             .unwrap();
-        let v14 = sqlx::migrate::Migrator {
+        let v15 = sqlx::migrate::Migrator {
             migrations: std::borrow::Cow::Owned(
                 super::super::database::MIGRATOR
                     .migrations
                     .iter()
-                    .filter(|migration| migration.version <= 14)
+                    .filter(|migration| migration.version <= 15)
                     .cloned()
                     .collect(),
             ),
             ..super::super::database::MIGRATOR
         };
-        v14.run(&pool).await.unwrap();
+        v15.run(&pool).await.unwrap();
         let now = Utc::now().to_rfc3339();
         let schedule_id = Uuid::new_v4();
         sqlx::query("INSERT INTO schedule_items(id, title, description, location, start_at_utc, end_at_utc, time_zone, all_day, status, project, category, tags_json, color, sync_status, version, created_at_utc, updated_at_utc) VALUES (?, 'preserved schedule', '', '', '2026-08-03T00:00:00Z', '2026-08-03T01:00:00Z', 'UTC', 0, 'scheduled', '', '', '[]', '#6F96F4', 'local_only', 0, ?, ?)")
@@ -967,7 +1307,7 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        assert_eq!(version, "15");
+        assert_eq!(version, "16");
         assert_eq!((schedules, tickets, links), (1, 1, 0));
     }
 

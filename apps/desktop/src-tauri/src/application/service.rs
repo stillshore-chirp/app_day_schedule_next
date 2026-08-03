@@ -18,10 +18,10 @@ use crate::{
         QuickBlock, QuickBlockDraft, RecurrenceEditScope, Schedule, ScheduleClassificationPatch,
         ScheduleDraft, ScheduleQuery, Settings, StopwatchCommand, StopwatchState, StopwatchStatus,
         SyncSummary, SyncSummaryState, TemplateApplyMode, TemplatePreview, Ticket, TicketBoard,
-        TicketDraft, TicketHistoryItem, TicketPage, TicketPatch, TicketPlanningSummary,
-        TicketQuery, TicketScheduleLink, TimerCommand, TimerDraft, TimerSet, TimerState,
-        TimerStatus, UnlinkTicketScheduleRequest, resolve_local_time, validate_focus_transition,
-        validate_stopwatch_transition, validate_timer_transition,
+        TicketDraft, TicketFocusHistoryItem, TicketHistoryItem, TicketPage, TicketPatch,
+        TicketPlanningSummary, TicketQuery, TicketScheduleLink, TimerCommand, TimerDraft, TimerSet,
+        TimerState, TimerStatus, UnlinkTicketScheduleRequest, resolve_local_time,
+        validate_focus_transition, validate_stopwatch_transition, validate_timer_transition,
     },
     infrastructure::{
         BackupRecord, ChangeResult, ConflictChoice, Database, DeliveryResult,
@@ -165,7 +165,7 @@ impl AppService {
         let timezone = timezone_id.parse::<Tz>().unwrap_or(chrono_tz::UTC);
         let settings = self.database.settings().await?;
         Ok(Bootstrap {
-            schema_version: 15,
+            schema_version: 16,
             app_version: env!("CARGO_PKG_VERSION").into(),
             today: self
                 .clock
@@ -382,6 +382,14 @@ impl AppService {
             .await
     }
 
+    pub async fn ticket_focus_history(
+        &self,
+        ticket_id: Uuid,
+        limit: u32,
+    ) -> AppResult<Vec<TicketFocusHistoryItem>> {
+        self.database.ticket_focus_history(ticket_id, limit).await
+    }
+
     #[cfg(feature = "e2e")]
     pub async fn create_read_only_schedule_fixture(
         &self,
@@ -501,6 +509,7 @@ impl AppService {
                 let record = FocusRecord {
                     id: Uuid::new_v4(),
                     schedule_item_id: linked_schedule_id,
+                    ticket_id: None,
                     phase: FocusPhase::Working,
                     previous_phase: None,
                     started_at: now,
@@ -508,7 +517,7 @@ impl AppService {
                     cycle: 0,
                 };
                 self.database.insert_focus(&record).await?;
-                Some(record)
+                self.database.active_focus().await?
             }
             (Some(mut record), FocusCommand::Start) => {
                 record.phase = FocusPhase::Working;
@@ -1342,6 +1351,7 @@ fn focus_state_from_record(
         accumulated_seconds: elapsed_seconds,
         cycle: record.cycle,
         linked_schedule_id: record.schedule_item_id,
+        linked_ticket_id: record.ticket_id,
     }
 }
 

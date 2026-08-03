@@ -43,6 +43,8 @@
 
 transition は persisted timestamps、accumulated elapsed、cycle count、linked schedule、notification outcome を更新します。
 
+Focus開始時、linked scheduleに有効なTicket関連があれば、session作成と同じtransactionでTicket、Schedule、link ID/versionを帰属snapshotへ保存します。作業実績はsnapshotと既存`focus_history`をjoinして`from_phase = working`だけを合計します。関連の付け替えや削除で過去sessionを再帰属しません。
+
 ## 6. Time source
 
 - elapsed work / break は monotonic clock を基本にする。
@@ -65,5 +67,7 @@ transition は persisted timestamps、accumulated elapsed、cycle count、linked
 - wall clock forward / backward、timezone change。
 - long sleep、grace boundary、max replay。
 - linked schedule delete / move during Focus。
+- linked / unlinked開始、開始後のrelink / archive / delete、Done維持 / 明示再開、未帰属開始。
+- 50,000 Focus履歴と500 Ticketの一括集計でN+1 queryを発生させない。
 - 複数 timer の同時完了、同一 run の repeated poll / restart、timer 削除、通知拒否、bounded replay。
 - stopwatch と timer の monotonic 経過、process restart、wall clock forward / backward。

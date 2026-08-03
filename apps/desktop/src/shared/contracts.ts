@@ -160,6 +160,7 @@ export const focusStateSchema = z.object({
   accumulatedSeconds: z.number().int().nonnegative(),
   cycle: z.number().int().nonnegative(),
   linkedScheduleId: z.uuid().nullable(),
+  linkedTicketId: z.uuid().nullable(),
 });
 
 export const focusHistoryReportSchema = z.object({
@@ -390,15 +391,28 @@ export const ticketScheduleLinkSchema = z.object({
 
 export const ticketPlanningSummarySchema = z.object({
   ticketId: z.uuid(),
+  estimateMinutes: z.number().int().nonnegative().nullable(),
   scheduleCount: z.number().int().nonnegative(),
   futurePlannedMinutes: z.number().int().nonnegative(),
   totalPlannedMinutes: z.number().int().nonnegative(),
   nextScheduledAt: z.iso.datetime({ offset: true }).nullable(),
+  actualFocusSeconds: z.number().int().nonnegative(),
+  remainingMinutes: z.number().int().nonnegative().nullable(),
+  varianceMinutes: z.number().int().nullable(),
 });
 
 export type TicketScheduleSource = z.infer<typeof ticketScheduleSourceSchema>;
 export type TicketScheduleLink = z.infer<typeof ticketScheduleLinkSchema>;
 export type TicketPlanningSummary = z.infer<typeof ticketPlanningSummarySchema>;
+
+export const ticketFocusHistoryItemSchema = z.object({
+  sessionId: z.uuid(),
+  scheduleId: z.uuid().nullable(),
+  startedAt: z.iso.datetime({ offset: true }),
+  endedAt: z.iso.datetime({ offset: true }).nullable(),
+  workSeconds: z.number().int().nonnegative(),
+});
+export type TicketFocusHistoryItem = z.infer<typeof ticketFocusHistoryItemSchema>;
 
 export interface AssignTicketScheduleRequest {
   operationId: string;

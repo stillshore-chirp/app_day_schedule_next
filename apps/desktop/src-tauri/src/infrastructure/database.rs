@@ -32,6 +32,7 @@ pub struct Database {
 pub struct FocusRecord {
     pub id: Uuid,
     pub schedule_item_id: Option<Uuid>,
+    pub ticket_id: Option<Uuid>,
     pub phase: FocusPhase,
     pub previous_phase: Option<FocusPhase>,
     pub started_at: DateTime<Utc>,
@@ -1110,7 +1111,11 @@ impl Database {
 
     pub async fn active_focus(&self) -> AppResult<Option<FocusRecord>> {
         let row = sqlx::query(
-            "SELECT * FROM focus_sessions WHERE ended_at_utc IS NULL ORDER BY started_at_utc DESC LIMIT 1",
+            "SELECT f.*, a.ticket_id AS attributed_ticket_id
+             FROM focus_sessions f
+             LEFT JOIN ticket_focus_attributions a ON a.focus_session_id = f.id
+             WHERE f.ended_at_utc IS NULL
+             ORDER BY f.started_at_utc DESC LIMIT 1",
         )
         .fetch_optional(&self.pool)
         .await
@@ -1121,6 +1126,10 @@ impl Database {
                 schedule_item_id: row
                     .get::<Option<String>, _>("schedule_item_id")
                     .map(|value| parse_uuid(&value, "focus-schedule-id"))
+                    .transpose()?,
+                ticket_id: row
+                    .get::<Option<String>, _>("attributed_ticket_id")
+                    .map(|value| parse_uuid(&value, "focus-ticket-id"))
                     .transpose()?,
                 phase: FocusPhase::try_from(row.get::<&str, _>("phase"))?,
                 previous_phase: row
@@ -1166,6 +1175,26 @@ impl Database {
             record.started_at,
         )
         .await?;
+        if let Some(schedule_item_id) = record.schedule_item_id {
+            sqlx::query(
+                "INSERT INTO ticket_focus_attributions(
+                    id, focus_session_id, ticket_id, schedule_id, captured_link_id,
+                    captured_link_version, source, attributed_at_utc
+                 )
+                 SELECT ?, ?, l.ticket_id, l.schedule_id, l.id, l.version, 'focus_start', ?
+                 FROM ticket_schedule_links l
+                 JOIN tickets t ON t.id = l.ticket_id
+                 WHERE l.schedule_id = ? AND l.unlinked_at_utc IS NULL
+                   AND t.archived_at_utc IS NULL AND t.deleted_at_utc IS NULL",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(record.id.to_string())
+            .bind(timestamp(record.started_at))
+            .bind(schedule_item_id.to_string())
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| AppError::database("focus-attribution-insert", error))?;
+        }
         transaction
             .commit()
             .await
@@ -1242,6 +1271,7 @@ impl Database {
                 .get::<Option<String>, _>("schedule_item_id")
                 .map(|value| parse_uuid(&value, "focus-end-schedule"))
                 .transpose()?,
+            ticket_id: None,
             phase: previous_phase,
             previous_phase: None,
             started_at: now,
@@ -1457,7 +1487,7 @@ impl Database {
         self.integrity_check().await?;
         Ok(DiagnosticsSnapshot {
             app_version: app_version.into(),
-            schema_version: 15,
+            schema_version: 16,
             database_state: "ready",
             schedule_count: schedule_count.max(0) as u64,
             deleted_count: deleted_count.max(0) as u64,
@@ -2306,6 +2336,7 @@ mod tests {
         let mut record = FocusRecord {
             id: Uuid::new_v4(),
             schedule_item_id: Some(schedule.id),
+            ticket_id: None,
             phase: FocusPhase::Working,
             previous_phase: None,
             started_at: started,
@@ -2912,7 +2943,7 @@ mod tests {
             )
         );
         assert_eq!(never, ("never".into(), None, None));
-        assert_eq!(schema_version, "15");
+        assert_eq!(schema_version, "16");
     }
 
     #[tokio::test]
@@ -2979,7 +3010,7 @@ mod tests {
                 "[]".into()
             )
         );
-        assert_eq!(schema_version, "15");
+        assert_eq!(schema_version, "16");
         assert!(invalid.is_err());
     }
 
