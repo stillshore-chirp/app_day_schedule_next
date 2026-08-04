@@ -316,6 +316,32 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
     await moveTicket(ticket, target.columnId, target.beforeTicketId);
   }
 
+  function scrollBoardDuringDrag(clientX: number) {
+    if (!boardRef.current) return;
+    const bounds = boardRef.current.getBoundingClientRect();
+    const edge = 72;
+    if (clientX < bounds.left + edge) boardRef.current.scrollLeft -= 18;
+    if (clientX > bounds.right - edge) boardRef.current.scrollLeft += 18;
+  }
+
+  function dropTicketAtPoint(ticket: Ticket, clientX: number, clientY: number) {
+    const dropElement = document.elementFromPoint(clientX, clientY);
+    const targetColumn = dropElement?.closest<HTMLElement>("[data-ticket-column-id]");
+    const targetCard = dropElement?.closest<HTMLElement>("[data-ticket-id]");
+    setDraggingId(null);
+    if (!targetColumn || !reorderEnabled) {
+      setAnnouncement(translate("features.tickets.KanbanView.moveCancelled"));
+      return;
+    }
+    const targetColumnId = targetColumn.dataset.ticketColumnId;
+    const beforeTicketId = targetCard?.dataset.ticketId ?? null;
+    if (!targetColumnId || beforeTicketId === ticket.id) {
+      setAnnouncement(translate("features.tickets.KanbanView.moveCancelled"));
+      return;
+    }
+    void moveTicket(ticket, targetColumnId, beforeTicketId);
+  }
+
   async function toggleArchive(ticket: Ticket, archived: boolean) {
     const planning = planningByTicket.get(ticket.id);
     if (
@@ -564,13 +590,6 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
         aria-label={board.name}
         data-dragging={draggingId ? "true" : "false"}
         ref={boardRef}
-        onDragOver={(event) => {
-          if (!draggingId || !boardRef.current) return;
-          const bounds = boardRef.current.getBoundingClientRect();
-          const edge = 72;
-          if (event.clientX < bounds.left + edge) boardRef.current.scrollLeft -= 18;
-          if (event.clientX > bounds.right - edge) boardRef.current.scrollLeft += 18;
-        }}
       >
         {board.columns.map((column) => {
           const columnTickets = visibleTickets.filter((ticket) => ticket.columnId === column.id);
@@ -578,16 +597,8 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
             <section
               className="ticket-column"
               key={column.id}
+              data-ticket-column-id={column.id}
               aria-labelledby={`ticket-column-${column.id}`}
-              onDragOver={(event) => {
-                if (reorderEnabled) event.preventDefault();
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const ticket = tickets.find((candidate) => candidate.id === draggingId);
-                setDraggingId(null);
-                if (ticket && reorderEnabled) void moveTicket(ticket, column.id, null);
-              }}
             >
               <header className="ticket-column__header">
                 <h2 id={`ticket-column-${column.id}`}>{column.name}</h2>
@@ -617,15 +628,13 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                     }}
                     onDragEnd={() => {
                       setDraggingId(null);
+                      setAnnouncement(translate("features.tickets.KanbanView.moveCancelled"));
                     }}
+                    onDragMove={scrollBoardDuringDrag}
+                    onDropAtPoint={(clientX, clientY) =>
+                      dropTicketAtPoint(ticket, clientX, clientY)
+                    }
                     onMove={(direction) => void keyboardMove(ticket, direction)}
-                    onDropBefore={() => {
-                      const dragged = tickets.find((candidate) => candidate.id === draggingId);
-                      setDraggingId(null);
-                      if (dragged && dragged.id !== ticket.id && reorderEnabled) {
-                        void moveTicket(dragged, column.id, ticket.id);
-                      }
-                    }}
                   />
                 ))}
                 {columnTickets.length === 0 ? (
@@ -943,8 +952,9 @@ function TicketCard({
   onOpen,
   onDragStart,
   onDragEnd,
+  onDragMove,
+  onDropAtPoint,
   onMove,
-  onDropBefore,
 }: {
   ticket: Ticket;
   draggable: boolean;
@@ -952,37 +962,108 @@ function TicketCard({
   onOpen: (opener: HTMLElement) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
+  onDragMove: (clientX: number) => void;
+  onDropAtPoint: (clientX: number, clientY: number) => void;
   onMove: (direction: "left" | "right" | "up" | "down") => void;
-  onDropBefore: () => void;
 }) {
   const moveHintId = `ticket-move-hint-${ticket.id}`;
+  const mouseDragRef = useRef<{
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
+  const cleanupMouseDragRef = useRef<(() => void) | null>(null);
+  const suppressClickRef = useRef(false);
+  const suppressClickTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (dragging || !mouseDragRef.current?.active) return;
+    cleanupMouseDragRef.current?.();
+  }, [dragging]);
+
+  useEffect(
+    () => () => {
+      cleanupMouseDragRef.current?.();
+      if (suppressClickTimerRef.current !== null) {
+        window.clearTimeout(suppressClickTimerRef.current);
+      }
+    },
+    [],
+  );
+
   return (
     <article
       className="ticket-card"
       role="listitem"
-      draggable={draggable}
+      data-ticket-id={ticket.id}
       data-priority={ticket.priority}
       data-dragging={dragging ? "true" : "false"}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragOver={(event) => {
-        if (!draggable) return;
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        onDropBefore();
-      }}
     >
       <button
         className="ticket-card__open"
-        onClick={(event) => onOpen(event.currentTarget)}
+        onClick={(event) => {
+          if (suppressClickRef.current) {
+            suppressClickRef.current = false;
+            event.preventDefault();
+            return;
+          }
+          onOpen(event.currentTarget);
+        }}
         aria-label={translate("features.tickets.KanbanView.openTicket", [ticket.title])}
         aria-describedby={draggable ? moveHintId : undefined}
         aria-keyshortcuts={draggable ? "ArrowLeft ArrowRight ArrowUp ArrowDown" : undefined}
         title={draggable ? translate("features.tickets.KanbanView.moveHint") : undefined}
+        onMouseDown={(event) => {
+          if (!draggable || event.button !== 0) return;
+          cleanupMouseDragRef.current?.();
+          const mouseDrag = {
+            startX: event.clientX,
+            startY: event.clientY,
+            active: false,
+          };
+          mouseDragRef.current = mouseDrag;
+          const cleanupMouseDrag = () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+            window.removeEventListener("blur", handleWindowBlur);
+            mouseDragRef.current = null;
+            cleanupMouseDragRef.current = null;
+          };
+          const handleMouseMove = (moveEvent: MouseEvent) => {
+            if (!mouseDrag.active) {
+              const distance = Math.hypot(
+                moveEvent.clientX - mouseDrag.startX,
+                moveEvent.clientY - mouseDrag.startY,
+              );
+              if (distance < 6) return;
+              mouseDrag.active = true;
+              onDragStart();
+            }
+            moveEvent.preventDefault();
+            onDragMove(moveEvent.clientX);
+          };
+          const handleMouseUp = (upEvent: MouseEvent) => {
+            const wasActive = mouseDrag.active;
+            cleanupMouseDrag();
+            if (!wasActive) return;
+            upEvent.preventDefault();
+            suppressClickRef.current = true;
+            suppressClickTimerRef.current = window.setTimeout(() => {
+              suppressClickRef.current = false;
+              suppressClickTimerRef.current = null;
+            }, 0);
+            onDropAtPoint(upEvent.clientX, upEvent.clientY);
+          };
+          const handleWindowBlur = () => {
+            const wasActive = mouseDrag.active;
+            cleanupMouseDrag();
+            if (wasActive) onDragEnd();
+          };
+          cleanupMouseDragRef.current = cleanupMouseDrag;
+          window.addEventListener("mousemove", handleMouseMove);
+          window.addEventListener("mouseup", handleMouseUp);
+          window.addEventListener("blur", handleWindowBlur);
+        }}
         onKeyDown={(event) => {
           if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat)
             return;

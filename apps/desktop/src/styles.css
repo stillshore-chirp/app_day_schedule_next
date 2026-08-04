@@ -334,6 +334,7 @@ body {
   outline: 3px solid var(--focus);
   outline-offset: 1px;
   opacity: 0.7;
+  user-select: none;
 }
 
 .ticket-card__open {
@@ -349,10 +350,6 @@ body {
 
 .ticket-card__open:active {
   cursor: grabbing;
-}
-
-.ticket-card[draggable="false"] .ticket-card__open {
-  cursor: pointer;
 }
 
 .ticket-card__open strong {
