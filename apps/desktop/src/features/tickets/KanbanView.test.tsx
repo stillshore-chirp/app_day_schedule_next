@@ -77,20 +77,28 @@ describe("KanbanView", () => {
       expect((await client.ticket(created.id)).columnId).toBe(board.columns[1]!.id),
     );
 
-    const card = screen.getByText(created.title).closest("article")!;
+    const card = screen.getByRole("button", { name: "Review releaseの詳細を開く" });
     const nextColumn = screen.getByRole("heading", { name: "Next" }).closest("section")!;
-    fireEvent.dragStart(card);
-    fireEvent.dragOver(nextColumn);
-    fireEvent.drop(nextColumn);
+    const elementFromPoint = vi.fn(() => nextColumn);
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: elementFromPoint,
+    });
+    fireEvent.mouseDown(card, { button: 0, clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(window, { clientX: 20, clientY: 10 });
+    fireEvent.mouseUp(window, { clientX: 20, clientY: 10 });
+    Reflect.deleteProperty(document, "elementFromPoint");
     await waitFor(async () =>
       expect((await client.ticket(created.id)).columnId).toBe(board.columns[2]!.id),
     );
+    await user.click(screen.getByRole("button", { name: "Review releaseの詳細を開く" }));
+    expect(screen.getByRole("dialog")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "詳細を閉じる" }));
 
     await user.type(screen.getByLabelText("タイトル・説明を検索"), "Review");
     expect(screen.getByText(/見えていないチケットの順序を守るため/)).toBeVisible();
-    expect(screen.getByText(created.title).closest("article")).toHaveAttribute(
-      "draggable",
-      "false",
+    expect(screen.getByRole("button", { name: "Review releaseの詳細を開く" })).not.toHaveAttribute(
+      "aria-keyshortcuts",
     );
   });
 

@@ -3,10 +3,10 @@
 ## 1. Summary
 
 - Issue: #66
-- Branch: `codex/issue-66-ticket-card-drag`
+- Branch: `codex/issue-66-real-pointer-drag-fix`
 - Affected screen: チケット Kanban のカード、列内・列間移動
 - OS: macOS / Windows 共通 UI。native 証跡は macOS arm64 で取得する
-- Decision: pointer の主操作をカード直接 drag にし、カード上の badge を優先度だけへ限定する
+- Decision: WebViewへ届かない合成HTML dragではなく、実マウスの down / move / up をカード直接 drag として扱う
 - Findings: P0 0、P1 0、P2 2（Windows 実機、screen reader 実機）
 
 ## 2. User value / novice simulation
@@ -21,7 +21,7 @@
 ## 3. State / interaction / accessibility
 
 - Normal: card は title と priority badge だけを表示する。
-- Pointer / trackpad: card 全面が drag source。card への drop はその card の手前、列余白への drop は列末尾へ移動する。
+- Pointer / trackpad: card 全面が drag source。6pxの移動閾値を超えた後、card への drop はその card の手前、列余白への drop は列末尾へ移動する。
 - Keyboard equivalent: 詳細 button へ focus し、`← / →` で列移動、`↑ / ↓` で列内移動する。`aria-keyshortcuts` と説明を関連付ける。
 - Filter / derived sort: drag と keyboard reorder を無効化し、非表示 card の永続順序を保護する。
 - Name / role / state: list / listitem、詳細 button の accessible name、drag 説明、polite live region を維持する。
@@ -40,14 +40,15 @@
 - Drag-only: 矢印キーの keyboard equivalent と component / native test で否定する。
 - Hidden-order corruption: filter / sort 中の `draggable=false` と keyboard guard を維持する。
 - Card detail loss: 表示だけを簡略化し、保存済み属性と詳細 panel は変更しない。
-- Accidental open vs drag: click は詳細、drag threshold は native HTML drag semantics に委ね、drag 中の source / destination state を表示する。
+- Accidental open vs drag: 6px未満はclickとして詳細を開き、閾値を超えた操作だけをdragとして扱う。drag後のclickは抑止する。
+- False-positive native test: `DragEvent` の直接発火を廃止し、WebDriverの実マウス `down → move → up` で列移動と保存結果を確認する。`down → move → Esc` で取消も確認する。
 - Schedule / Focus regression: planning summary query は archive / delete / detail の影響説明用に維持する。
 
 ## 6. Evidence
 
 - Before: [Issue #33 の通常 card](../../evidence/issue-33/native-ticket-board.png)、ユーザー提供 screenshot（個人 title を含むため repository へ保存しない）
-- After: [通常](../../evidence/issue-66/native-ticket-board.png)、[drag 中](../../evidence/issue-66/native-ticket-drag-preview.png)、[keyboard focus](../../evidence/issue-66/native-ticket-keyboard-move.png)、[狭幅](../../evidence/issue-66/native-ticket-board-narrow.png)、[200% text](../../evidence/issue-66/native-ticket-board-text-200.png)、[500 cards](../../evidence/issue-66/native-ticket-board-500.png)
-- Automated: `KanbanView.test.tsx` で priority badge 1 件、move button 不在、`aria-keyshortcuts`、keyboard / pointer move、filter guard、axe を検証する。
+- After: [通常](../../evidence/issue-66/native-ticket-board.png)、[実マウスdrag中](../../evidence/issue-66/native-ticket-drag-preview.png)、[隣レーンdrop後](../../evidence/issue-66/native-ticket-pointer-move.png)、[keyboard focus](../../evidence/issue-66/native-ticket-keyboard-move.png)、[狭幅](../../evidence/issue-66/native-ticket-board-narrow.png)、[200% text](../../evidence/issue-66/native-ticket-board-text-200.png)、[500 cards](../../evidence/issue-66/native-ticket-board-500.png)
+- Automated: `KanbanView.test.tsx` で priority badge 1 件、move button 不在、`aria-keyshortcuts`、keyboard / mouse move、filter guard、axe を検証する。native E2Eでは実マウスの開始、Esc取消、隣レーンdrop、保存後DOMを検証する。
 - Redaction: repository evidence は synthetic title / description / tag のみを使用する。
 
 ## 7. Unexecuted validation / remaining risks

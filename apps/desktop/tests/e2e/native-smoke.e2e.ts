@@ -1486,25 +1486,40 @@ describe("Day Schedule Next native smoke", () => {
     ).waitForDisplayed();
     await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
 
-    await browser.execute((titleText) => {
-      const target = document
-        .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)
-        ?.closest("article");
-      if (!target) throw new Error("ticket card was not found");
-      target.dispatchEvent(
-        new DragEvent("dragstart", {
-          bubbles: true,
-          cancelable: true,
-          dataTransfer: new DataTransfer(),
-        }),
-      );
-    }, ticketTitle);
+    const pointerSource = $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`);
+    const pointerTarget = $(
+      '//section[.//h2[normalize-space(.)="Backlog"]]//*[contains(@class, "ticket-column__cards")]',
+    );
+    await browser
+      .action("pointer", { parameters: { pointerType: "mouse" } })
+      .move({ origin: pointerSource })
+      .down({ button: 0 })
+      .pause(150)
+      .move({ origin: pointerSource, x: 20, duration: 300 })
+      .perform(true);
     await browser.waitUntil(
       async () => (await $(".ticket-board").getAttribute("data-dragging")) === "true",
-      { timeoutMsg: "ticket drag preview did not appear" },
+      { timeoutMsg: "real pointer movement did not start the ticket drag preview" },
     );
     await browser.saveScreenshot("./test-results/native-ticket-drag-preview.png");
     await browser.keys(["Escape"]);
+    await browser.waitUntil(
+      async () => (await $(".ticket-board").getAttribute("data-dragging")) === "false",
+      { timeoutMsg: "Escape did not cancel the real pointer drag" },
+    );
+    await browser.releaseActions();
+    await browser
+      .action("pointer", { parameters: { pointerType: "mouse" } })
+      .move({ origin: pointerSource })
+      .down({ button: 0 })
+      .pause(150)
+      .move({ origin: pointerTarget, duration: 800 })
+      .up({ button: 0 })
+      .perform();
+    await $(
+      `//section[.//h2[normalize-space(.)="Backlog"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
+    ).waitForDisplayed({ timeoutMsg: "pointer drag did not move the ticket to Backlog" });
+    await browser.saveScreenshot("./test-results/native-ticket-pointer-move.png");
 
     await browser.execute((titleText) => {
       document
@@ -1512,7 +1527,7 @@ describe("Day Schedule Next native smoke", () => {
         ?.focus();
     }, ticketTitle);
     await browser.saveScreenshot("./test-results/native-ticket-keyboard-move.png");
-    for (const columnName of ["Backlog", "Next", "In Progress", "Waiting", "Done"]) {
+    for (const columnName of ["Next", "In Progress", "Waiting", "Done"]) {
       await browser.execute((titleText) => {
         document
           .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)
