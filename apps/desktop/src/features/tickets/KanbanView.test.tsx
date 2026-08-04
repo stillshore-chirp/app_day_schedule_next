@@ -56,15 +56,23 @@ describe("KanbanView", () => {
     expect((await client.listTickets({})).total).toBe(1);
   });
 
-  it("moves a card by keyboard and pointer while disabling reorder under filters", async () => {
+  it("shows only the priority badge and moves the focused card or dragged card", async () => {
     const client = new MemoryAppClient([]);
     const created = await createTicket(client);
     const board = await client.ticketBoard();
     const user = userEvent.setup();
     renderBoard(client);
 
-    await user.click(await screen.findByRole("button", { name: "移動" }));
-    await user.click(screen.getByRole("button", { name: "右の列へ移動" }));
+    const open = await screen.findByRole("button", { name: "Review releaseの詳細を開く" });
+    const initialCard = open.closest("article")!;
+    expect(initialCard.querySelectorAll(".ticket-card__meta > span")).toHaveLength(1);
+    expect(within(initialCard).getByText("優先度: 高")).toBeVisible();
+    expect(within(initialCard).queryByRole("button", { name: "移動" })).not.toBeInTheDocument();
+    expect(open).toHaveAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight ArrowUp ArrowDown");
+
+    fireEvent.keyDown(open, { key: "ArrowRight", repeat: true });
+    expect((await client.ticket(created.id)).columnId).toBe(board.columns[0]!.id);
+    fireEvent.keyDown(open, { key: "ArrowRight" });
     await waitFor(async () =>
       expect((await client.ticket(created.id)).columnId).toBe(board.columns[1]!.id),
     );

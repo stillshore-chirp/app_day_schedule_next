@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Ticket, TicketDraft, TicketPlanningSummary } from "../../shared/contracts";
+import type { Ticket, TicketDraft } from "../../shared/contracts";
 import { appLocale, translate } from "../../shared/i18n/messages";
 import { AppClientError, type AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
@@ -106,7 +106,6 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
   );
   const [announcement, setAnnouncement] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [keyboardMoveId, setKeyboardMoveId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ticket | null>(null);
   const [deletedDraft, setDeletedDraft] = useState<TicketDraft | null>(null);
   const [actionError, setActionError] = useState<"failure" | "conflict" | null>(null);
@@ -142,10 +141,6 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
     [tickets],
   );
   const reorderEnabled = canFreelyReorder(filters);
-
-  useEffect(() => {
-    if (!reorderEnabled) setKeyboardMoveId(null);
-  }, [reorderEnabled]);
 
   useEffect(() => {
     if (!draggingId) return;
@@ -609,12 +604,8 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                   <TicketCard
                     key={ticket.id}
                     ticket={ticket}
-                    {...(planningByTicket.get(ticket.id)
-                      ? { planning: planningByTicket.get(ticket.id)! }
-                      : {})}
-                    today={today}
                     draggable={reorderEnabled}
-                    moving={keyboardMoveId === ticket.id}
+                    dragging={draggingId === ticket.id}
                     onOpen={(opener) =>
                       openEditor({ mode: "edit", ticket, columnId: ticket.columnId }, opener)
                     }
@@ -626,14 +617,6 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                     }}
                     onDragEnd={() => {
                       setDraggingId(null);
-                    }}
-                    onMoveMode={() => {
-                      setKeyboardMoveId((current) => (current === ticket.id ? null : ticket.id));
-                      setAnnouncement(
-                        translate("features.tickets.KanbanView.keyboardMoveStarted", [
-                          ticket.title,
-                        ]),
-                      );
                     }}
                     onMove={(direction) => void keyboardMove(ticket, direction)}
                     onDropBefore={() => {
@@ -955,38 +938,31 @@ function FilterSelect({
 
 function TicketCard({
   ticket,
-  planning,
-  today,
   draggable,
-  moving,
+  dragging,
   onOpen,
   onDragStart,
   onDragEnd,
-  onMoveMode,
   onMove,
   onDropBefore,
 }: {
   ticket: Ticket;
-  planning?: TicketPlanningSummary;
-  today: string;
   draggable: boolean;
-  moving: boolean;
+  dragging: boolean;
   onOpen: (opener: HTMLElement) => void;
   onDragStart: () => void;
   onDragEnd: () => void;
-  onMoveMode: () => void;
   onMove: (direction: "left" | "right" | "up" | "down") => void;
   onDropBefore: () => void;
 }) {
-  const completed = ticket.checklist.filter((item) => item.completed).length;
-  const overdue = ticket.dueDate !== null && ticket.dueDate < today && ticket.completedAt === null;
+  const moveHintId = `ticket-move-hint-${ticket.id}`;
   return (
     <article
       className="ticket-card"
       role="listitem"
       draggable={draggable}
       data-priority={ticket.priority}
-      data-moving={moving ? "true" : "false"}
+      data-dragging={dragging ? "true" : "false"}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragOver={(event) => {
@@ -1004,103 +980,39 @@ function TicketCard({
         className="ticket-card__open"
         onClick={(event) => onOpen(event.currentTarget)}
         aria-label={translate("features.tickets.KanbanView.openTicket", [ticket.title])}
+        aria-describedby={draggable ? moveHintId : undefined}
+        aria-keyshortcuts={draggable ? "ArrowLeft ArrowRight ArrowUp ArrowDown" : undefined}
+        title={draggable ? translate("features.tickets.KanbanView.moveHint") : undefined}
+        onKeyDown={(event) => {
+          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat)
+            return;
+          if (!draggable) return;
+          const direction = {
+            ArrowLeft: "left",
+            ArrowRight: "right",
+            ArrowUp: "up",
+            ArrowDown: "down",
+          }[event.key] as "left" | "right" | "up" | "down" | undefined;
+          if (!direction) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onMove(direction);
+        }}
       >
         <strong>{ticket.title}</strong>
         <span className="ticket-card__meta">
-          <span>
+          <span className="ticket-card__priority">
             {translate("features.tickets.KanbanView.priorityValue", [
               priorityLabel(ticket.priority),
             ])}
           </span>
-          {ticket.dueDate ? (
-            <span data-overdue={overdue ? "true" : "false"}>
-              {overdue
-                ? translate("features.tickets.KanbanView.overdue", [ticket.dueDate])
-                : translate("features.tickets.KanbanView.dueValue", [ticket.dueDate])}
-            </span>
-          ) : null}
-          {ticket.estimateMinutes ? (
-            <span>
-              {translate("features.tickets.KanbanView.estimateValue", [ticket.estimateMinutes])}
-            </span>
-          ) : null}
-          <span>
-            {translate("features.tickets.KanbanView.planningSummary", [
-              planning?.scheduleCount ?? 0,
-              planning?.futurePlannedMinutes ?? 0,
-              planning?.totalPlannedMinutes ?? 0,
-            ])}
-          </span>
-          <span>
-            {translate("features.tickets.KanbanView.focusSummary", [
-              Math.round((planning?.actualFocusSeconds ?? 0) / 60),
-              planning?.remainingMinutes ?? translate("features.tickets.KanbanView.notSet"),
-            ])}
-          </span>
-          {planning?.nextScheduledAt ? (
-            <span>
-              {translate("features.tickets.KanbanView.nextSchedule", [
-                new Date(planning.nextScheduledAt).toLocaleString(appLocale),
-              ])}
-            </span>
-          ) : null}
-          {ticket.checklist.length ? (
-            <span>
-              {translate("features.tickets.KanbanView.checklistValue", [
-                completed,
-                ticket.checklist.length,
-              ])}
-            </span>
-          ) : null}
         </span>
-        {ticket.tags.length ? (
-          <span className="ticket-card__tags">
-            {ticket.tags.slice(0, 3).map((tag) => (
-              <span key={tag.id}>#{tag.name}</span>
-            ))}
+        {draggable ? (
+          <span className="sr-only" id={moveHintId}>
+            {translate("features.tickets.KanbanView.moveHint")}
           </span>
         ) : null}
       </button>
-      <div className="ticket-card__move">
-        <button className="button button--subtle" onClick={onMoveMode} aria-pressed={moving}>
-          {translate(
-            moving
-              ? "features.tickets.KanbanView.finishMove"
-              : "features.tickets.KanbanView.moveMode",
-          )}
-        </button>
-        {moving ? (
-          <div
-            className="ticket-card__move-controls"
-            aria-label={translate("features.tickets.KanbanView.moveControls")}
-          >
-            <button
-              aria-label={translate("features.tickets.KanbanView.moveLeft")}
-              onClick={() => onMove("left")}
-            >
-              ←
-            </button>
-            <button
-              aria-label={translate("features.tickets.KanbanView.moveUp")}
-              onClick={() => onMove("up")}
-            >
-              ↑
-            </button>
-            <button
-              aria-label={translate("features.tickets.KanbanView.moveDown")}
-              onClick={() => onMove("down")}
-            >
-              ↓
-            </button>
-            <button
-              aria-label={translate("features.tickets.KanbanView.moveRight")}
-              onClick={() => onMove("right")}
-            >
-              →
-            </button>
-          </div>
-        ) : null}
-      </div>
     </article>
   );
 }
