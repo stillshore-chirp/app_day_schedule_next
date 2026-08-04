@@ -330,9 +330,10 @@ body {
   border-left-color: var(--success);
 }
 
-.ticket-card[data-moving="true"] {
+.ticket-card[data-dragging="true"] {
   outline: 3px solid var(--focus);
   outline-offset: 1px;
+  opacity: 0.7;
 }
 
 .ticket-card__open {
@@ -343,6 +344,14 @@ body {
   text-align: left;
   background: transparent;
   border: 0;
+  cursor: grab;
+}
+
+.ticket-card__open:active {
+  cursor: grabbing;
+}
+
+.ticket-card[draggable="false"] .ticket-card__open {
   cursor: pointer;
 }
 
@@ -351,8 +360,7 @@ body {
   line-height: 1.35;
 }
 
-.ticket-card__meta,
-.ticket-card__tags {
+.ticket-card__meta {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
@@ -360,45 +368,11 @@ body {
   font-size: 0.76rem;
 }
 
-.ticket-card__meta span,
-.ticket-card__tags span {
+.ticket-card__priority {
   padding: 3px 6px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface-soft);
-}
-
-.ticket-card__meta [data-overdue="true"] {
-  color: var(--danger);
-  border-color: var(--danger);
-  font-weight: 800;
-}
-
-.ticket-card__move {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 8px 8px;
-}
-
-.ticket-card__move .button {
-  min-height: 34px;
-  padding: 5px 9px;
-}
-
-.ticket-card__move-controls {
-  display: flex;
-  gap: 3px;
-}
-
-.ticket-card__move-controls button {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
 }
 
 .ticket-quick-create {

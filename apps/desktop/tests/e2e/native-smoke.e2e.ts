@@ -1506,14 +1506,19 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-ticket-drag-preview.png");
     await browser.keys(["Escape"]);
 
-    await $(
-      `//article[.//*[normalize-space(.)="${ticketTitle}"]]//button[normalize-space(.)="移動"]`,
-    ).click();
+    await browser.execute((titleText) => {
+      document
+        .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)
+        ?.focus();
+    }, ticketTitle);
     await browser.saveScreenshot("./test-results/native-ticket-keyboard-move.png");
     for (const columnName of ["Backlog", "Next", "In Progress", "Waiting", "Done"]) {
-      await $(
-        `//article[.//*[normalize-space(.)="${ticketTitle}"]]//button[@aria-label="右の列へ移動"]`,
-      ).click();
+      await browser.execute((titleText) => {
+        document
+          .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)
+          ?.focus();
+      }, ticketTitle);
+      await browser.keys("ArrowRight");
       await $(
         `//section[.//h2[normalize-space(.)="${columnName}"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
       ).waitForDisplayed();
@@ -1524,9 +1529,12 @@ describe("Day Schedule Next native smoke", () => {
     await browser.execute(() => {
       window.confirm = () => true;
     });
-    await $(
-      `//article[.//*[normalize-space(.)="${ticketTitle}"]]//button[@aria-label="左の列へ移動"]`,
-    ).click();
+    await browser.execute((titleText) => {
+      document
+        .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)
+        ?.focus();
+    }, ticketTitle);
+    await browser.keys("ArrowLeft");
     await $(
       `//section[.//h2[normalize-space(.)="Waiting"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
     ).waitForDisplayed();
