@@ -94,6 +94,9 @@ describe("KanbanView", () => {
     await user.click(screen.getByRole("button", { name: "Review releaseの詳細を開く" }));
     expect(screen.getByRole("dialog")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "詳細を閉じる" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Review releaseの詳細を開く" })).toHaveFocus(),
+    );
 
     await user.type(screen.getByLabelText("タイトル・説明を検索"), "Review");
     expect(screen.getByText(/見えていないチケットの順序を守るため/)).toBeVisible();
@@ -156,6 +159,35 @@ describe("KanbanView", () => {
 
     expect(await screen.findByText("保存できませんでした")).toBeVisible();
     expect(title).toHaveValue("Unsaved but retained");
+  });
+
+  it("opens an existing ticket description as Markdown and saves the edited source", async () => {
+    const client = new MemoryAppClient([]);
+    const created = await createTicket(client);
+    await client.updateTicket({
+      operationId: crypto.randomUUID(),
+      id: created.id,
+      expectedVersion: created.version,
+      patch: { description: "# 実装計画\n\n| 項目 | 状態 |\n| --- | --- |\n| UI | 確認中 |" },
+    });
+    const user = userEvent.setup();
+    renderBoard(client);
+
+    await user.click(await screen.findByRole("button", { name: "Review releaseの詳細を開く" }));
+    expect(screen.getByRole("region", { name: "説明のMarkdownプレビュー" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "実装計画" })).toBeVisible();
+    expect(screen.getByRole("table")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    const description = screen.getByRole("textbox", { name: "説明" });
+    await waitFor(() => expect(description).toHaveFocus());
+    await user.clear(description);
+    await user.type(description, "# 実装計画\n\n- component test");
+    expect(description).toHaveValue("# 実装計画\n\n- component test");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+    await screen.findByText("この端末へ保存しました");
+
+    expect((await client.ticket(created.id)).description).toContain("- component test");
   });
 
   it("archives, restores, deletes and offers immediate recovery", async () => {

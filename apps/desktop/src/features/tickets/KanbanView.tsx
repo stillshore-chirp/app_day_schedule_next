@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Ticket, TicketDraft } from "../../shared/contracts";
 import { appLocale, translate } from "../../shared/i18n/messages";
 import { AppClientError, type AppClient } from "../../shared/ipc/client";
+import { MarkdownDescriptionField } from "../../shared/ui/MarkdownDescriptionField";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 import {
   canFreelyReorder,
@@ -179,6 +180,10 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
   useEffect(() => {
     if (!editor || deleteTarget) return;
     titleRef.current?.focus();
+  }, [deleteTarget, editor?.mode, editor?.ticket?.id]);
+
+  useEffect(() => {
+    if (!editor || deleteTarget) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -731,15 +736,15 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                   onChange={(event) => setForm({ ...form, title: event.target.value })}
                 />
               </label>
-              <label>
-                {translate("features.tickets.KanbanView.description")}
-                <textarea
-                  rows={5}
-                  maxLength={10_000}
-                  value={form.description}
-                  onChange={(event) => setForm({ ...form, description: event.target.value })}
-                />
-              </label>
+              <MarkdownDescriptionField
+                key={editor.ticket?.id ?? "new-ticket"}
+                id="ticket-description"
+                label={translate("features.tickets.KanbanView.description")}
+                rows={8}
+                maxLength={10_000}
+                value={form.description}
+                onChange={(description) => setForm({ ...form, description })}
+              />
               <div className="ticket-dialog__grid">
                 <label>
                   {translate("features.tickets.KanbanView.priority")}

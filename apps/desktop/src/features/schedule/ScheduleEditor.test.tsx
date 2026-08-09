@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Schedule } from "../../shared/contracts";
 import { MemoryAppClient } from "../../shared/ipc/memory-client";
@@ -33,6 +34,43 @@ const complexGoogleSchedule: Schedule = {
 };
 
 describe("ScheduleEditor", () => {
+  it("shows an existing schedule description as Markdown and returns to the source", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const user = userEvent.setup();
+    const schedule: Schedule = {
+      ...complexGoogleSchedule,
+      id: "00000000-0000-4000-8000-000000000021",
+      title: "Markdown予定",
+      description: "## 手順\n\n| 時刻 | 作業 |\n| --- | --- |\n| 09:00 | 設計 |",
+      recurrenceRule: null,
+      recurrenceSupplementalLines: [],
+      syncStatus: "local_only",
+    };
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ScheduleEditor
+          client={new MemoryAppClient([])}
+          schedule={schedule}
+          selectedDate={new Date("2026-07-20T00:00:00.000Z")}
+          timezoneId="Asia/Tokyo"
+          snapMinutes={5}
+          mode="edit"
+          busy={false}
+          onSave={vi.fn().mockResolvedValue(undefined)}
+          onDelete={vi.fn().mockResolvedValue(undefined)}
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("region", { name: "説明のMarkdownプレビュー" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "手順" })).toBeVisible();
+    expect(screen.getByRole("table")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "編集" }));
+    expect(screen.getByRole("textbox", { name: "説明" })).toHaveValue(schedule.description);
+  });
+
   it("explains why a complex Google recurrence is protected while sync continues", () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },

@@ -11,6 +11,7 @@ import {
 } from "../../shared/contracts";
 import type { AppClient } from "../../shared/ipc/client";
 import { formatDuration, localDateTimeInput } from "../../shared/time";
+import { MarkdownDescriptionField } from "../../shared/ui/MarkdownDescriptionField";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 import { ScheduleTicketLink } from "./ScheduleTicketLink";
 
@@ -700,14 +701,16 @@ export function ScheduleEditor({
             onChange={(event) => update("location", event.target.value)}
           />
         </label>
-        <label>
-          {translate("features.schedule.ScheduleEditor.067")}
-          <textarea
-            rows={3}
-            value={state.description}
-            onChange={(event) => update("description", event.target.value)}
-          />
-        </label>
+        <MarkdownDescriptionField
+          key={schedule?.id ?? "new-schedule"}
+          id="schedule-description"
+          label={translate("features.schedule.ScheduleEditor.067")}
+          rows={8}
+          maxLength={10_000}
+          value={state.description}
+          disabled={readOnly}
+          onChange={(description) => update("description", description)}
+        />
 
         <div className="inspector__actions">
           <button className="button button--primary" type="submit" disabled={busy || readOnly}>

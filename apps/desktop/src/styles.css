@@ -1556,7 +1556,7 @@ button:disabled {
   background: var(--surface-raised);
   border-left: 1px solid var(--border);
   box-shadow: -10px 0 24px rgb(30 43 66 / 8%);
-  z-index: 8;
+  z-index: 11;
 }
 
 .inspector__header {
@@ -1651,6 +1651,218 @@ textarea[aria-invalid="true"] {
 .field-help {
   color: var(--text-muted);
   font-size: 0.74rem;
+}
+
+.markdown-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.markdown-field__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.markdown-field__label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.markdown-field__mode {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+
+.markdown-field__mode button {
+  min-height: 32px;
+  padding: 4px 10px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.markdown-field__mode button[aria-pressed="true"] {
+  color: var(--text);
+  background: var(--surface-raised);
+  box-shadow: 0 1px 3px rgb(30 43 66 / 14%);
+}
+
+.markdown-preview {
+  min-height: 164px;
+  max-height: min(48vh, 520px);
+  padding: 14px 16px;
+  overflow: auto;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 9px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.65;
+}
+
+.markdown-preview > :first-child {
+  margin-top: 0;
+}
+
+.markdown-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-preview h1,
+.markdown-preview h2,
+.markdown-preview h3,
+.markdown-preview h4,
+.markdown-preview h5,
+.markdown-preview h6 {
+  margin-block: 1.2em 0.45em;
+  line-height: 1.3;
+}
+
+.markdown-preview h1 {
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.45rem;
+}
+
+.markdown-preview h2 {
+  padding-bottom: 0.2em;
+  border-bottom: 1px solid var(--border);
+  font-size: 1.25rem;
+}
+
+.markdown-preview h3 {
+  font-size: 1.08rem;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  padding-inline-start: 1.65rem;
+}
+
+.markdown-preview li + li {
+  margin-top: 0.2em;
+}
+
+.markdown-preview .contains-task-list {
+  padding-inline-start: 0;
+}
+
+.markdown-preview .task-list-item {
+  list-style: none;
+}
+
+.markdown-preview input[type="checkbox"] {
+  margin: 0 0.4em 0.1em 0;
+  vertical-align: middle;
+}
+
+.markdown-preview blockquote {
+  margin-inline: 0;
+  padding: 0.15em 1em;
+  color: var(--text-muted);
+  border-left: 4px solid var(--border-strong);
+}
+
+.markdown-preview table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.markdown-preview th,
+.markdown-preview td {
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-preview th {
+  background: var(--surface-soft);
+  font-weight: 800;
+}
+
+.markdown-preview code {
+  padding: 0.15em 0.35em;
+  background: var(--surface-soft);
+  border-radius: 4px;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.markdown-preview pre {
+  max-width: 100%;
+  padding: 12px;
+  overflow: auto;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.markdown-preview pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.markdown-preview__link {
+  color: var(--primary-strong);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+.markdown-preview__link-destination {
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.86em;
+}
+
+.markdown-preview__blocked-link {
+  text-decoration: underline dotted;
+}
+
+.markdown-preview__image-placeholder {
+  display: inline-block;
+  padding: 4px 7px;
+  color: var(--text-muted);
+  background: var(--surface-soft);
+  border: 1px dashed var(--border-strong);
+  border-radius: 6px;
+}
+
+.markdown-preview__empty {
+  display: grid;
+  place-items: start;
+  gap: 10px;
+}
+
+.markdown-preview__empty p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .markdown-field__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .markdown-field__mode {
+    align-self: flex-start;
+  }
 }
 
 .field-error {
