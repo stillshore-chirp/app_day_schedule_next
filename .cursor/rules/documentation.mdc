@@ -1,0 +1,7 @@
+---
+description: "文書変更をdocs ruleと公開安全性正本へ接続する"
+globs: "{docs/**/*,README.md,UserManual.md,OPERATIONS.md,SECURITY.md,plans/**/*}"
+alwaysApply: false
+---
+
+root `AGENTS.md`、`docs/AGENTS.md`、公開物では `.agents/skills/security-publication/SKILL.md` を読んでください。このMDCへ文書規則本文を複製しません。

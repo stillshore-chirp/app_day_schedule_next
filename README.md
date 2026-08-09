@@ -66,7 +66,8 @@ pnpm test:e2e
 
 ## 文書案内
 
-- 実行規約: [`AGENTS.md`](AGENTS.md)
+- エージェント作業契約: [`AGENTS.md`](AGENTS.md)
+- エージェントハーネス設計: [`docs/agent-harness.md`](docs/agent-harness.md)
 - 製品不変条件: [`docs/product-invariants.md`](docs/product-invariants.md)
 - アーキテクチャ: [`docs/architecture-boundaries.md`](docs/architecture-boundaries.md)
 - UI/UX ガバナンス: [`docs/ai-governance/00-index.md`](docs/ai-governance/00-index.md)

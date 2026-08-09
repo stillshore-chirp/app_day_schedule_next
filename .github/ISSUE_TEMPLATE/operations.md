@@ -15,24 +15,49 @@ title: "[Ops]: "
 - Install type: dev / debug bundle / release installer:
 - Timezone / locale:
 - Main / Compact / tray / complete exit:
-- Google connection / calendar scope:
+- Google connection / calendar / task scope:
 - Fresh / migrated / legacy-imported DB:
+- 発生日時または期間:
 
 ## 影響
 
 - Local data:
-- Google Calendar:
+- Google Calendar / Tasks:
 - Notification / Focus:
 - Launch / update / uninstall:
 - User workflow:
 
+## 調査・対応判断の理由と根拠
+
+<!--
+なぜ今調査・対応するか。確認済み事実、ユーザー提示の判断材料、判断、仮説、未確認事項を分ける。
+詳細: docs/ai-governance/14-issue-quality-gate.md
+-->
+
+## 現在のユーザー体験
+
+- 対象ユーザー:
+- 利用文脈・達成したいこと:
+- 現在ユーザーが経験していること:
+- ユーザー視点での認識・負担・感情:
+- 結果として生じている体験状態:
+- 根拠区分（該当するものを残す）: ユーザー申告 / 実ユーザー観察 / 観測事実からの推定 / 未確認の仮説
+
+## 対応後に目指すユーザー体験
+
+- 調査のみの場合に直接的な体験変化がないことと理由:
+- 対応または後続判断を通じた体験上の変化:
+- ユーザーが理解・判断・実行・回復できるようになること:
+- 結果として目指す体験状態:
+- その変化を確認する方法:
+
 ## 確認済み事実
 
-<!-- 実機・mask済み診断・test に基づく事実。 -->
+<!-- 実機、mask済みdiagnostics、testに基づく事実。 -->
 
 -
 
-## 未確認
+## 未確認事項
 
 -
 
@@ -44,15 +69,20 @@ title: "[Ops]: "
 
 - Investigation only / fix PR / migration / recovery / docs:
 
-## Acceptance
+## 非対象
+
+-
+
+## 受け入れ条件
 
 - [ ] Observed facts and hypotheses are separated.
 - [ ] Data protection and backup requirement is explicit.
 - [ ] Google / keyring / notification / platform scope is explicit.
 - [ ] Public Issue / PR contains no secret or personal data.
-- [ ] Verification and remaining risk are explicit.
+- [ ] Verification, unexecuted checks, remaining risk are explicit.
+- [ ] Recovery / rollback is defined when the action can change data or installation.
 
-## Verification
+## 検証方針
 
 - DB integrity / backup / restore:
 - Sync / OAuth mock or real-account private check:
@@ -60,9 +90,25 @@ title: "[Ops]: "
 - macOS / Windows build / install:
 - Rollback / recovery:
 
-## Public safety
+## 証跡・公開確認
 
-- [ ] No token / credential / personal event content.
-- [ ] No raw DB / backup / diagnostic ZIP.
+- 対象面: アプリ本体UI / GitHub共同作業面 / 混在 / N/A
+- UI/UX evidence:
+- Diagnostics / log summary:
+- Screenshot / fixture redaction:
+- Public safety review:
+
+## 公開安全性チェック
+
+- [ ] No token / credential / personal event or task content.
+- [ ] No raw DB / backup / diagnostic archive.
 - [ ] No full home path / device name / raw log / unique trace ID.
 - [ ] Screenshots use synthetic data or are masked.
+
+## 完了時に残す証跡
+
+- PR body:
+- Issue comment:
+- Operations / engineering docs:
+- CI / dry-run / manual matrix:
+- Unexecuted checks / remaining risks:

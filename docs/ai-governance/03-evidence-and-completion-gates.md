@@ -1,98 +1,111 @@
-# Evidence and Completion Gates
+# 証跡と完了ゲート
 
-## 1. 原則
+この文書は、アプリ本体UIとGitHub共同作業面を区別し、変更を完了扱いするための証跡と判定条件を定義します。
 
-UI/UX と desktop behavior の完了には、主張を裏付ける evidence が必要です。証跡は個人情報を含まない synthetic data で作成します。
+## 1. 対象面
 
-## 2. 必須成果物
+最初に `02-uiux-review-framework.md` で分類します。
 
-- 変更画面 / window / component / state の一覧。
-- user goal assessment。
-- novice simulation。
-- state matrix。
-- accessibility review。
-- visual hierarchy review。
-- UI copy review。
-- expert efficiency review。
-- satisfaction / trust review。
-- counter-review。
-- executed / unexecuted validation。
-- remaining risks。
+| 対象面 | 必要な証跡 |
+|---|---|
+| アプリ本体UI | 画面、状態、操作、accessibility、前後差分、native behavior |
+| GitHub共同作業面 | 文言、項目、順序、必須性、Markdown / YAML / frontmatter、link、公開安全性 |
+| 混在 | 両方を別々に満たす |
+| N/A | UIまたは共同作業面を変更しない理由 |
 
-UI 変更 PR では対象状態ごとの before / after screenshot を添付します。
+## 2. アプリ本体UIの証跡
 
-## 3. Day Schedule Next の必須状態
+変更に該当する範囲で、次を残します。
 
-該当しない理由がない限り:
+- 対象ユーザー、目的、支援するtask
+- 変更画面、component、window、state、input、output
+- novice simulation
+- state matrix
+- accessibility
+- visual hierarchy、copy
+- expert efficiency
+- satisfaction / trust
+- counter-review
+- Unit / Integration / E2E、manual observation
+- affected OS、app version / commit
+- 未実行検証、その理由、残るリスク
 
-- empty / normal / many items / overlap / cross-midnight。
-- current none / one / multiple。
-- create / move / resize / invalid time / Undo。
-- Google disconnected / connecting / syncing / offline / retry / conflict / auth expired。
-- permission unknown / denied / granted。
-- Focus idle / working / paused / break。
-- backup none / creating / failed / restore preview。
-- main / Compact / narrow / 200% text / light / mild / dark。
+### 前後screenshot
 
-## 4. Evidence requirements
+アプリ本体UIまたはrepository独自UIの変更では、該当画面・状態の変更前後screenshotをPRへ添付します。同じviewport、OS、synthetic fixtureで比較します。
 
-### Screenshot
+取得できない場合は、取得できなかった検証、理由、代替証跡、残るリスク、次に必要な確認を示します。受け入れ条件上必須なら完了扱いにしません。
 
-- before / after を同じ viewport / OS / data fixture で比較する。
-- account、calendar、event、path、notification preview を synthetic にする。
-- happy path だけに偏らない。
+### native evidence
 
-### Test
+- browser previewだけでTauri WebView、OS permission、tray、notification、installerを確認済みにしない。
+- mock Google testを実アカウント・実データ確認として扱わない。
+- screenshotをkeyboard / accessibility tree / data recoveryの代替にしない。
+- build成功、install済み、launch済み、permission確認済みを別の状態として記録する。
 
-- command と result を記録する。
-- skipped / flaky / retried を隠さない。
-- native behavior は affected OS evidence を残す。
+## 3. GitHub共同作業面の証跡
 
-### Manual
+Issue / PR template、repository Markdown、workflow説明、agent ruleでは次を確認します。
 
-- OS、app version / commit、steps、expected、observed、result を残す。
-- real personal data を report に記載しない。
+- 変更した文言、項目、順序、必須性、設定
+- Markdown、YAML、frontmatter、glob / path、instruction budget
+- link、command、移動先file
+- 正本とadapterの重複
+- 公開安全性
+- previewや実ページ確認の要否
+- 未実行検証と残るリスク
 
-## 5. Completion gate
+GitHubが所有する未変更のlayout、keyboard、focus、loadingへアプリ本体UIと同じstate matrixを要求しません。screenshotはrepository独自の視覚構成・操作が変わる場合、受け入れ条件、明示依頼がある場合に取得します。
 
-すべて必要:
+## 4. 共通完了ゲート
 
-- P0 なし。
-- user value を説明できる。
-- initial comprehension が成立。
-- state matrix 完成。
-- accessibility minimum 確認。
-- visual hierarchy / copy / efficiency / trust 確認。
-- counter-review 実施。
-- evidence 提出。
-- UI PR の before / after screenshots。
-- unexecuted checks と risk。
-- PR の latest CI success。
-- CI 後の Codex review / unresolved thread 確認。
+- 依頼の成果と受け入れ条件を満たす。
+- product invariantとarchitecture boundaryを保つ。
+- P0が残っていない。
+- 対象面に対応する証跡がある。
+- 実行した検証と結果を示す。
+- 未実行検証、その理由、残るリスクを示す。
+- 実施していない確認を成功扱いしていない。
+- 公開物の安全性を確認している。
+- 無関係な差分やユーザーデータを破壊していない。
 
-## 6. Evidence を取得できない場合
+## 5. アプリ本体UIの完了ゲート
 
-次を報告します。
+- ユーザー価値を説明できる。
+- initial comprehensionと主要状態を確認している。
+- accessibility、visual hierarchy、copy、efficiency、trustを確認している。
+- counter-reviewを実施している。
+- 必要な前後screenshotをPRで確認できる。
+- time / sync / migration / platformへ影響する場合、該当Skillのmatrixを満たす。
+- latest検証commitに対応するartifact / install / launch証跡をrelease gateに従って扱う。
 
-- 取得できなかった検証。
-- 理由。
-- 代替確認。
-- 残る risk。
-- 後続で必要な最短確認。
+## 6. Pull Requestの完了ゲート
 
-取得不能を「問題なし」に変換しません。必須 evidence が欠ける場合は completion 不可です。
+PRをreadyまたはmerge可能として報告する場合は次を満たします。
 
-## 7. 推奨 tools
+- latest headの必須CIが成功している。
+- latest meaningful changeに対する利用可能な自動・手動reviewを確認している。
+- actionableな未解決review threadがない。
+- reviewが提供されない場合は、代替自己reviewと未確認範囲を記録している。
+- draft状態、pending check、権限上の未完了を明示している。
 
-- Vitest / Testing Library / axe。
-- native E2E / WebDriver。
-- visual regression / screenshot diff。
-- keyboard walkthrough。
-- Rust unit / property / integration。
-- mock Google server。
-- SQLite migration / integrity test。
-- macOS / Windows manual matrix。
+同じheadでclean reviewを複数回集める必要はありません。指摘対応でheadが変わった場合だけCIと該当reviewを再確認します。mergeまたはcloseは別の明示指示がある場合だけ行います。
 
-## 8. Report
+## 7. 推奨検証
 
-`templates/completion-gate-report.md` と `templates/uiux-review-report.md` を使います。
+変更範囲に応じて選びます。
+
+- harness / Markdown / YAML / frontmatter / link / security scan
+- format、lint、typecheck
+- Unit / Integration / contract / property test
+- native E2E
+- axe-core、keyboard walkthrough、accessibility tree
+- screenshot / visual diff
+- content stress、narrow、200% text
+- macOS / Windows manual matrix
+
+利用できない検証を捏造せず、理由と残るリスクを報告します。
+
+## 8. 報告
+
+`templates/completion-gate-report.md` を使うか、同等の情報をPR本文へ記録します。今回の対象面と未確認範囲が伝わる項目だけを具体的に書きます。

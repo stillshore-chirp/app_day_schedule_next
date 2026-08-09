@@ -1,186 +1,82 @@
 ---
 name: ui-ux-review
-description: "Day Schedule Next の画面、タイムライン、予定操作、コピー、状態、アクセシビリティ、熟練者効率、信頼感を証跡付きでレビューする。ユーザーに見える変更では必ず使う。"
+description: "Day Schedule Nextのアプリ本体UI、またはrepositoryが制御する独自UIを、ユーザー価値、状態、アクセシビリティ、視覚階層、コピー、熟練者効率、信頼感の証跡付きでレビューする。"
 ---
 
 # UI/UXレビュー Skill
 
-この Skill は、Day Schedule Next のユーザーに見える変更を、感想ではなく Pass / Fail と証跡で評価する手順です。
+## 1. 発動条件と対象面
 
-## 1. 発動条件
+次の変更で使います。
 
-次を含む作業では必ず実行します。
+- Today / Week / Month / List / Ticket / Template / Focus / Alarm / Settings / Diagnostics
+- timeline、Now Dock、Compact Window、Inspector、dialog、menu、notification
+- 予定・Ticketの作成、drag、resize、直接入力、複製、削除、Undo / Redo
+- Google接続、同期、競合、permission、backup / restore / import
+- 表示文言、empty、loading、offline、error、disabled、accessibility、keyboard、visual regression
+- backend変更でも、利用者に見える結果、待機、失敗、回復、通知が変わるもの
 
-- Today / Week / Month / List / Template / Focus / Alarm / Settings / Diagnostics。
-- 24時間ストリップ、詳細タイムライン、Now Dock、Compact Window、Inspector。
-- 予定の作成、drag、resize、直接時刻入力、複製、削除、Undo / Redo。
-- Google 接続、同期状態、競合解決、calendar 選択、オフライン表示。
-- notification / Focus / Pomodoro / permission / backup / restore / legacy import の UI。
-- コピー、ラベル、エラー、空、loading、disabled、permission-denied、partial-data。
-- accessibility、keyboard、shortcut、focus、contrast、target size、visual regression。
+最初に [`docs/ai-governance/02-uiux-review-framework.md`](../../../docs/ai-governance/02-uiux-review-framework.md) で対象面を分類します。
 
-バックエンド変更でも、ユーザーに見える結果・待機・失敗・通知が変わる場合は対象です。
+- **アプリ本体UI**: repositoryがlayout、操作、状態、focus、accessibilityを実装する画面。本文書の全手順を適用する。
+- **GitHub共同作業面**: Issue / PR template、repository Markdown、workflow説明など。文言、構造、必須性、link、公開安全性を変更範囲に比例して確認する。
+- **混在**: 両方を分けて確認し、一方の証跡で他方を代用しない。
 
-## 2. 必須で読む文書
+## 2. 読む正本
 
-1. `AGENTS.md`
-2. `docs/product-invariants.md`
-3. `docs/ai-governance/00-index.md`
-4. `docs/ai-governance/02-uiux-review-framework.md`
-5. `docs/ai-governance/03-evidence-and-completion-gates.md`
-6. 変更内容に応じた `04`〜`12` の詳細文書
-7. `docs/engineering/time-and-recurrence.md` または `calendar-sync.md` など関連契約
+- 全作業: rootと変更対象に最も近い `AGENTS.md`
+- 製品契約: `docs/product-invariants.md`
+- UI品質: `docs/ai-governance/02-uiux-review-framework.md`
+- 証跡: `docs/ai-governance/03-evidence-and-completion-gates.md`
+- 変更内容に直接関係する `04`〜`12` の詳細文書
+- time / sync / migration / platformへ影響する場合は該当domain Skillとengineering docs
+
+indexや全詳細文書を機械的に読み直さず、変更範囲から必要な正本を選びます。
 
 ## 3. スコープ棚卸し
 
-次を特定します。
+- 対象ユーザー、利用文脈、達成したい結果
+- 変更画面、component、window、dialog、menu、notification
+- 最初の有意味な行動、選択対象、保存先、remote影響
+- input method: mouse、trackpad、keyboard、screen reader
+- affected OS: macOS、Windows
+- state: normal、empty、loading、offline、conflict、permission、error、large data、narrow、200% text
 
-- 変更画面、component、window、modal、menu、notification。
-- 対象ユーザーと利用文脈。
-- ユーザーが達成したい結果。
-- 最初の有意味な行動。
-- 選択中の日、予定、calendar、template、対象範囲。
-- 影響する input method: mouse、trackpad、keyboard、screen reader。
-- 影響する OS: macOS、Windows。
-- 影響する状態: normal、empty、loading、offline、conflict、permission、error、large data。
+## 4. アプリ本体UIレビュー
 
-## 4. ユーザー価値評価
+1. **価値**: 予定の把握・設計・実行・回復の何を助けるか説明する。
+2. **初見理解**: 日付、現在地、選択対象、主操作、次の行動、回復方法を判断できるか確認する。
+3. **状態**: 該当するstate matrixを作り、対象外は理由を書く。
+4. **操作**: pointer、keyboard、直接入力を確認し、dragだけに依存させない。
+5. **アクセシビリティ**: focus order / restoration、name / role / state、contrast、target size、reduced motion、live regionを確認する。
+6. **視覚階層**: Today、現在、次、主操作を短時間で把握でき、overview / detail / Compactが矛盾しないか確認する。
+7. **コピー**: local saveとGoogle sync、local deleteとremote delete、trayとcomplete exit、permissionとdelivery結果を正確に区別する。
+8. **熟練者効率**: 予定作成・調整・複製・template・Focus・retryの手数、設定保持、shortcut、一括操作を確認する。
+9. **信頼感**: pending、conflict、auth expiry、restore、通知失敗でデータ保持と回復手段が分かるか確認する。
+10. **反証**: 500件、長い日本語、23:59、日跨ぎ、DST、複数current、狭幅、OS差で落とす立場から確認する。
 
-次に答えます。
+## 5. 最低state matrix
 
-1. この変更は、予定の把握・設計・実行・回復のどれを助けるか。
-2. ユーザーは何を理解、判断、実行しやすくなるか。
-3. 画面上の情報は意思決定に使われるか。
-4. 既存 UI で代替できるか。
-5. 削れる説明、badge、button、panel はないか。
+変更に該当する範囲で確認します。
 
-説明できない主要 UI は P0 です。
+- 予定0件 / 通常 / 重複 / 日跨ぎ / 終日 / 500件
+- current 0 / 1 / 複数、create / move / resize / invalid / Undo
+- Google未接続 / 接続中 / 同期中 / offline / retry / conflict / auth expired
+- notification permission未確認 / 拒否 / 許可、delivery成功 / 失敗
+- Focus idle / working / paused / break / waiting-next
+- backupなし / 作成中 / 失敗 / restore preview
+- Main / Compact / 720px / 200% text / light / mild / dark
 
-## 5. 初見シミュレーション
+## 6. 証跡
 
-アプリを初めて起動したユーザーとして確認します。
+アプリ本体UIでは、該当画面・状態の変更前後screenshot、test、native observation、state matrix、各レビュー結果を残します。browser previewやmockだけでnative desktop確認を代替しません。
 
-- 今日の日付、現在時刻、現在表示範囲が分かるか。
-- 最初の予定をどう作るか分かるか。
-- drag 可能な領域と resize handle が分かるか。
-- Quick Block、template、calendar、sync の意味が内部用語なしで分かるか。
-- 現在予定、次の予定、残り、空き時間の関係が分かるか。
-- Google 未接続でもローカル利用できることが分かるか。
-- 失敗時に入力を失わず戻れるか。
+GitHub共同作業面だけの場合は、差分、Markdown / YAML / frontmatter、入力順、link、公開安全性、未実行項目を証跡とします。GitHubが所有する未変更のlayout、focus、loadingまで検査対象を広げません。repository独自UI、受け入れ条件、明示依頼がある場合はscreenshotを取得します。
 
-## 6. state matrix
+## 7. 判定
 
-`docs/ai-governance/templates/state-matrix.md` を埋めます。最低限、次を確認します。
-
-- 初回で予定 0 件。
-- 予定あり、重複あり、日跨ぎあり、終日あり。
-- 現在進行中 0 / 1 / 複数。
-- loading、部分データ、500 件以上、検索結果なし。
-- Google 未接続、接続中、同期中、offline、retry wait、conflict、auth expired。
-- notification permission 未確認 / 拒否 / 許可。
-- Focus idle / working / paused / break / waiting-next。
-- backup なし / 作成中 / 失敗 / restore preview。
-- 狭い window、Compact Window、200% text、OS scale、高 contrast。
-
-## 7. interaction review
-
-### 7.1 Timeline
-
-- 保存精度 1 分と表示 snap を混同していないか。
-- drag 開始閾値が誤操作を抑え、preview が開始・終了・所要時間を示すか。
-- `Esc` で取消、drop 後に Undo できるか。
-- resize と move の affordance が区別できるか。
-- 重複予定が隠れず、選択・編集できるか。
-- 現在時刻線が予定 text や focus ring を隠さないか。
-- 日跨ぎ予定が両日で同一予定として理解できるか。
-
-### 7.2 Keyboard equivalent
-
-- 予定作成、選択、移動、resize、日移動、編集、削除、Undo / Redo を keyboard で実行できるか。
-- drag 必須の機能がないか。WCAG 2.2 の dragging movements を意識する。
-- shortcut は menu / help から確認でき、OS 予約 shortcut と衝突しないか。
-
-### 7.3 Inspector / dialogs
-
-- 選択対象と保存先 calendar が明確か。
-- 時刻・timezone・recurrence・notification の依存関係が分かるか。
-- validation は入力欄近くに出て、入力が保持されるか。
-- destructive action の対象、件数、remote 影響、Undo 可否が明確か。
-
-## 8. アクセシビリティ確認
-
-- 主要導線を keyboard だけで完了する。
-- focus order、visible focus、focus restoration、modal escape を確認する。
-- timeline / schedule block の role、name、time range、selected / conflict / sync state を支援技術へ伝える。
-- icon-only button に accessible name を付ける。危険操作は text label を伴う。
-- 色だけで category、conflict、sync、priority、current を表さない。
-- 4.5:1 text、3:1 non-text、24x24 CSS px 以上を最低目安にする。
-- status update は必要に応じて live region を使い、毎秒の時計を過剰に読み上げない。
-- animation、current-time movement、Focus transition は reduced motion に従う。
-
-## 9. 視覚階層と密度
-
-- 3秒で Today、現在、次、主操作を把握できるか。
-- 24時間 overview と詳細 timeline の役割が競合していないか。
-- Now Dock と Compact Window が同じ情報を一貫して示すか。
-- 予定件数が多い時にも主操作・選択中・同期警告が埋もれないか。
-- 空き時間の表現が予定と競合せず、装飾過多になっていないか。
-- macOS / Windows の font rendering と scale で数値・時刻が読めるか。
-
-## 10. コピー
-
-- `sync token`、`etag`、`outbox`、`schema` など内部用語を UI に出さない。
-- エラーは何が起きたか、影響、データ保持、回復手段を示す。
-- `同期済み` は local save と remote反映を区別する。
-- Google から削除、ローカルだけ削除、両方から削除を明確にする。
-- notification の完全終了時制約を曖昧に安心させない。
-- user を責めず、操作結果を具体的な動詞で示す。
-
-## 11. 熟練者効率
-
-主要反復タスクの手数を数えます。
-
-- 予定作成、複製、時間調整、翌日繰越。
-- template 適用、Quick Block toggle。
-- Focus start / pause / resume。
-- sync retry、conflict resolution。
-
-確認項目:
-
-- 前回 calendar、category、duration、snap、view、filter が必要に応じて保持されるか。
-- shortcut、multi-select、bulk move、duplicate、template があるか。
-- 初回説明が毎回 timeline を占有しないか。
-- 危険でない操作に確認 dialog を乱発していないか。
-
-## 12. 満足感・信頼感
-
-- local save と remote sync の進行が正直に分かるか。
-- pending 中も入力と予定が消えたように見えないか。
-- conflict / auth expiry / restore で user が何を選ぶか理解できるか。
-- success、failure、Undo、recovery が明確か。
-- notification / Focus の音・動きが突然すぎず、設定できるか。
-
-## 13. 反証レビュー
-
-実装を落とすつもりで確認します。
-
-- happy path 以外の screenshot がない。
-- pointer だけで成立している。
-- current-time / overlap / Compact で focus が隠れる。
-- offline なのに同期済みに見える。
-- local delete と remote delete が曖昧。
-- 500 件、長い日本語、23:59、日跨ぎ、DST で崩れる。
-- macOS だけの見た目・shortcut を Windows 共通仕様としている。
-- 証跡が mock / browser preview だけで native WebView を確認していない。
-
-## 14. 出力
-
-`docs/ai-governance/templates/uiux-review-report.md` を使い、次を残します。
-
-- Pass / Fail と P0 / P1 / P2。
-- user value、novice simulation、state matrix。
-- accessibility、visual hierarchy、copy、efficiency、trust。
-- screenshot / trace / test / manual evidence。
-- 未実行検証と残リスク。
-
-P0 または必須証跡不足がある場合は完了不可です。
+- P0は完了不可。
+- P1は原則として同じ変更内で修正し、分離時は理由と追跡先を示す。
+- P2は対応判断と後続先を記録する。
+- screenshot、test、実機確認、ユーザーフィードバック、accessibility結果を捏造しない。
+- 出力には対象面、P0 / P1 / P2、証跡、実行した検証、未実行検証、残るリスクを含める。
