@@ -8,6 +8,14 @@ export interface ClockHandAngles {
 }
 
 export const analogClockScales: readonly AnalogClockScale[] = [1, 1.5, 2, 2.5];
+const analogClockFaceFillRatio = 0.96;
+
+export function analogClockFaceSize(width: number, height: number): number {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 0;
+  }
+  return Math.floor(Math.min(width, height) * analogClockFaceFillRatio);
+}
 
 export function clockHandAngles(now: Date): ClockHandAngles {
   const second = now.getSeconds() + now.getMilliseconds() / 1_000;

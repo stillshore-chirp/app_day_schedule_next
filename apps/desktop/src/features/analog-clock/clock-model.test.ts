@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { clockHandAngles, nextAnalogClockScale, resolvedClockTheme } from "./clock-model";
+import {
+  analogClockFaceSize,
+  clockHandAngles,
+  nextAnalogClockScale,
+  resolvedClockTheme,
+} from "./clock-model";
 
 describe("analog clock model", () => {
   it("derives all hands from one wall-clock snapshot", () => {
@@ -26,5 +31,16 @@ describe("analog clock model", () => {
     expect(nextAnalogClockScale(1.5)).toBe(2);
     expect(nextAnalogClockScale(2)).toBe(2.5);
     expect(nextAnalogClockScale(2.5)).toBe(1);
+  });
+
+  it("sizes the face from the shorter window edge", () => {
+    expect(analogClockFaceSize(720, 360)).toBe(345);
+    expect(analogClockFaceSize(360, 720)).toBe(345);
+    expect(analogClockFaceSize(360, 360)).toBe(345);
+  });
+
+  it("does not derive a face size from an unavailable layout", () => {
+    expect(analogClockFaceSize(0, 360)).toBe(0);
+    expect(analogClockFaceSize(Number.NaN, 360)).toBe(0);
   });
 });

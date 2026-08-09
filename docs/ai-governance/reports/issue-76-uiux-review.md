@@ -34,20 +34,20 @@
 - Target: ヘッダー時計と設定ボタンは44px。閉じるボタンも44px。
 - 200%: 設定面は現在の親領域内で縦scrollし、横overflowを発生させない。
 - Automated: component keyboard testとaxe WCAG 2.2 AA serious / critical 0。
-- Manual: macOS実WebViewでpointer起動、設定開閉、sound、always-on-top、resize、一窓再利用を確認した。
+- Manual: macOS実WebViewでpointer起動、設定開閉、sound、always-on-top、720x360 / 360x360 resize、一窓再利用を確認した。
 
 ## 5. Visual hierarchy / efficiency / trust
 
 - 参照アプリは400x400の時計ウィジェット内に直径380pxの外周を描く。移行先も時計盤外周をウィンドウ短辺の約93%とし、通常面から設定カードを除いた。
 - デジタル日時と設定ボタンは時計盤上の小さな補助オーバーレイで、時計盤のlayout領域を消費しない。
 - 初期ウィンドウと4段階resizeを正方形にし、手動で縦長 / 横長にしても短辺基準で円形を維持する。
-- `vh` / `vmin`はmacOS WKWebViewでnative resize後に旧値が残ったため使用せず、更新される親領域の割合だけで再計算する。
+- `vh` / `vmin`はmacOS WKWebViewでnative resize後に旧値が残るため使用しない。時計領域の実測幅・高さの短い方を`ResizeObserver`とwindow resizeで追跡し、盤面の幅・高さへ同じpx値を渡す。
 - soundは初期OFFで、視覚時刻を置き換えない。常に手前は時計ウィンドウだけへ保存し、失敗時はoptimistic stateを戻す。
 
 ## 6. Counter-review
 
 - 時計が再び小さくなる: native E2Eで実際のSVG外周 / viewport短辺を89%から96%に固定し、上下左右がviewport内であることを確認。
-- native resize後のはみ出し: 360x360へ縮小した実 WebViewで、古いviewport単位の1.47倍overflowを検出して親割合へ修正した。
+- native resize後のはみ出し: 360x360へ縮小した実WebViewで古いviewport単位の1.47倍overflowを検出し、720x360では横幅基準の1.47倍overflowを追加検出した。どちらも実測短辺へ追従させた。
 - 設定が時計を押し縮める: 設定DOMは閉状態で存在せず、開状態だけfixed overlayとして表示する。
 - pointer-only: header launcher、settings、close、各controlはkeyboard等価を持つ。Escapeとfocus restorationをcomponent testで固定。
 - 音声デバイス機能の再混入: `select`不在をnative E2Eで確認し、capabilityにもaudio device / shell / filesystem permissionを追加しない。
@@ -58,15 +58,16 @@
 | Severity | Location | Problem | Impact | Fix | Status |
 | --- | --- | --- | --- | --- | --- |
 | P1 | 専用ウィンドウ | 常設ヘッダーと設定カードにより時計盤が短辺の約36%だった | 時計が主目的に見えず参照アプリ相当でない | 時計盤約93%、設定overlay、正方形windowへ変更 | fixed |
-| P1 | 360px native resize | WKWebViewが古い`vh` / `vmin`を保持し時計盤が1.47倍へoverflow | 数字と針が切れる | 親領域のpercentageだけでlayout | fixed |
+| P1 | 360px native resize | WKWebViewが古い`vh` / `vmin`を保持し時計盤が1.47倍へoverflow | 数字と針が切れる | 実測短辺の96%を盤面の幅・高さへ同じpx値で指定 | fixed |
+| P1 | 720x360 native resize | 親領域のpercentage指定でもSVGの正方形比率が横幅を基準にし、時計盤が1.47倍へoverflow | 縦だけ縮めると盤面下側が切れる | 実測短辺の96%を盤面の幅・高さへ同じpx値で指定 | fixed |
 | P2 | Windows | WebView2 / OS scalingのnative実機未確認 | DPI時の細部差 | Windows CIと実機release smoke | deferred |
 | P2 | Screen reader | axeとkeyboardのみでVoiceOver / NVDA未確認 | dialog読上げ順の差 | 対象OSの支援技術smoke | deferred |
 
 ## 8. Evidence
 
-- User evidence: 提供スクリーンショットで、時計盤より見出し / 設定カードが面積を使う誤った主従を確認。ユーザー提供画像はrepositoryへ保存しない。
+- User evidence: 提供スクリーンショットで、時計盤より見出し / 設定カードが面積を使う誤った主従と、横長・低高時に時計盤下側が切れる状態を確認。ユーザー提供画像はrepositoryへ保存しない。
 - Reference evidence: `app_analog_clock_2.py`の公開実装で400x400時計ウィジェット、半径190、デジタル日時とalways-on-topの時計上overlayを確認。
-- After: [ヘッダー時計](../../evidence/issue-76/native-analog-clock-launcher.png)、[通常時計](../../evidence/issue-76/native-analog-clock.png)、[360px](../../evidence/issue-76/native-analog-clock-narrow.png)、[200%設定](../../evidence/issue-76/native-analog-clock-text-200.png)。
+- After: [ヘッダー時計](../../evidence/issue-76/native-analog-clock-launcher.png)、[通常時計](../../evidence/issue-76/native-analog-clock.png)、[720x360](../../evidence/issue-76/native-analog-clock-short-wide.png)、[360px](../../evidence/issue-76/native-analog-clock-narrow.png)、[200%設定](../../evidence/issue-76/native-analog-clock-text-200.png)。
 - Native result: 時計固有native E2E 1 test Pass。全native試行では時計testを含む17 Pass、今回と無関係な既存シナリオ2 Fail。
 - Redaction: 合成予定だけを使い、account、calendar、event、token、端末pathを画像へ含めない。
 

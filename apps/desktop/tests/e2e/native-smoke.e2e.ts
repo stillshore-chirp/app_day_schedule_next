@@ -2026,7 +2026,13 @@ describe("Day Schedule Next native smoke", () => {
     await $('//button[starts-with(normalize-space(.), "サイズ変更")]').click();
     await $('//button[normalize-space(.)="サイズ変更（1.5×）"]').waitForDisplayed();
     await browser.waitUntil(
-      async () => (await browser.getWindowSize()).width > initialWindowSize.width,
+      async () => {
+        const resizedWindow = await browser.getWindowSize();
+        return (
+          Math.abs(resizedWindow.width - initialWindowSize.width) > 1 ||
+          Math.abs(resizedWindow.height - initialWindowSize.height) > 1
+        );
+      },
       {
         timeout: 3_000,
         timeoutMsg: "analog clock window did not resize",
@@ -2035,6 +2041,52 @@ describe("Day Schedule Next native smoke", () => {
     await $('button[aria-label="時計の設定を閉じる"]').click();
     await $(".analog-clock-settings-panel").waitForExist({ reverse: true });
     await browser.execute(() => (document.activeElement as HTMLElement | null)?.blur());
+
+    await setExactLogicalViewportSize(720, 360);
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() => {
+          const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
+          if (!dial) return false;
+          const viewportEdge = Math.min(
+            document.documentElement.clientWidth,
+            document.documentElement.clientHeight,
+          );
+          const ratio = dial.getBoundingClientRect().width / viewportEdge;
+          return ratio >= 0.89 && ratio <= 0.96;
+        }),
+      {
+        timeout: 3_000,
+        timeoutMsg: "analog clock did not follow the short window edge",
+      },
+    );
+    const shortWideLayout = await browser.execute(() => {
+      const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
+      if (!dial) throw new Error("short wide analog clock dial was not rendered");
+      const rect = dial.getBoundingClientRect();
+      const viewportEdge = Math.min(
+        document.documentElement.clientWidth,
+        document.documentElement.clientHeight,
+      );
+      return {
+        bottom: rect.bottom,
+        clientHeight: document.documentElement.clientHeight,
+        clientWidth: document.documentElement.clientWidth,
+        clockRatio: rect.width / viewportEdge,
+        left: rect.left,
+        right: rect.right,
+        scrollWidth: document.documentElement.scrollWidth,
+        top: rect.top,
+      };
+    });
+    expect(shortWideLayout.scrollWidth).toBeLessThanOrEqual(shortWideLayout.clientWidth + 1);
+    expect(shortWideLayout.clockRatio).toBeGreaterThanOrEqual(0.89);
+    expect(shortWideLayout.clockRatio).toBeLessThanOrEqual(0.96);
+    expect(shortWideLayout.left).toBeGreaterThanOrEqual(0);
+    expect(shortWideLayout.top).toBeGreaterThanOrEqual(0);
+    expect(shortWideLayout.right).toBeLessThanOrEqual(shortWideLayout.clientWidth + 1);
+    expect(shortWideLayout.bottom).toBeLessThanOrEqual(shortWideLayout.clientHeight + 1);
+    await browser.saveScreenshot("./test-results/native-analog-clock-short-wide.png");
 
     await setExactLogicalViewportSize(360, 360);
     const narrowLayout = await browser.execute(() => {

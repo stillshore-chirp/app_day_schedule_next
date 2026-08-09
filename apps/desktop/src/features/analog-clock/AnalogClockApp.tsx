@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { AppClient } from "../../shared/ipc/client";
 import { appLocale, translate } from "../../shared/i18n/messages";
 import { AnalogClockFace } from "./AnalogClockFace";
 import {
+  analogClockFaceSize,
   nextAnalogClockScale,
   resolvedClockTheme,
   type AnalogClockScale,
@@ -45,6 +46,10 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButton = useRef<HTMLButtonElement | null>(null);
   const settingsPanel = useRef<HTMLElement | null>(null);
+  const clockStage = useRef<HTMLDivElement | null>(null);
+  const [clockFaceSize, setClockFaceSize] = useState(() =>
+    analogClockFaceSize(window.innerWidth, window.innerHeight),
+  );
   const sound = useRef<TickSoundPlayer | null>(null);
   if (sound.current === null) sound.current = new TickSoundPlayer();
   const soundPlayer = sound.current;
@@ -54,6 +59,33 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
   }, [resolvedTheme]);
+
+  useLayoutEffect(() => {
+    const stage = clockStage.current;
+    if (!stage) return;
+
+    const updateClockFaceSize = (width: number, height: number) => {
+      const next = analogClockFaceSize(width, height);
+      if (next > 0) setClockFaceSize((current) => (current === next ? current : next));
+    };
+    const measureStage = () => updateClockFaceSize(stage.clientWidth, stage.clientHeight);
+
+    measureStage();
+    window.addEventListener("resize", measureStage);
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver((entries) => {
+            const entry = entries.find(({ target }) => target === stage);
+            if (entry) updateClockFaceSize(entry.contentRect.width, entry.contentRect.height);
+          });
+    observer?.observe(stage);
+
+    return () => {
+      window.removeEventListener("resize", measureStage);
+      observer?.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (bootstrap.data) {
@@ -149,7 +181,11 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
   return (
     <main className="analog-clock-shell" data-clock-scale={scale}>
       <h1 className="sr-only">{translate("app.AnalogClock.001")}</h1>
-      <div className="analog-clock-stage">
+      <div
+        ref={clockStage}
+        className="analog-clock-stage"
+        style={{ "--analog-clock-face-size": `${clockFaceSize}px` } as CSSProperties}
+      >
         <AnalogClockFace now={now} />
       </div>
 

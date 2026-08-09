@@ -3465,8 +3465,8 @@ tbody tr:focus {
 }
 
 .analog-clock-face--full {
-  width: 96%;
-  height: 96%;
+  width: var(--analog-clock-face-size);
+  height: var(--analog-clock-face-size);
   filter: drop-shadow(0 12px 22px rgb(21 33 51 / 16%));
 }
 

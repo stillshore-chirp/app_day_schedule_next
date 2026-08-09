@@ -16,7 +16,8 @@
 | Always on top | checkboxと状態文 | 時計だけを手前に保つ | toggle | 保存失敗時rollback | checkbox + status | native persistence | Pass |
 | Bootstrap failure | 時計は表示、設定内に読込失敗文 | 手前設定だけ未取得 | 時計利用 / retry reopen | mainを開き再試行 | inline error | component structure | Pass |
 | Size 1 / 1.5 / 2 / 2.5 | 正方形の時計window | 時計全体が段階的に拡大 | 次size / manual resize | displayの90%以内へclamp | button status | Rust unit + native resize | Pass |
-| Manual non-square resize | 短辺基準の円形時計 | 円が歪まず収まる | resize / setting | 正方形sizeへ戻す | same named image | responsive contract | Pass |
+| Manual non-square resize | 短辺基準の円形時計 | 円が歪まず収まる | resize / setting | 正方形sizeへ戻す | same named image | [720x360 native](../../evidence/issue-76/native-analog-clock-short-wide.png) | Pass |
+| Short wide 720x360 | 高さ約90%で全周が見える時計盤 | 縦だけ縮めても時計全体を読める | resize / setting | window拡大 | named image、境界内 | [native](../../evidence/issue-76/native-analog-clock-short-wide.png) | Pass |
 | Minimum 360px | 切れない約93%時計盤 | 小さくても時計を読める | settings / resize | window拡大 | 44px setting target | [native](../../evidence/issue-76/native-analog-clock-narrow.png) | Pass |
 | 200% text | 拡大した設定と内部scroll | 全設定へ縦scrollで到達できる | Tab / scroll / close | Escape | no horizontal overflow | [native](../../evidence/issue-76/native-analog-clock-text-200.png) | Pass |
 | Reopen existing | 同じwindowが復元 / focus | 二重起動していない | 利用継続 | close / reopen | handle count unchanged | native E2E | Pass |
