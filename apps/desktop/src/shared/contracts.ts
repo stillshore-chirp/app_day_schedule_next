@@ -229,6 +229,7 @@ export const bootstrapSchema = z.object({
   windowPreferences: z.object({
     mainAlwaysOnTop: z.boolean(),
     compactAlwaysOnTop: z.boolean(),
+    analogClockAlwaysOnTop: z.boolean(),
   }),
 });
 

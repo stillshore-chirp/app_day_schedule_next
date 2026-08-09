@@ -118,6 +118,7 @@ pub struct Bootstrap {
 pub struct WindowPreferences {
     pub main_always_on_top: bool,
     pub compact_always_on_top: bool,
+    pub analog_clock_always_on_top: bool,
 }
 
 impl AppService {
@@ -185,6 +186,10 @@ impl AppService {
             window_preferences: WindowPreferences {
                 main_always_on_top: self.database.window_always_on_top("main").await?,
                 compact_always_on_top: self.database.window_always_on_top("compact").await?,
+                analog_clock_always_on_top: self
+                    .database
+                    .window_always_on_top("analog-clock")
+                    .await?,
             },
         })
     }

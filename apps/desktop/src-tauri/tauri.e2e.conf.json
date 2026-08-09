@@ -10,7 +10,7 @@
         {
           "identifier": "e2e",
           "description": "Test-only WebdriverIO permissions, activated only by this isolated E2E configuration.",
-          "windows": ["main", "compact"],
+          "windows": ["main", "compact", "analog-clock"],
           "permissions": ["wdio:default", "wdio-webdriver:default"]
         }
       ]

@@ -12,7 +12,7 @@ Day Schedule Next は、一日の予定を分単位で設計・実行し、現�
 - OAuth JSON不要のDesktop OAuth + Authorization Code + PKCE + loopback、Outbox、差分同期、競合解決
 - TicketとGoogle Tasksの双方向同期、Task List選択、Local専用のpriority・見積・tags・Schedule・Focus実績の保護
 - SQLite migration、バックアップ、復元 staging、JSON export / import、旧 DB の read-only preview
-- Compact Window、トレイ常駐、single instance、構造化・マスク済み診断 export
+- ヘッダーから呼び出すアナログ時計、秒針音、Compact Window、トレイ常駐、single instance、構造化・マスク済み診断 export
 
 詳細な操作は [`UserManual.md`](UserManual.md)、障害対応は [`OPERATIONS.md`](OPERATIONS.md)、Google 接続準備は [`docs/guides/google-calendar-oauth.md`](docs/guides/google-calendar-oauth.md) を参照してください。
 

@@ -41,7 +41,7 @@ macOS x64 / Windows、Native E2E、installer生成は `Native release validation
 - production CSP は self / IPC / bundled asset に限定
 - remote script / CDN / iframe / object を禁止
 - Google HTTP、SQLite、keyring、notification adapter は Rust 側
-- frontend plugin permission は main / compact window ごとの最小 capability
+- frontend plugin permission は main / compact / analog-clock window ごとの最小 capability
 - general shell、general filesystem、raw SQL、arbitrary HTTP permission は不使用
 - external browser は OAuth の検証済み Google authorization URL だけを開く
 
@@ -55,7 +55,7 @@ E2E capability は `cfg(feature = "e2e")` の build だけに存在します。
 - Command / Control、tray、close / quit semantics
 - path、installer、scale、multi-monitor work area
 
-window state は logical label で保存し、main / Compact の always-on-top を独立管理します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
+window state は logical label で保存し、main / Compact / analog-clock の always-on-top を独立管理します。動的な補助ウィンドウは同じ label を再利用して重複生成せず、表示・復元・focus します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
 
 ## 5. unsigned 個人配布
 

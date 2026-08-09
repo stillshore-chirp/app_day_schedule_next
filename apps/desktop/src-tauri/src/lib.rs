@@ -198,6 +198,8 @@ pub fn run() {
             commands::google_task_conflict_resolve,
             commands::google_disconnect,
             commands::compact_window_open,
+            commands::analog_clock_window_open,
+            commands::analog_clock_window_resize,
             commands::main_window_show,
             commands::template_list,
             commands::template_save,

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "analog-clock",
+  "description": "Analog clock window invokes only allowlisted application commands.",
+  "windows": ["analog-clock"],
+  "permissions": []
+}
