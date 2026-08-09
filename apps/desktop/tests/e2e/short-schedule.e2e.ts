@@ -98,7 +98,7 @@ describe("Day Schedule Next short schedule layout", () => {
     });
     expect(collapsedLayout.sidebarWidth).toBeCloseTo(76, 0);
     expect(collapsedLayout.navigationLabelDisplay).toBe("none");
-    expect(Math.max(...collapsedLayout.labelWidths)).toBeLessThanOrEqual(65);
+    expect(Math.max(...collapsedLayout.labelWidths)).toBeLessThanOrEqual(73);
     expect(collapsedLayout.labelsFit.every(Boolean)).toBe(true);
     expect(collapsedLayout.scheduleTrackWidth).toBeCloseTo(collapsedLayout.templateTrackWidth, 0);
     expect(collapsedLayout.labelGaps).toHaveLength(2);
@@ -153,7 +153,7 @@ describe("Day Schedule Next short schedule layout", () => {
       };
     });
     expect(narrowLayout.sidebarWidth).toBeCloseTo(76, 0);
-    expect(Math.max(...narrowLayout.labelWidths)).toBeLessThanOrEqual(65);
+    expect(Math.max(...narrowLayout.labelWidths)).toBeLessThanOrEqual(73);
     expect(narrowLayout.labelsFit.every(Boolean)).toBe(true);
     expect(narrowLayout.scheduleTrackWidth).toBeCloseTo(narrowLayout.templateTrackWidth, 0);
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-narrow.png");

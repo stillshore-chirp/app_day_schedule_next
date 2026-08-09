@@ -855,7 +855,7 @@ button:disabled {
 }
 
 .overview {
-  --overview-lane-label-width: 4rem;
+  --overview-lane-label-width: 4.5rem;
 
   padding: 10px 18px;
   margin-bottom: 16px;
@@ -964,12 +964,14 @@ button:disabled {
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .overview-lane__kind {
   color: var(--text-muted);
   font-size: 0.7rem;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .overview-lane__track {
@@ -3053,7 +3055,7 @@ tbody tr:focus {
 
 @media (max-width: 840px) {
   .overview {
-    --overview-lane-label-width: 4rem;
+    --overview-lane-label-width: 4.5rem;
 
     padding-inline: 10px;
   }
