@@ -34,7 +34,6 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     referenceMinute,
     setReferenceMinute,
     setActiveView,
-    openTemplateEditor,
   } = useUiStore();
   const schedulesQuery = useSchedules(client, selectedDate, search);
   const quickBlocksQuery = useQuery({
@@ -429,7 +428,6 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             templatesQuery.isLoading ? "loading" : templatesQuery.isError ? "error" : "ready"
           }
           onRetryTemplate={() => void templatesQuery.refetch()}
-          onEditTemplate={openTemplateEditor}
           referenceMinute={referenceMinute}
           onReferenceChange={setReferenceMinute}
         />

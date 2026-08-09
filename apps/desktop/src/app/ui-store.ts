@@ -43,10 +43,7 @@ interface UiState {
   search: string;
   createRange: { startUtc: string; endUtc: string } | null;
   referenceMinute: number;
-  templateFocusPending: boolean;
   setActiveView: (view: AppView) => void;
-  openTemplateEditor: () => void;
-  consumeTemplateFocus: () => void;
   setSelectedDate: (date: Date) => void;
   selectSchedule: (id: string | null) => void;
   openCreate: (range?: { startUtc: string; endUtc: string }) => void;
@@ -64,16 +61,10 @@ export const useUiStore = create<UiState>((set) => ({
   search: "",
   createRange: null,
   referenceMinute: 8 * 60,
-  templateFocusPending: false,
   setActiveView: (activeView) => {
     localStorage.setItem("day-schedule-next.active-view", activeView);
     set({ activeView });
   },
-  openTemplateEditor: () => {
-    localStorage.setItem("day-schedule-next.active-view", "templates");
-    set({ activeView: "templates", templateFocusPending: true });
-  },
-  consumeTemplateFocus: () => set({ templateFocusPending: false }),
   setSelectedDate: (selectedDate) => set({ selectedDate, selectedScheduleId: null }),
   selectSchedule: (selectedScheduleId) => set({ selectedScheduleId }),
   openCreate: (createRange) =>

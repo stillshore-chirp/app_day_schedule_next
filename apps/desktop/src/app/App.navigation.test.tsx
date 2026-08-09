@@ -11,7 +11,7 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   delete document.documentElement.dataset.theme;
-  useUiStore.setState({ activeView: "today", templateFocusPending: false });
+  useUiStore.setState({ activeView: "today" });
 });
 
 describe("App time-tool navigation", () => {
@@ -113,7 +113,7 @@ describe("App time-tool navigation", () => {
     expect((await client.bootstrap()).settings.theme).toBe("mild");
   });
 
-  it("opens the selected template editor from Today without applying or creating schedules", async () => {
+  it("keeps template editing in the sidebar destination instead of Today", async () => {
     const user = userEvent.setup();
     const client = new MemoryAppClient([]);
     const applyTemplate = vi.spyOn(client, "applyTemplate");
@@ -125,12 +125,18 @@ describe("App time-tool navigation", () => {
       </QueryClientProvider>,
     );
 
-    await user.click(await screen.findByRole("button", { name: "テンプレートを編集" }));
-    const editorHeading = await screen.findByRole("heading", {
-      name: "テンプレートを編集",
-      level: 2,
-    });
-    await waitFor(() => expect(editorHeading).toHaveFocus());
+    await screen.findByRole("heading", { name: "詳細タイムライン" });
+    expect(screen.queryByRole("button", { name: "テンプレートを編集" })).toBeNull();
+
+    await user.click(
+      within(screen.getByLabelText("主要画面")).getByRole("button", { name: "テンプレート" }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: "テンプレートを編集",
+        level: 2,
+      }),
+    ).toBeVisible();
     expect(applyTemplate).not.toHaveBeenCalled();
     expect(createSchedule).not.toHaveBeenCalled();
   });

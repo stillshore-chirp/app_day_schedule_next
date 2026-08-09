@@ -855,7 +855,7 @@ button:disabled {
 }
 
 .overview {
-  --overview-lane-label-width: clamp(118px, 12vw, 168px);
+  --overview-lane-label-width: 4.5rem;
 
   padding: 10px 18px;
   margin-bottom: 16px;
@@ -874,12 +874,6 @@ button:disabled {
 
 .overview > .section-heading--compact h2 {
   margin: 0;
-}
-
-.overview__template-action {
-  display: flex;
-  align-items: center;
-  margin: 0 10px 8px;
 }
 
 .section-heading {
@@ -932,7 +926,7 @@ button:disabled {
 .overview-axis {
   position: relative;
   height: 16px;
-  margin: 0 14px 0 calc(14px + var(--overview-lane-label-width) + 10px);
+  margin: 0 14px 0 calc(14px + var(--overview-lane-label-width) + 8px);
 }
 
 .overview-lanes {
@@ -957,6 +951,7 @@ button:disabled {
   gap: 4px;
   min-width: 0;
   padding-block: 4px;
+  text-align: end;
 }
 
 .overview-lane__heading > div {
@@ -969,12 +964,14 @@ button:disabled {
   margin: 0;
   overflow-wrap: anywhere;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .overview-lane__kind {
   color: var(--text-muted);
   font-size: 0.7rem;
   font-weight: 750;
+  white-space: nowrap;
 }
 
 .overview-lane__track {
@@ -3270,7 +3267,7 @@ tbody tr:focus {
 
 @media (max-width: 840px) {
   .overview {
-    --overview-lane-label-width: 100px;
+    --overview-lane-label-width: 4.5rem;
 
     padding-inline: 10px;
   }
