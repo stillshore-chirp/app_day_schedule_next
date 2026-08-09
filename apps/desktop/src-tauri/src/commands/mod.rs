@@ -1234,6 +1234,67 @@ pub async fn compact_window_open(
 }
 
 #[tauri::command]
+pub async fn analog_clock_window_open(
+    app: AppHandle,
+    service: State<'_, AppService>,
+) -> CommandResult<()> {
+    if let Some(window) = app.get_webview_window("analog-clock") {
+        window.show().map_err(|_| window_error())?;
+        window.unminimize().map_err(|_| window_error())?;
+        window.set_focus().map_err(|_| window_error())?;
+        return Ok(());
+    }
+    let always_on_top = service
+        .window_always_on_top("analog-clock")
+        .await
+        .map_err(UserSafeError::from)?;
+    WebviewWindowBuilder::new(
+        &app,
+        "analog-clock",
+        WebviewUrl::App("index.html?window=analog-clock".into()),
+    )
+    .title("Day Schedule Next — アナログ時計")
+    .inner_size(480.0, 480.0)
+    .min_inner_size(360.0, 360.0)
+    .resizable(true)
+    .always_on_top(always_on_top)
+    .build()
+    .map_err(|_| window_error())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn analog_clock_window_resize(app: AppHandle, factor: f64) -> CommandResult<()> {
+    let Some(window) = app.get_webview_window("analog-clock") else {
+        return Err(window_error());
+    };
+    let (width, height) = analog_clock_size(factor).ok_or_else(|| UserSafeError {
+        code: "validation",
+        message: "時計のサイズが正しくありません。".into(),
+        recovery: "サイズ変更をもう一度選んでください。".into(),
+        retryable: false,
+        diagnostic_id: None,
+    })?;
+    let scale_factor = window.scale_factor().map_err(|_| window_error())?;
+    let monitor = window.current_monitor().map_err(|_| window_error())?;
+    let (max_width, max_height) = monitor.map_or((width, height), |monitor| {
+        (
+            (f64::from(monitor.size().width) / scale_factor * 0.9).max(360.0),
+            (f64::from(monitor.size().height) / scale_factor * 0.9).max(360.0),
+        )
+    });
+    let max_edge = max_width.min(max_height);
+    window
+        .set_size(tauri::LogicalSize::new(
+            width.min(max_edge),
+            height.min(max_edge),
+        ))
+        .map_err(|_| window_error())?;
+    window.center().map_err(|_| window_error())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn main_window_show(app: AppHandle) -> CommandResult<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Err(window_error());
@@ -1250,11 +1311,11 @@ pub async fn window_always_on_top_set(
     service: State<'_, AppService>,
     request: WindowPreferenceRequest,
 ) -> CommandResult<()> {
-    if !matches!(request.label.as_str(), "main" | "compact") {
+    if !matches!(request.label.as_str(), "main" | "compact" | "analog-clock") {
         return Err(UserSafeError {
             code: "validation",
             message: "対象ウィンドウが正しくありません。".into(),
-            recovery: "メインまたはコンパクトを選んでください。".into(),
+            recovery: "メイン、コンパクト、またはアナログ時計を選んでください。".into(),
             retryable: false,
             diagnostic_id: None,
         });
@@ -1415,10 +1476,20 @@ pub async fn template_apply(
 fn window_error() -> UserSafeError {
     UserSafeError {
         code: "window",
-        message: "コンパクトウィンドウを開けませんでした。".into(),
+        message: "ウィンドウを開けませんでした。".into(),
         recovery: "メインウィンドウを開いたまま、もう一度試してください。".into(),
         retryable: true,
         diagnostic_id: None,
+    }
+}
+
+fn analog_clock_size(factor: f64) -> Option<(f64, f64)> {
+    match factor {
+        value if (value - 1.0).abs() < f64::EPSILON => Some((480.0, 480.0)),
+        value if (value - 1.5).abs() < f64::EPSILON => Some((620.0, 620.0)),
+        value if (value - 2.0).abs() < f64::EPSILON => Some((800.0, 800.0)),
+        value if (value - 2.5).abs() < f64::EPSILON => Some((980.0, 980.0)),
+        _ => None,
     }
 }
 
@@ -1433,4 +1504,17 @@ fn checked_path(value: String) -> CommandResult<PathBuf> {
         });
     }
     Ok(PathBuf::from(value))
+}
+
+#[cfg(test)]
+mod analog_clock_window_tests {
+    use super::analog_clock_size;
+
+    #[test]
+    fn accepts_only_the_supported_clock_scales() {
+        assert_eq!(analog_clock_size(1.0), Some((480.0, 480.0)));
+        assert_eq!(analog_clock_size(2.5), Some((980.0, 980.0)));
+        assert_eq!(analog_clock_size(1.25), None);
+        assert_eq!(analog_clock_size(f64::NAN), None);
+    }
 }

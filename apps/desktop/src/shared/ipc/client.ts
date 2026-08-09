@@ -202,6 +202,8 @@ export interface AppClient {
   diagnostics(): Promise<DiagnosticsSnapshot>;
   exportDiagnostics(path: string, webview: string): Promise<DiagnosticsExportResult>;
   openCompactWindow(): Promise<void>;
+  openAnalogClockWindow(): Promise<void>;
+  resizeAnalogClockWindow(factor: 1 | 1.5 | 2 | 2.5): Promise<void>;
   showMainWindowWithAction(action: "quick-add" | "focus"): Promise<void>;
   listTemplates(): Promise<DayTemplate[]>;
   saveTemplate(input: VersionedSave<DayTemplateDraft>): Promise<DayTemplate>;
@@ -217,7 +219,10 @@ export interface AppClient {
   reorderFreeAlarms(ids: string[]): Promise<void>;
   previewTemplate(request: TemplateTarget): Promise<TemplatePreview>;
   applyTemplate(request: TemplateTarget): Promise<ChangeResult>;
-  setWindowAlwaysOnTop(label: "main" | "compact", alwaysOnTop: boolean): Promise<void>;
+  setWindowAlwaysOnTop(
+    label: "main" | "compact" | "analog-clock",
+    alwaysOnTop: boolean,
+  ): Promise<void>;
   exportData(path: string, operationId: string): Promise<ExportResult>;
   deleteAllUserData(confirmation: string): Promise<number>;
   previewImport(path: string): Promise<ImportPreview>;
@@ -597,6 +602,14 @@ export class TauriAppClient implements AppClient {
     await call("compact_window_open");
   }
 
+  async openAnalogClockWindow(): Promise<void> {
+    await call("analog_clock_window_open");
+  }
+
+  async resizeAnalogClockWindow(factor: 1 | 1.5 | 2 | 2.5): Promise<void> {
+    await call("analog_clock_window_resize", { factor });
+  }
+
   async showMainWindowWithAction(action: "quick-add" | "focus"): Promise<void> {
     await call("main_window_show");
     await emit("compact-action", action);
@@ -660,7 +673,10 @@ export class TauriAppClient implements AppClient {
     return result;
   }
 
-  async setWindowAlwaysOnTop(label: "main" | "compact", alwaysOnTop: boolean): Promise<void> {
+  async setWindowAlwaysOnTop(
+    label: "main" | "compact" | "analog-clock",
+    alwaysOnTop: boolean,
+  ): Promise<void> {
     await call("window_always_on_top_set", { request: { label, alwaysOnTop } });
   }
 
@@ -983,6 +999,12 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   openCompactWindow(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+  openAnalogClockWindow(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+  resizeAnalogClockWindow(): Promise<void> {
     return Promise.reject(this.unavailable());
   }
   showMainWindowWithAction(): Promise<void> {

@@ -24,7 +24,7 @@
     ],
     "security": {
       "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'",
-      "capabilities": ["main", "compact"]
+      "capabilities": ["main", "compact", "analog-clock"]
     }
   },
   "bundle": {

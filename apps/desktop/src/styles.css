@@ -155,6 +155,13 @@ body,
   margin: 0;
 }
 
+:root[data-window="analog-clock"],
+:root[data-window="analog-clock"] body,
+:root[data-window="analog-clock"] #root {
+  min-width: 0;
+  min-height: 0;
+}
+
 body {
   color: var(--text);
   background: var(--canvas);
@@ -644,6 +651,109 @@ button:disabled {
 .date-navigation {
   justify-content: center;
   gap: 6px;
+}
+
+.analog-clock-launcher-wrap {
+  position: relative;
+  display: grid;
+  flex: 0 0 44px;
+  place-items: center;
+}
+
+.analog-clock-launcher {
+  display: grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 3px;
+  place-items: center;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.analog-clock-launcher:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.analog-clock-launcher__error {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: min(320px, 70vw);
+  padding: 8px 10px;
+  color: var(--danger);
+  background: var(--surface);
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  transform: translateX(-50%);
+}
+
+.analog-clock-face {
+  display: block;
+  color: var(--text);
+  overflow: visible;
+}
+
+.analog-clock-face--compact {
+  width: 36px;
+  height: 36px;
+}
+
+.analog-clock-face__dial {
+  fill: var(--surface);
+  stroke: var(--border-strong);
+  stroke-width: 1.4;
+}
+
+.analog-clock-face__marks line {
+  stroke: var(--text-muted);
+  stroke-linecap: round;
+  stroke-width: 0.55;
+}
+
+.analog-clock-face__marks .analog-clock-face__mark--hour {
+  stroke: var(--text);
+  stroke-width: 1.3;
+}
+
+.analog-clock-face__numbers {
+  fill: var(--text);
+  font-size: 6px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.analog-clock-face__hand {
+  stroke: var(--text);
+  stroke-linecap: round;
+}
+
+.analog-clock-face__hand--hour {
+  stroke-width: 3.4;
+}
+
+.analog-clock-face__hand--minute {
+  stroke-width: 2.2;
+}
+
+.analog-clock-face__hand--second {
+  stroke: var(--danger);
+  stroke-width: 0.9;
+}
+
+.analog-clock-face__pin {
+  fill: var(--danger);
+  stroke: var(--surface);
+  stroke-width: 0.8;
 }
 
 .date-navigation__date {
@@ -3303,7 +3413,6 @@ tbody tr:focus {
     grid-template-columns: auto 1fr auto;
   }
 
-  .date-navigation .button--subtle,
   .topbar__actions .button--primary {
     display: none;
   }
@@ -3327,6 +3436,230 @@ tbody tr:focus {
 
   .diagnostics-grid {
     grid-template-columns: repeat(2, minmax(150px, 1fr));
+  }
+}
+
+.analog-clock-shell {
+  position: relative;
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  place-items: center;
+  color: var(--text);
+  background:
+    radial-gradient(
+      circle at 85% 8%,
+      color-mix(in srgb, var(--primary) 15%, transparent),
+      transparent 34%
+    ),
+    var(--canvas);
+  overflow: hidden;
+}
+
+.analog-clock-stage {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+
+.analog-clock-face--full {
+  width: var(--analog-clock-face-size);
+  height: var(--analog-clock-face-size);
+  filter: drop-shadow(0 12px 22px rgb(21 33 51 / 16%));
+}
+
+.analog-clock-digital {
+  position: fixed;
+  z-index: 4;
+  top: 14px;
+  left: 14px;
+  max-width: calc(100% - 84px);
+  padding: 5px 8px;
+  overflow: hidden;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
+  opacity: 0.82;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analog-clock-settings-trigger {
+  position: fixed;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  padding: 9px;
+  place-items: center;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  opacity: 0.78;
+}
+
+.analog-clock-settings-trigger:hover,
+.analog-clock-settings-trigger:focus-visible,
+.analog-clock-settings-trigger[aria-expanded="true"] {
+  color: var(--primary-strong);
+  background: var(--surface-raised);
+  border-color: var(--primary);
+  opacity: 1;
+}
+
+.analog-clock-settings-trigger svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.analog-clock-settings-layer {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  place-items: center;
+}
+
+.analog-clock-settings-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgb(5 12 23 / 62%);
+  cursor: default;
+}
+
+.analog-clock-settings-panel {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  max-height: 100%;
+  padding: 20px;
+  overflow: auto;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-raised) 98%, var(--canvas));
+  border: 1px solid var(--border-strong);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgb(5 12 23 / 38%);
+}
+
+.analog-clock-settings-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.analog-clock-settings-panel__header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.analog-clock-settings-close {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.analog-clock-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.analog-clock-controls fieldset {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+
+.analog-clock-controls legend {
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.analog-clock-theme-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.analog-clock-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.analog-clock-volume {
+  display: grid !important;
+  grid-template-columns: auto minmax(120px, 1fr);
+  gap: 12px !important;
+}
+
+.analog-clock-volume input {
+  width: 100%;
+  min-width: 0;
+}
+
+.analog-clock-controls__help,
+.analog-clock-controls__status,
+.analog-clock-controls .inline-error {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.analog-clock-controls__help,
+.analog-clock-controls__status {
+  color: var(--text-muted);
+}
+
+.analog-clock-controls__status {
+  min-height: 1.2em;
+}
+
+.analog-clock-controls .inline-error {
+  color: var(--danger);
+}
+
+@media (max-width: 430px) {
+  .analog-clock-settings-panel {
+    padding: 16px;
+  }
+
+  .analog-clock-volume {
+    grid-template-columns: 1fr;
   }
 }
 

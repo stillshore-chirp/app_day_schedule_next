@@ -13,6 +13,7 @@ import { AlarmsView, TemplatesView } from "../features/views/LibraryViews";
 import { TimersView } from "../features/timers/TimersView";
 import { StopwatchView } from "../features/stopwatch/StopwatchView";
 import { KanbanView } from "../features/tickets/KanbanView";
+import { AnalogClockLauncher } from "../features/analog-clock/AnalogClockLauncher";
 import { useUiStore, type AppView } from "./ui-store";
 import { NotificationRuntime } from "./NotificationRuntime";
 import { SyncRuntime } from "./SyncRuntime";
@@ -212,6 +213,7 @@ export function App({
           <button className="button button--subtle" onClick={() => setSelectedDate(new Date())}>
             {translate("app.App.011")}
           </button>
+          <AnalogClockLauncher client={client} />
         </div>
         <div className="topbar__actions">
           {activeView !== "tickets" && (

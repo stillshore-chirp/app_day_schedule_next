@@ -1887,4 +1887,274 @@ describe("Day Schedule Next native smoke", () => {
     expect(compactScheduleRendered).toBe(true);
     await browser.saveScreenshot("./test-results/native-compact.png");
   });
+
+  it("opens one native analog clock window with moving hands and accessible controls", async () => {
+    await browser.tauri.switchWindow("main");
+    await persistFixtureTheme("light");
+    await setLogicalWindowSize(1024, 640);
+    await browser.execute(() => {
+      localStorage.removeItem("day-schedule-next.analog-clock-theme");
+      localStorage.removeItem("day-schedule-next.analog-clock-scale");
+      localStorage.removeItem("day-schedule-next.analog-clock-volume");
+    });
+    const launcher = $('button[aria-label="アナログ時計を開く"]');
+    await launcher.waitForDisplayed();
+
+    const launcherHandsBefore = await browser.execute(() => ({
+      hour: document
+        .querySelector(".analog-clock-launcher .analog-clock-face__hand--hour")
+        ?.getAttribute("transform"),
+      minute: document
+        .querySelector(".analog-clock-launcher .analog-clock-face__hand--minute")
+        ?.getAttribute("transform"),
+    }));
+    await browser.waitUntil(
+      async () => {
+        const current = await browser.execute(() => ({
+          hour: document
+            .querySelector(".analog-clock-launcher .analog-clock-face__hand--hour")
+            ?.getAttribute("transform"),
+          minute: document
+            .querySelector(".analog-clock-launcher .analog-clock-face__hand--minute")
+            ?.getAttribute("transform"),
+        }));
+        return (
+          current.hour !== launcherHandsBefore.hour && current.minute !== launcherHandsBefore.minute
+        );
+      },
+      { timeout: 3_000, timeoutMsg: "header analog clock hands did not advance" },
+    );
+    await $(".topbar").saveScreenshot("./test-results/native-analog-clock-launcher.png");
+
+    const handlesBeforeOpen = await browser.getWindowHandles();
+    await launcher.click();
+    await browser.waitUntil(
+      async () => (await browser.getWindowHandles()).length === handlesBeforeOpen.length + 1,
+      { timeout: 5_000, timeoutMsg: "analog clock window was not created" },
+    );
+    await browser.tauri.switchWindow("analog-clock");
+    const settingsButton = $('button[aria-label="時計の設定を開く"]');
+    await settingsButton.waitForDisplayed();
+
+    const clockBefore = await browser.execute(() => ({
+      hour: document.querySelector(".analog-clock-face__hand--hour")?.getAttribute("transform"),
+      markCount: document.querySelectorAll(".analog-clock-face__marks line").length,
+      minute: document.querySelector(".analog-clock-face__hand--minute")?.getAttribute("transform"),
+      numberCount: document.querySelectorAll(".analog-clock-face__numbers text").length,
+      second: document.querySelector(".analog-clock-face__hand--second")?.getAttribute("transform"),
+    }));
+    expect(clockBefore.markCount).toBe(60);
+    expect(clockBefore.numberCount).toBe(12);
+    await browser.waitUntil(
+      async () => {
+        const current = await browser.execute(() => ({
+          hour: document.querySelector(".analog-clock-face__hand--hour")?.getAttribute("transform"),
+          minute: document
+            .querySelector(".analog-clock-face__hand--minute")
+            ?.getAttribute("transform"),
+          second: document
+            .querySelector(".analog-clock-face__hand--second")
+            ?.getAttribute("transform"),
+        }));
+        return (
+          current.hour !== clockBefore.hour &&
+          current.minute !== clockBefore.minute &&
+          current.second !== clockBefore.second
+        );
+      },
+      { timeout: 3_000, timeoutMsg: "analog clock hands did not advance" },
+    );
+
+    const dominantClockLayout = await browser.execute(() => {
+      const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
+      if (!dial) throw new Error("analog clock dial was not rendered");
+      const rect = dial.getBoundingClientRect();
+      const viewportEdge = Math.min(
+        document.documentElement.clientWidth,
+        document.documentElement.clientHeight,
+      );
+      return {
+        bottom: rect.bottom,
+        clockRatio: rect.width / viewportEdge,
+        clientHeight: document.documentElement.clientHeight,
+        clientWidth: document.documentElement.clientWidth,
+        left: rect.left,
+        right: rect.right,
+        scrollWidth: document.documentElement.scrollWidth,
+        settingsVisible: document.querySelector(".analog-clock-settings-panel") !== null,
+        top: rect.top,
+      };
+    });
+    expect(dominantClockLayout.clockRatio).toBeGreaterThanOrEqual(0.89);
+    expect(dominantClockLayout.clockRatio).toBeLessThanOrEqual(0.96);
+    expect(dominantClockLayout.left).toBeGreaterThanOrEqual(0);
+    expect(dominantClockLayout.top).toBeGreaterThanOrEqual(0);
+    expect(dominantClockLayout.right).toBeLessThanOrEqual(dominantClockLayout.clientWidth + 1);
+    expect(dominantClockLayout.bottom).toBeLessThanOrEqual(dominantClockLayout.clientHeight + 1);
+    expect(dominantClockLayout.scrollWidth).toBeLessThanOrEqual(
+      dominantClockLayout.clientWidth + 1,
+    );
+    expect(dominantClockLayout.settingsVisible).toBe(false);
+    await browser.saveScreenshot("./test-results/native-analog-clock.png");
+
+    expect(await browser.execute(() => document.querySelectorAll("select").length)).toBe(0);
+    await settingsButton.click();
+    await $(".analog-clock-settings-panel").waitForDisplayed();
+    const soundLabel = $('//label[contains(normalize-space(.), "秒針音")]');
+    await soundLabel.waitForDisplayed();
+    const soundToggle = soundLabel.$('input[type="checkbox"]');
+    await soundLabel.click();
+    await $('//*[contains(., "秒針音を有効にしました")]').waitForDisplayed();
+    await soundLabel.click();
+    await $('//*[contains(., "秒針音を無効にしました")]').waitForDisplayed();
+    expect(await soundToggle.isExisting()).toBe(true);
+
+    const topmostLabel = $('//label[normalize-space(.)="常に手前"]');
+    await topmostLabel.waitForDisplayed();
+    const topmost = topmostLabel.$('input[type="checkbox"]');
+    if (!(await topmost.isSelected())) await topmostLabel.click();
+    await browser.waitUntil(() => topmost.isSelected(), {
+      timeout: 3_000,
+      timeoutMsg: "analog clock always-on-top setting was not enabled",
+    });
+    const persistedTopmost = (await browser.tauri.execute(({ core }) =>
+      core.invoke("bootstrap_get"),
+    )) as { windowPreferences: { analogClockAlwaysOnTop: boolean } };
+    expect(persistedTopmost.windowPreferences.analogClockAlwaysOnTop).toBe(true);
+
+    const initialWindowSize = await browser.getWindowSize();
+    await $('//button[starts-with(normalize-space(.), "サイズ変更")]').click();
+    await $('//button[normalize-space(.)="サイズ変更（1.5×）"]').waitForDisplayed();
+    await browser.waitUntil(
+      async () => {
+        const resizedWindow = await browser.getWindowSize();
+        return (
+          Math.abs(resizedWindow.width - initialWindowSize.width) > 1 ||
+          Math.abs(resizedWindow.height - initialWindowSize.height) > 1
+        );
+      },
+      {
+        timeout: 3_000,
+        timeoutMsg: "analog clock window did not resize",
+      },
+    );
+    await $('button[aria-label="時計の設定を閉じる"]').click();
+    await $(".analog-clock-settings-panel").waitForExist({ reverse: true });
+    await browser.execute(() => (document.activeElement as HTMLElement | null)?.blur());
+
+    await setExactLogicalViewportSize(720, 360);
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() => {
+          const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
+          if (!dial) return false;
+          const viewportEdge = Math.min(
+            document.documentElement.clientWidth,
+            document.documentElement.clientHeight,
+          );
+          const ratio = dial.getBoundingClientRect().width / viewportEdge;
+          return ratio >= 0.89 && ratio <= 0.96;
+        }),
+      {
+        timeout: 3_000,
+        timeoutMsg: "analog clock did not follow the short window edge",
+      },
+    );
+    const shortWideLayout = await browser.execute(() => {
+      const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
+      if (!dial) throw new Error("short wide analog clock dial was not rendered");
+      const rect = dial.getBoundingClientRect();
+      const viewportEdge = Math.min(
+        document.documentElement.clientWidth,
+        document.documentElement.clientHeight,
+      );
+      return {
+        bottom: rect.bottom,
+        clientHeight: document.documentElement.clientHeight,
+        clientWidth: document.documentElement.clientWidth,
+        clockRatio: rect.width / viewportEdge,
+        left: rect.left,
+        right: rect.right,
+        scrollWidth: document.documentElement.scrollWidth,
+        top: rect.top,
+      };
+    });
+    expect(shortWideLayout.scrollWidth).toBeLessThanOrEqual(shortWideLayout.clientWidth + 1);
+    expect(shortWideLayout.clockRatio).toBeGreaterThanOrEqual(0.89);
+    expect(shortWideLayout.clockRatio).toBeLessThanOrEqual(0.96);
+    expect(shortWideLayout.left).toBeGreaterThanOrEqual(0);
+    expect(shortWideLayout.top).toBeGreaterThanOrEqual(0);
+    expect(shortWideLayout.right).toBeLessThanOrEqual(shortWideLayout.clientWidth + 1);
+    expect(shortWideLayout.bottom).toBeLessThanOrEqual(shortWideLayout.clientHeight + 1);
+    await browser.saveScreenshot("./test-results/native-analog-clock-short-wide.png");
+
+    await setExactLogicalViewportSize(360, 360);
+    const narrowLayout = await browser.execute(() => {
+      const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
+      if (!dial) throw new Error("narrow analog clock dial was not rendered");
+      const rect = dial.getBoundingClientRect();
+      const viewportEdge = Math.min(
+        document.documentElement.clientWidth,
+        document.documentElement.clientHeight,
+      );
+      return {
+        bottom: rect.bottom,
+        clientHeight: document.documentElement.clientHeight,
+        clientWidth: document.documentElement.clientWidth,
+        clockRatio: rect.width / viewportEdge,
+        left: rect.left,
+        right: rect.right,
+        scrollWidth: document.documentElement.scrollWidth,
+        top: rect.top,
+      };
+    });
+    expect(narrowLayout.scrollWidth).toBeLessThanOrEqual(narrowLayout.clientWidth + 1);
+    expect(narrowLayout.clockRatio).toBeGreaterThanOrEqual(0.89);
+    expect(narrowLayout.clockRatio).toBeLessThanOrEqual(0.96);
+    expect(narrowLayout.left).toBeGreaterThanOrEqual(0);
+    expect(narrowLayout.top).toBeGreaterThanOrEqual(0);
+    expect(narrowLayout.right).toBeLessThanOrEqual(narrowLayout.clientWidth + 1);
+    expect(narrowLayout.bottom).toBeLessThanOrEqual(narrowLayout.clientHeight + 1);
+    await browser.saveScreenshot("./test-results/native-analog-clock-narrow.png");
+
+    await setExactLogicalViewportSize(480, 480);
+    const originalFontSize = await browser.execute(() => {
+      const original = document.documentElement.style.fontSize;
+      document.documentElement.style.fontSize = "200%";
+      return original;
+    });
+    await settingsButton.click();
+    await $(".analog-clock-settings-panel").waitForDisplayed();
+    const enlargedSettings = await browser.execute(() => {
+      const panel = document.querySelector<HTMLElement>(".analog-clock-settings-panel");
+      if (!panel) throw new Error("enlarged clock settings were not rendered");
+      const rect = panel.getBoundingClientRect();
+      return {
+        clientWidth: document.documentElement.clientWidth,
+        left: rect.left,
+        panelClientWidth: panel.clientWidth,
+        panelScrollWidth: panel.scrollWidth,
+        right: rect.right,
+      };
+    });
+    expect(enlargedSettings.left).toBeGreaterThanOrEqual(0);
+    expect(enlargedSettings.right).toBeLessThanOrEqual(enlargedSettings.clientWidth + 1);
+    expect(enlargedSettings.panelScrollWidth).toBeLessThanOrEqual(
+      enlargedSettings.panelClientWidth + 1,
+    );
+    await browser.saveScreenshot("./test-results/native-analog-clock-text-200.png");
+    await browser.execute((original) => {
+      document.documentElement.style.fontSize = original;
+    }, originalFontSize);
+    await browser.keys("Escape");
+    await $(".analog-clock-settings-panel").waitForExist({ reverse: true });
+
+    await browser.tauri.switchWindow("main");
+    const handlesBeforeReopen = await browser.getWindowHandles();
+    await launcher.waitForDisplayed();
+    await launcher.click();
+    await browser.tauri.switchWindow("analog-clock");
+    await $('button[aria-label="時計の設定を開く"]').waitForDisplayed();
+    expect(await browser.getWindowHandles()).toHaveLength(handlesBeforeReopen.length);
+  });
 });

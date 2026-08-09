@@ -264,7 +264,11 @@ export class MemoryAppClient implements AppClient {
       focus: structuredClone(this.focus),
       notificationPermission: "unknown",
       databaseState: "ready",
-      windowPreferences: { mainAlwaysOnTop: false, compactAlwaysOnTop: false },
+      windowPreferences: {
+        mainAlwaysOnTop: false,
+        compactAlwaysOnTop: false,
+        analogClockAlwaysOnTop: false,
+      },
     };
   }
 
@@ -1146,6 +1150,14 @@ export class MemoryAppClient implements AppClient {
   }
 
   async openCompactWindow(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async openAnalogClockWindow(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async resizeAnalogClockWindow(): Promise<void> {
     return Promise.resolve();
   }
 

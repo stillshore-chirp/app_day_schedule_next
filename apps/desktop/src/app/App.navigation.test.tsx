@@ -74,6 +74,44 @@ describe("App time-tool navigation", () => {
     expect(screen.queryByRole("heading", { name: "タイマー", level: 1 })).toBeNull();
   });
 
+  it("opens the analog clock from the clock immediately after Today", async () => {
+    const user = userEvent.setup();
+    const client = new MemoryAppClient();
+    const openAnalogClockWindow = vi.spyOn(client, "openAnalogClockWindow");
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App client={client} />
+      </QueryClientProvider>,
+    );
+
+    const navigation = await screen.findByLabelText("表示日の移動");
+    const buttons = within(navigation).getAllByRole("button");
+    const todayIndex = buttons.findIndex((button) => button.textContent?.trim() === "今日");
+    expect(buttons[todayIndex + 1]).toHaveAccessibleName("アナログ時計を開く");
+
+    await user.click(screen.getByRole("button", { name: "アナログ時計を開く" }));
+    expect(openAnalogClockWindow).toHaveBeenCalledOnce();
+  });
+
+  it("shows a recoverable error when the analog clock window cannot open", async () => {
+    const user = userEvent.setup();
+    const client = new MemoryAppClient();
+    vi.spyOn(client, "openAnalogClockWindow").mockRejectedValueOnce(new Error("unavailable"));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App client={client} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "アナログ時計を開く" }));
+    expect(await screen.findByText(/アナログ時計を開けませんでした/)).toHaveAttribute(
+      "role",
+      "alert",
+    );
+  });
+
   it("opens the ticket board as an independent primary navigation destination", async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
