@@ -12,7 +12,7 @@ afterEach(() => {
 });
 
 describe("AnalogClockApp", () => {
-  it("shows the migrated clock controls without an audio-device selector", async () => {
+  it("keeps the clock dominant and opens migrated controls on demand", async () => {
     localStorage.setItem("day-schedule-next.analog-clock-theme", "dark");
     const client = new MemoryAppClient();
     const resize = vi.spyOn(client, "resizeAnalogClockWindow");
@@ -27,6 +27,10 @@ describe("AnalogClockApp", () => {
 
     expect(await screen.findByRole("heading", { name: "アナログ時計" })).toBeVisible();
     expect(screen.getByRole("img", { name: /^現在時刻/ })).toBeVisible();
+    expect(screen.getByText(/\d{4}\/\d{2}\/\d{2}.*\d{2}:\d{2}:\d{2}/)).toBeVisible();
+    expect(screen.queryByRole("dialog", { name: "時計の設定" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "時計の設定を開く" }));
+    expect(screen.getByRole("dialog", { name: "時計の設定" })).toBeVisible();
     expect(screen.getByRole("checkbox", { name: "秒針音" })).not.toBeChecked();
     expect(screen.getByRole("slider", { name: "秒針音の音量" })).toHaveValue("50");
     expect(screen.queryByRole("combobox", { name: /音声出力/ })).toBeNull();
@@ -40,6 +44,10 @@ describe("AnalogClockApp", () => {
     await waitFor(() => expect(topmost).toBeEnabled());
     await user.click(topmost);
     expect(setAlwaysOnTop).toHaveBeenCalledWith("analog-clock", true);
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "時計の設定" })).toBeNull();
+    expect(screen.getByRole("button", { name: "時計の設定を開く" })).toHaveFocus();
   });
 
   it("keeps sound off and explains recovery when Web Audio is unavailable", async () => {
@@ -50,6 +58,7 @@ describe("AnalogClockApp", () => {
         <AnalogClockApp client={new MemoryAppClient()} />
       </QueryClientProvider>,
     );
+    await user.click(await screen.findByRole("button", { name: "時計の設定を開く" }));
     const sound = await screen.findByRole("checkbox", { name: "秒針音" });
     await user.click(sound);
     expect(sound).not.toBeChecked();

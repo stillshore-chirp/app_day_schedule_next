@@ -117,6 +117,8 @@ export const jaMessages = {
   "app.AnalogClock.021":
     "常に手前の設定を読み込めませんでした。時計はそのまま利用できます。メイン画面を開いたまま再度お試しください。",
   "app.AnalogClock.022": "現在時刻 {0}",
+  "app.AnalogClock.023": "時計の設定を開く",
+  "app.AnalogClock.024": "時計の設定を閉じる",
   "features.schedule.DayOverview.001": "一日の分布",
   "features.schedule.DayOverview.002": "24時間ストリップ",
   "features.schedule.DayOverview.003": " 同期待ちを点線で表示 ",

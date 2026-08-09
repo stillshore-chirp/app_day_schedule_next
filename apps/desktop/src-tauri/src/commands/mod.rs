@@ -1254,8 +1254,8 @@ pub async fn analog_clock_window_open(
         WebviewUrl::App("index.html?window=analog-clock".into()),
     )
     .title("Day Schedule Next — アナログ時計")
-    .inner_size(480.0, 640.0)
-    .min_inner_size(360.0, 520.0)
+    .inner_size(480.0, 480.0)
+    .min_inner_size(360.0, 360.0)
     .resizable(true)
     .always_on_top(always_on_top)
     .build()
@@ -1280,13 +1280,14 @@ pub fn analog_clock_window_resize(app: AppHandle, factor: f64) -> CommandResult<
     let (max_width, max_height) = monitor.map_or((width, height), |monitor| {
         (
             (f64::from(monitor.size().width) / scale_factor * 0.9).max(360.0),
-            (f64::from(monitor.size().height) / scale_factor * 0.9).max(520.0),
+            (f64::from(monitor.size().height) / scale_factor * 0.9).max(360.0),
         )
     });
+    let max_edge = max_width.min(max_height);
     window
         .set_size(tauri::LogicalSize::new(
-            width.min(max_width),
-            height.min(max_height),
+            width.min(max_edge),
+            height.min(max_edge),
         ))
         .map_err(|_| window_error())?;
     window.center().map_err(|_| window_error())?;
@@ -1484,10 +1485,10 @@ fn window_error() -> UserSafeError {
 
 fn analog_clock_size(factor: f64) -> Option<(f64, f64)> {
     match factor {
-        value if (value - 1.0).abs() < f64::EPSILON => Some((480.0, 640.0)),
-        value if (value - 1.5).abs() < f64::EPSILON => Some((620.0, 780.0)),
-        value if (value - 2.0).abs() < f64::EPSILON => Some((800.0, 960.0)),
-        value if (value - 2.5).abs() < f64::EPSILON => Some((980.0, 1_140.0)),
+        value if (value - 1.0).abs() < f64::EPSILON => Some((480.0, 480.0)),
+        value if (value - 1.5).abs() < f64::EPSILON => Some((620.0, 620.0)),
+        value if (value - 2.0).abs() < f64::EPSILON => Some((800.0, 800.0)),
+        value if (value - 2.5).abs() < f64::EPSILON => Some((980.0, 980.0)),
         _ => None,
     }
 }
@@ -1511,8 +1512,8 @@ mod analog_clock_window_tests {
 
     #[test]
     fn accepts_only_the_supported_clock_scales() {
-        assert_eq!(analog_clock_size(1.0), Some((480.0, 640.0)));
-        assert_eq!(analog_clock_size(2.5), Some((980.0, 1_140.0)));
+        assert_eq!(analog_clock_size(1.0), Some((480.0, 480.0)));
+        assert_eq!(analog_clock_size(2.5), Some((980.0, 980.0)));
         assert_eq!(analog_clock_size(1.25), None);
         assert_eq!(analog_clock_size(f64::NAN), None);
     }
