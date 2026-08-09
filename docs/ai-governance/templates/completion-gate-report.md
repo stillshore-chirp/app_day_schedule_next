@@ -1,59 +1,76 @@
-# Completion Gate Report
+# 完了ゲート報告
 
-## Decision
+## 判定
 
-- Complete: Yes / No
-- P0 remaining: Yes / No
-- P1 remaining: Yes / No
-- P2 remaining: Yes / No
+- 完了可否:
+- 対象面: アプリ本体UI / GitHub共同作業面 / 混在 / N/A
+- P0 / P1 / P2:
+- 判定理由:
 
-## Repository gate
+## 変更と影響
 
-- [ ] Issue exists or N/A reason is written.
-- [ ] Work branch is used.
-- [ ] Changes committed and pushed.
-- [ ] Non-draft PR exists.
-- [ ] Latest head CI is successful.
-- [ ] Codex review checked after CI.
-- [ ] Unresolved review threads checked.
+- 対象ユーザーと目的:
+- 変更した画面・状態・文言・構造:
+- 影響するproduct invariant / architecture boundary:
+- 保持した既存挙動:
+- 非対象:
 
-## Product / data gate
+## 対象面別証跡
 
-- [ ] Product invariants preserved.
-- [ ] Architecture boundaries preserved.
-- [ ] Data loss / duplicate / silent overwrite reviewed.
-- [ ] Time / DST / recurrence reviewed if affected.
-- [ ] Migration / backup / restore reviewed if affected.
-- [ ] macOS / Windows impact reviewed.
-- [ ] Security publication check completed.
+### アプリ本体UI
 
-## UI/UX gate
+- ユーザー価値:
+- 初見理解:
+- state matrix:
+- accessibility:
+- visual hierarchy / copy:
+- expert efficiency:
+- satisfaction / trust:
+- counter-review:
+- before / after screenshot:
+- affected OS / native evidence:
 
-- [ ] User value assessed.
-- [ ] Novice simulation completed.
-- [ ] State matrix completed.
-- [ ] Accessibility reviewed.
-- [ ] Visual hierarchy reviewed.
-- [ ] Copy reviewed.
-- [ ] Expert efficiency reviewed.
-- [ ] Satisfaction / trust reviewed.
-- [ ] Counter-review completed.
-- [ ] UI PR includes before / after screenshots or is marked incomplete.
+### GitHub共同作業面
 
-## Executed validation
+- 文言・項目・順序・必須性:
+- Markdown / YAML / frontmatter:
+- path / glob / 正本参照:
+- link / preview:
+- instruction budget:
+- 公開安全性:
 
-| Check | Result | Log / evidence |
+## Domain evidence
+
+- Calendar / Tasks sync:
+- Time / DST / recurrence / notification / Focus:
+- SQLite / migration / backup / restore:
+- Tauri / capability / CSP / OS / installer:
+
+## 検証
+
+| 検証 | 結果 | 証跡 |
 |---|---|---|
 |  |  |  |
 
-## Unexecuted validation
+## PR / CI / Review
 
-| Check | Reason | Remaining risk | Next action |
+- Issue:
+- branch:
+- latest commit:
+- PR / draft state:
+- required CI:
+- 利用可能な自動・手動review:
+- 未解決review thread:
+- review未提供時の代替自己review:
+
+## 未実行項目
+
+| 項目 | 理由 | 残るrisk | 次のaction |
 |---|---|---|---|
 |  |  |  |  |
 
-## Remaining findings
+## 残るrisk・後続
 
-| Severity | Finding | Decision / follow-up |
+| 優先度 | 内容 | 対応方針 |
 |---|---|---|
 |  |  |  |

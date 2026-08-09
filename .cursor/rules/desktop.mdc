@@ -1,0 +1,7 @@
+---
+description: "Tauri desktop app変更をnearest AGENTSとdomain Skillへ接続する"
+globs: "{apps/desktop/**/*,Cargo.toml,Cargo.lock,pnpm-lock.yaml,UserManual.md}"
+alwaysApply: false
+---
+
+root `AGENTS.md` と変更pathに最も近い `apps/desktop/**/AGENTS.md`、`docs/product-invariants.md`、該当する `.agents/skills/*/SKILL.md` を読んで適用してください。

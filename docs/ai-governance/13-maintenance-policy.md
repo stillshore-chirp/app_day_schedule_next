@@ -1,69 +1,123 @@
-# Governance Maintenance Policy
+# ガバナンス保守方針
 
-## 1. 正本
+この文書は、AIエージェント向けルールとUI/UXガバナンスを保守する方針です。Codex・Claude Code・Cursorを支援する全体構成は [`docs/agent-harness.md`](../agent-harness.md) を正本とします。
 
-- rule origin: `AGENTS.md`。
-- detailed principles: `docs/ai-governance/`。
-- execution workflow: `.agents/skills/`。
-- product contract: `docs/product-invariants.md`。
-- tool redirect: `CLAUDE.md` は `@AGENTS.md` のみ。
-- scoped implementation rules: subdirectory `AGENTS.md`。
+## 正本
 
-## 2. 重複禁止
+- 共通の常時読込契約: root `AGENTS.md`
+- 領域固有契約: 対象に最も近いnested `AGENTS.md`
+- task固有手順: `.agents/skills/<name>/SKILL.md`
+- product contract: `docs/product-invariants.md`
+- architecture: `docs/architecture-boundaries.md`
+- UI/UX詳細: `docs/ai-governance/`
+- 公開安全性: `docs/security-publication-checklist.md`
+- Claude Code adapter: `.claude/rules/`, `.claude/skills/`
+- Cursor adapter: `.cursor/rules/`
+- 機械検証: `scripts/verify-agent-harness.mjs`, `npm run verify:bootstrap`
 
-同じ長文 rule を AGENTS、Skill、tool-specific file にコピーしません。
+`CLAUDE.md` は `@AGENTS.md` だけを維持します。tool adapterは正本を参照し、新しい判断基準を持ちません。
 
-- AGENTS: 発動条件、blocker、completion gate。
-- Governance docs: rationale / Pass-Fail detail。
-- Skills: ordered execution steps / output。
-- Scoped AGENTS: local boundary / command。
+## 3製品確認
 
-## 3. 更新時の確認
+rule、Skill、adapter、verifierを変更する場合は同じPRで確認します。
 
-- user value、accessibility、state、efficiency、trust のバランス。
-- calendar sync、time、data recovery、desktop platform の P0 を弱めていないか。
-- Pass / Fail が実行可能か。
-- evidence に結びつくか。
-- AI simulation と real user / platform observation を混同しないか。
-- rule conflict / dead link / stale command がないか。
-- source repository 固有の Cloud / Python rule が残っていないか。
+### Codex
 
-## 4. P0 格下げ
+- rootとnearest `AGENTS.md`から必要な規則へ到達できる。
+- task手順がrootへ混入せず `.agents/skills/` へ分離されている。
+- rootとnestedのinstruction budgetを満たす。
 
-P0 を P1 / P2 に変える場合は、completion blocker でない理由、new evidence、replacement control を Issue / PR に記載します。都合による格下げは禁止します。
+### Claude Code
 
-## 5. 研究・標準
+- `CLAUDE.md`がroot契約を一重にimportしている。
+- `.claude/rules/` のpathsが必要な正本へ案内する。
+- `.claude/skills/` が共有Skillを唯一の手順正本として参照する。
+- adapterへ長文本文をcopyしていない。
 
-優先順位:
+### Cursor
 
-1. official specification / platform docs。
-2. stable HCI / accessibility standards。
-3. cognitive accessibility guidance。
-4. relevant current research。
-5. single study / trend は hypothesis。
+- root `AGENTS.md`と `.cursor/rules/` が競合しない。
+- MDC ruleは `alwaysApply: false` と限定したglobsを持つ。
+- task手順は `.agents/skills/` を正本として利用する。
+- `.cursor` directoryを禁止しない。
+- adapterへ共通核やSkill本文をcopyしていない。
 
-外部資料名だけで rule を追加せず、observation、Pass / Fail、evidence へ変換します。
+## ルール追加の判断
 
-## 6. 日本語
+1. 機械判定できる場合はscript、test、lint、CIへ置く。
+2. 全作業で必要なhard gateだけをrootへ置く。
+3. 特定pathだけならnested `AGENTS.md`と薄いtool adapterへ置く。
+4. 特定taskだけなら `.agents/skills/` と必要なadapterへ置く。
+5. 詳細な根拠やchecklistは既存docsへ統合する。
 
-判断基準と作業指示は日本語を正本とします。file name、standard、code identifier、technical term は英語を許可し、必要に応じて `glossary.md` を更新します。
+rootへ詳細手順を追加する変更は、他の配置で成立しない理由をIssueとPRへ書きます。
 
-## 7. Verification
+## 重複禁止
+
+同じhard gate、checklist、workflow本文を複数箇所で正本化しません。
+
+良い構造:
+
+```text
+AGENTS.md -> nearest AGENTS.md / task Skill -> detailed docs
+Claude / Cursor adapter -> same AGENTS or Skill
+```
+
+避ける構造:
+
+```text
+root、Skill、docs、tool ruleへ同じ長文を複製
+```
+
+表現を変えた意味上の重複も対象です。indexは入口、Skillは実行順、詳細docsは判定基準を担当します。
+
+## Hard gateとheuristic
+
+- P0、secret、証跡捏造、data loss、公開contract、権限境界はhard gateとして明確にする。
+- DRY、KISS、SRP、OCP、file size、重複回数、coverage、test配分はheuristicとして扱う。
+- heuristicを数値だけのFail条件へ変えない。
+- P0を格下げする場合は、完了blockerでない根拠、replacement control、evidenceをIssueとPRへ記録する。
+
+## Review収束
+
+- latest meaningful changeに対するCIと利用可能なreviewを確認する。
+- 指摘対応でheadが変わった場合だけ再確認する。
+- 変更のないheadへclean reviewを複数回要求しない。
+- 特定review botやclient名を3製品共通条件にしない。
+- review未提供時は代替自己reviewと未確認範囲を記録する。
+- merge、close、releaseは別の明示指示がある場合だけ行う。
+
+## Issueと対象面
+
+- Issueは [`14-issue-quality-gate.md`](14-issue-quality-gate.md) に従い、理由、根拠、現在と目標、acceptance、riskを記録する。
+- app UIとGitHub共同作業面を [`02-uiux-review-framework.md`](02-uiux-review-framework.md) で分類する。
+- harness / template / Markdownだけの変更へ、native screenshotや全state matrixを定型要求しない。
+- app UI変更では、Day Schedule固有state、native evidence、platform差分を弱めない。
+
+## 研究・標準
+
+新しい研究やguidanceを取り込む時は、official specification、安定したHCI / accessibility standard、cognitive accessibility guidance、current research、single studyの順に強制力を判断します。単発研究や一時的なtool挙動を根拠なくhard gateへしません。
+
+tool仕様が変わった場合は、3製品の現行仕様を確認し、adapterとverifierを同じ変更で更新します。
+
+## 検証
 
 ```bash
 node scripts/verify-agent-harness.mjs
-node scripts/verify-doc-links.mjs
-node scripts/security-scan-text.mjs
+npm run verify:bootstrap
 ```
 
-検証できない場合は理由と残リスクを報告します。
+加えて、変更したNode / JSON / YAML / Markdown、document link、公開安全性、既存CIを確認します。検証できない項目は理由と残るリスクを報告します。
 
-## 8. デスクトップアプリ本体の完了証跡
+## Desktop固有contractの維持
 
-デスクトップアプリのユーザー向け変更では、実装・CI・レビューだけでなく、最新の検証済みコミットから生成したアプリ本体または installer の手渡し状態を確認します。詳細な手順と blocker は `AGENTS.md` の完了ゲートを正本とし、ここでは判断理由だけを固定します。
+ハーネス保守で次を一般化・削除しません。
 
-- build artifact は source commit、version、identifier、architecture、checksum と対応させる。
-- macOS の個人用更新は DMG 検証、読み取り専用 mount、旧版の recoverable 退避、安全な置換、起動 smoke を伴う。
-- OAuth secret、token、Keychain、個人データ、個人パスを公開証跡へ含めない。
-- Windows、署名/notarization、OAuth、native E2E、install の未実行は「未検証」として残リスクにする。
-- build 成功、CI 成功、install 済み、launch 済みを別々の状態として報告する。
+- local-first、UTC instant + IANA timezone、transactional Outbox
+- Google incremental sync、conflict、retry、token保護
+- notification delivery ledger、Focus state machine
+- forward-only migration、backup / restore、legacy import
+- Tauri capability、CSP、keyring、macOS / Windows差分
+- latest検証commitとartifact / install / launchの対応
+
+これらの詳細はproduct invariants、engineering docs、5つの専門Skillを正本とし、rootからのroutingをmachine verifierで固定します。

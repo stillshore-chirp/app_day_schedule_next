@@ -1,24 +1,10 @@
 ## Issue
-<!--
-完全解決: Closes #123 / Fixes #123 / Resolves #123
-部分対応・調査・段階実装: Refs #123
-大型 Issue の一部: Part of #123
-関連のみ: Related to #123
-Issue 省略: Issue: N/A — 省略理由
-default branch 以外を base にする場合は closing keyword に依存しない。
--->
 
+<!-- 完全解決: Closes #123 / 部分対応: Refs #123 / 省略時は短い理由 -->
 - Issue:
 - 対応範囲:
-- 非対象:
+- 対応していないこと:
 - 完了条件との差分:
-
-## User value / product invariants
-
-- 対象ユーザーと目的:
-- 支援する理解・判断・行動・回復:
-- 影響する `docs/product-invariants.md`:
-- 参照機能 RF:
 
 ## 変更内容
 
@@ -28,16 +14,24 @@ default branch 以外を base にする場合は closing keyword に依存しな
 
 -
 
+## User value / product invariants
+
+- 対象ユーザーと目的:
+- 支援する理解・判断・行動・回復:
+- 影響する `docs/product-invariants.md`:
+- 影響するarchitecture boundary:
+
 ## Architecture / data impact
 
 - React / IPC / application / domain / infrastructure:
 - SQLite schema / migration / backup / restore:
-- Google OAuth / Calendar / Outbox / conflict:
+- Google OAuth / Calendar / Tasks / Outbox / conflict:
 - Timezone / DST / recurrence / notification / Focus:
-- Tauri capability / CSP / OS integration:
+- Tauri capability / CSP / OS integration / installer:
 
 ## 検証結果
-<!-- 実行した command、result、evidence を記載する。 -->
+
+<!-- 実行したcommand、result、evidenceを書く。 -->
 
 | Check | Result | Evidence |
 |---|---|---|
@@ -49,26 +43,23 @@ default branch 以外を base にする場合は closing keyword に依存しな
 | macOS build / manual |  |  |
 | Windows build / manual |  |  |
 
-## UI/UX evidence
-<!-- UI、copy、state、accessibility に変更がない場合は N/A と理由を書く。 -->
+## UI/UX・GitHub共同作業面の証跡
 
-- UI/UX Skill:
-- User value assessment:
-- Novice simulation:
-- State matrix:
+<!-- 対象面を「アプリ本体UI / GitHub共同作業面 / 混在 / N/A」から選ぶ。 -->
+- 対象面:
+- アプリ本体UIの対象画面・状態:
+- User value / novice simulation / state matrix:
 - Accessibility / keyboard / drag equivalent:
-- Visual hierarchy / copy:
-- Expert efficiency:
-- Satisfaction / trust:
+- Visual hierarchy / copy / expert efficiency / trust:
 - Counter-review:
-- Before screenshots:
-- After screenshots:
-- Screenshot を添付できない場合の理由・代替証跡・残リスク:
+- Before / after screenshots:
+- GitHub共同作業面の文言・構造・frontmatter・link確認:
+- Screenshotを添付できない場合の理由・代替証跡・残るrisk:
 
 ## Security / privacy / publication
 
 - OAuth token / credential / keyring:
-- Calendar / event / personal data:
+- Calendar / event / task / personal data:
 - Logs / diagnostics / screenshots redaction:
 - Tauri capabilities / CSP:
 - Dependency / license:
@@ -81,13 +72,17 @@ default branch 以外を base にする場合は closing keyword に依存しな
 - Backup / restore:
 - Sync retry / conflict recovery:
 - User-facing Undo / recovery:
+- Repository change rollback:
 
-## Codex review / review threads
-<!-- CI success 後に確認。未確認なら完了扱いにしない。 -->
+## CI / Review
 
-- Codex review:
-- Unresolved review threads:
+- latest commit:
+- draft / ready state:
+- required CI:
+- 利用可能な自動・手動review:
+- 未解決review thread:
 - 対応不要と判断した指摘と理由:
+- review未提供時の代替自己review:
 
 ## 未実行項目
 
