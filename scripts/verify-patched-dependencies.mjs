@@ -55,7 +55,7 @@ for (const minimatchDirectory of minimatchDirectories) {
   const braceManifest = JSON.parse(fs.readFileSync(braceManifestPath, "utf8"));
   assert.equal(
     braceManifest.version,
-    "5.0.8",
+    "5.0.9",
     `minimatch ${manifest.version} resolved vulnerable brace-expansion ${braceManifest.version}`
   );
 

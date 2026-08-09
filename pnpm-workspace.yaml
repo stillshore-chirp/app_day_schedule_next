@@ -4,10 +4,15 @@ packages:
 
 overrides:
   "@wdio/native-utils": 2.5.0
-  brace-expansion: 5.0.8
+  brace-expansion: 5.0.9
+  "cheerio>undici": 7.29.0
+  ip-address: 10.3.1
+  js-yaml: 4.3.1
   modern-tar: 0.7.6
-  postcss: 8.5.19
+  nanoid: 3.3.17
+  postcss: 8.5.23
   serialize-javascript: 7.0.5
+  "webdriver>undici": 6.28.0
 
 allowBuilds:
   edgedriver: false
@@ -15,4 +20,4 @@ allowBuilds:
   geckodriver: false
 
 patchedDependencies:
-  brace-expansion@5.0.8: patches/brace-expansion@5.0.8.patch
+  brace-expansion@5.0.9: patches/brace-expansion@5.0.9.patch

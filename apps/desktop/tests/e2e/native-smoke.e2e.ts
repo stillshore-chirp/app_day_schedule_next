@@ -172,6 +172,30 @@ describe("Day Schedule Next native smoke", () => {
     await created.waitForDisplayed();
     await saveAppShellAtLogicalSize("./test-results/native-today.png", 1024, 640);
 
+    await $(`//button[starts-with(@aria-label, "${title} ")]`).click();
+    const description = $("#schedule-description");
+    await description.waitForDisplayed();
+    await description.setValue(
+      "## 予定の手順\n\n| 時刻 | 作業 |\n| --- | --- |\n| 09:00 | 設計 |\n| 09:30 | 確認 |\n\n- [x] 準備\n- [ ] 実施",
+    );
+    await $('//aside//button[normalize-space(.)="変更を保存"]').click();
+    await $('//aside//button[@aria-label="編集を閉じる"]').waitForExist({ reverse: true });
+    await $(`//button[starts-with(@aria-label, "${title} ")]`).click();
+    const preview = $('//aside//*[@role="region" and @aria-label="説明のMarkdownプレビュー"]');
+    await preview.waitForDisplayed();
+    const inspectorScrollTop = await browser.execute(() => {
+      const inspector = document.querySelector<HTMLElement>(".inspector");
+      const region = document.querySelector<HTMLElement>(
+        '[role="region"][aria-label="説明のMarkdownプレビュー"]',
+      );
+      if (!inspector || !region) throw new Error("schedule Markdown preview was not found");
+      inspector.scrollTop = Math.max(0, region.offsetTop - 180);
+      return inspector.scrollTop;
+    });
+    expect(inspectorScrollTop).toBeGreaterThan(0);
+    await browser.saveScreenshot("./test-results/native-schedule-markdown-preview.png");
+    await $('//aside//button[@aria-label="編集を閉じる"]').click();
+
     await browser.refresh();
     await $(".today-heading h1").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[contains(., "一覧")]').click();
@@ -1467,8 +1491,10 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-ticket-board.png");
 
     await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
-    const description = $('//div[@role="dialog"]//label[contains(., "説明")]/textarea');
-    await description.setValue("synthetic native Kanban evidence");
+    const description = $("#ticket-description");
+    await description.setValue(
+      "# リリース計画\n\n| 項目 | 状態 | 担当 |\n| --- | --- | --- |\n| UI | 完了 | local |\n| native | 確認中 | local |\n\n- [x] component test\n- [ ] native smoke",
+    );
     await $('//div[@role="dialog"]//label[contains(., "優先度")]/select').selectByAttribute(
       "value",
       "urgent",
@@ -1484,6 +1510,22 @@ describe("Day Schedule Next native smoke", () => {
     await $(
       '//div[@role="dialog"]//*[@role="status" and contains(., "保存しました")]',
     ).waitForDisplayed();
+    await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    await $(
+      '//div[@role="dialog"]//*[@role="region" and @aria-label="説明のMarkdownプレビュー"]',
+    ).waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-markdown-preview.png");
+    await setLogicalWindowSize(720, 820);
+    await browser.saveScreenshot("./test-results/native-ticket-markdown-preview-narrow.png");
+    await setLogicalWindowSize(1280, 820);
+    await browser.execute(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    await browser.saveScreenshot("./test-results/native-ticket-markdown-preview-text-200.png");
+    await browser.execute(() => {
+      document.documentElement.style.removeProperty("font-size");
+    });
     await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
 
     const pointerSource = $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`);
@@ -1606,9 +1648,8 @@ describe("Day Schedule Next native smoke", () => {
     const currentTicket = current.items[0];
     if (!currentTicket) throw new Error("ticket conflict fixture was not found");
     await $(`button[aria-label="${ticketTitle}の詳細を開く"]`).click();
-    await $('//div[@role="dialog"]//label[contains(., "説明")]/textarea').addValue(
-      " locally edited",
-    );
+    await $('//div[@role="dialog"]//button[normalize-space(.)="編集"]').click();
+    await $("#ticket-description").addValue(" locally edited");
     await browser.tauri.execute(
       ({ core }, ticket) =>
         core.invoke("ticket_update", {
