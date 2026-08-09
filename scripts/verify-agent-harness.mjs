@@ -163,7 +163,6 @@ const requiredFiles = [
   "docs/agent-principles.md",
   "docs/product-invariants.md",
   "docs/architecture-boundaries.md",
-  "docs/technical-contracts.md",
   "docs/documentation-structure.md",
   "docs/security-publication-checklist.md",
   "docs/release-quality-gates.md",
