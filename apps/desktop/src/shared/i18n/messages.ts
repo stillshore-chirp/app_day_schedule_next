@@ -103,8 +103,6 @@ export const jaMessages = {
   "features.schedule.DayOverview.012": "ほか{0}件",
   "features.schedule.DayOverview.013": "参照専用",
   "features.schedule.DayOverview.014": "日次テンプレート",
-  "features.schedule.DayOverview.015": "テンプレートを編集",
-  "features.schedule.DayOverview.016": "日次テンプレートを作成",
   "features.schedule.DayOverview.017": "0時から24時の日次テンプレート",
   "features.schedule.DayOverview.018": "日次テンプレートを読み込み中",
   "features.schedule.DayOverview.019": "日次テンプレートを読み込めませんでした",

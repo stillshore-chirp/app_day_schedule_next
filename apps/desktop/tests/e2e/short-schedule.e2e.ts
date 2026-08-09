@@ -23,7 +23,7 @@ const setLogicalWindowSize = async (width: number, height: number) => {
 };
 
 describe("Day Schedule Next short schedule layout", () => {
-  it("starts with an icon sidebar and keeps the template action out of the overview lanes", async () => {
+  it("starts with an icon sidebar and keeps template editing in the sidebar destination", async () => {
     await setLogicalWindowSize(1180, 820);
     await $(".app-shell").waitForDisplayed();
     const bootstrap = (await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"))) as {
@@ -41,7 +41,6 @@ describe("Day Schedule Next short schedule layout", () => {
     await browser.execute(() => localStorage.removeItem("day-schedule-next.sidebar-expanded"));
     await browser.refresh();
     await $(".app-shell").waitForDisplayed();
-    const shell = $(".app-shell");
     await $('aside[aria-label="主要画面"] button[aria-label="今日"]').click();
     await $(".overview").waitForDisplayed();
     await browser.execute(() => {
@@ -49,47 +48,52 @@ describe("Day Schedule Next short schedule layout", () => {
       if (workspace instanceof HTMLElement) workspace.scrollTop = 0;
     });
     const expandSidebar = $('button[aria-label="サイドバーを展開"]');
-    await $(".overview__template-action .button").waitForDisplayed();
+    await expect($("button=テンプレートを編集")).not.toBeExisting();
 
-    await expect(shell).toHaveAttribute("data-sidebar", "collapsed");
+    expect(
+      await browser.execute(() =>
+        document.querySelector(".app-shell")?.getAttribute("data-sidebar"),
+      ),
+    ).toBe("collapsed");
     await expect(expandSidebar).toHaveAttribute("aria-expanded", "false");
     const collapsedLayout = await browser.execute(() => {
       const sidebar = document.querySelector(".sidebar");
       const firstNavigationLabel = document.querySelector(".sidebar__label");
       const scheduleTrack = document.querySelector(".overview-lane__track");
       const templateTrack = document.querySelector(".overview-lane__track--template");
-      const editAction = document.querySelector(".overview__template-action .button");
       if (!(sidebar instanceof HTMLElement)) throw new Error("sidebar was not found");
       if (!(firstNavigationLabel instanceof HTMLElement))
         throw new Error("sidebar label was not found");
       if (!(scheduleTrack instanceof HTMLElement)) throw new Error("schedule track was not found");
       if (!(templateTrack instanceof HTMLElement)) throw new Error("template track was not found");
-      if (!(editAction instanceof HTMLElement))
-        throw new Error("template edit action was not found");
       return {
         sidebarWidth: sidebar.getBoundingClientRect().width,
         navigationLabelDisplay: getComputedStyle(firstNavigationLabel).display,
         scheduleTrackWidth: scheduleTrack.getBoundingClientRect().width,
         templateTrackWidth: templateTrack.getBoundingClientRect().width,
-        editActionIsBelowTracks: editAction.closest(".overview__template-action") !== null,
-        editActionIsInLaneHeading: editAction.closest(".overview-lane__heading") !== null,
       };
     });
     expect(collapsedLayout.sidebarWidth).toBeCloseTo(76, 0);
     expect(collapsedLayout.navigationLabelDisplay).toBe("none");
     expect(collapsedLayout.scheduleTrackWidth).toBeCloseTo(collapsedLayout.templateTrackWidth, 0);
-    expect(collapsedLayout.editActionIsBelowTracks).toBe(true);
-    expect(collapsedLayout.editActionIsInLaneHeading).toBe(false);
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-overview.png");
 
     await expandSidebar.click();
-    await expect(shell).toHaveAttribute("data-sidebar", "expanded");
+    expect(
+      await browser.execute(() =>
+        document.querySelector(".app-shell")?.getAttribute("data-sidebar"),
+      ),
+    ).toBe("expanded");
     await expect($('button[aria-label="サイドバーを格納"]')).toHaveAttribute(
       "aria-expanded",
       "true",
     );
     await $('button[aria-label="サイドバーを格納"]').click();
-    await expect(shell).toHaveAttribute("data-sidebar", "collapsed");
+    expect(
+      await browser.execute(() =>
+        document.querySelector(".app-shell")?.getAttribute("data-sidebar"),
+      ),
+    ).toBe("collapsed");
     await browser.waitUntil(
       async () =>
         (await browser.execute(() => {
@@ -104,22 +108,17 @@ describe("Day Schedule Next short schedule layout", () => {
       const sidebar = document.querySelector(".sidebar");
       const scheduleTrack = document.querySelector(".overview-lane__track");
       const templateTrack = document.querySelector(".overview-lane__track--template");
-      const editAction = document.querySelector(".overview__template-action .button");
       if (!(sidebar instanceof HTMLElement)) throw new Error("sidebar was not found");
       if (!(scheduleTrack instanceof HTMLElement)) throw new Error("schedule track was not found");
       if (!(templateTrack instanceof HTMLElement)) throw new Error("template track was not found");
-      if (!(editAction instanceof HTMLElement))
-        throw new Error("template edit action was not found");
       return {
         sidebarWidth: sidebar.getBoundingClientRect().width,
         scheduleTrackWidth: scheduleTrack.getBoundingClientRect().width,
         templateTrackWidth: templateTrack.getBoundingClientRect().width,
-        editActionIsInLaneHeading: editAction.closest(".overview-lane__heading") !== null,
       };
     });
     expect(narrowLayout.sidebarWidth).toBeCloseTo(76, 0);
     expect(narrowLayout.scheduleTrackWidth).toBeCloseTo(narrowLayout.templateTrackWidth, 0);
-    expect(narrowLayout.editActionIsInLaneHeading).toBe(false);
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-narrow.png");
 
     await setLogicalWindowSize(1180, 820);
@@ -129,11 +128,14 @@ describe("Day Schedule Next short schedule layout", () => {
     });
     expect(rootFontSize).toBe("32px");
     await expect(expandSidebar).toBeDisplayed();
-    await expect($(".overview__template-action .button")).toBeDisplayed();
+    await expect($("button=テンプレートを編集")).not.toBeExisting();
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-text-200.png");
     await browser.execute(() => {
       document.documentElement.style.removeProperty("font-size");
     });
+
+    await $('aside[aria-label="主要画面"] button[aria-label="テンプレート"]').click();
+    await $("h2=テンプレートを編集").waitForDisplayed();
   });
 
   it("keeps a 30-minute schedule identifiable in overview and detail", async () => {

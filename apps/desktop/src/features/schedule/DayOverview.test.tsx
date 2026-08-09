@@ -65,7 +65,6 @@ function renderOverview(overrides: Partial<React.ComponentProps<typeof DayOvervi
     template,
     templateState: "ready",
     onRetryTemplate: vi.fn(),
-    onEditTemplate: vi.fn(),
     referenceMinute: 0,
     onReferenceChange: vi.fn(),
     ...overrides,
@@ -206,15 +205,10 @@ describe("DayOverview", () => {
     expect(scheduleTrack?.style.minHeight).toBe("135px");
   });
 
-  it("keeps the explicit edit action below the template lane so it cannot narrow its track", async () => {
-    const user = userEvent.setup();
-    const { props } = renderOverview();
+  it("keeps template editing out of the Today overview", () => {
+    renderOverview();
 
-    const editButton = screen.getByRole("button", { name: "テンプレートを編集" });
-    expect(editButton.closest(".overview__template-action")).not.toBeNull();
-    expect(editButton.closest(".overview-lane__heading")).toBeNull();
-    await user.click(editButton);
-    expect(props.onEditTemplate).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "テンプレートを編集" })).toBeNull();
   });
 
   it("keeps the board and schedule creation action when the day has no schedules", async () => {
@@ -249,7 +243,6 @@ describe("DayOverview", () => {
         template={null}
         templateState="error"
         onRetryTemplate={retry}
-        onEditTemplate={vi.fn()}
         referenceMinute={0}
         onReferenceChange={vi.fn()}
       />,
@@ -268,13 +261,12 @@ describe("DayOverview", () => {
         template={null}
         templateState="ready"
         onRetryTemplate={retry}
-        onEditTemplate={vi.fn()}
         referenceMinute={0}
         onReferenceChange={vi.fn()}
       />,
     );
     expect(screen.getByText("表示できる日次テンプレートがありません")).toBeVisible();
-    expect(screen.getByRole("button", { name: "日次テンプレートを作成" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "日次テンプレートを作成" })).toBeNull();
   });
 
   it("announces a cross-midnight template block without wrapping it to the next day", () => {

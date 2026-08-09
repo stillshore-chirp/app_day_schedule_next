@@ -14,7 +14,6 @@ import {
 } from "../../shared/contracts";
 import type { AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
-import { useUiStore } from "../../app/ui-store";
 import { ViewTitle } from "./CalendarViews";
 
 const WEEKDAYS = [
@@ -46,7 +45,6 @@ export function TemplatesView({
   settings: Settings;
 }) {
   const queryClient = useQueryClient();
-  const { templateFocusPending, consumeTemplateFocus } = useUiStore();
   const [templates, setTemplates] = useState<DayTemplate[]>([]);
   const [quickBlocks, setQuickBlocks] = useState<QuickBlock[]>([]);
   const [selected, setSelected] = useState<DayTemplate | null>(null);
@@ -107,15 +105,6 @@ export function TemplatesView({
       active = false;
     };
   }, [client, queryClient, settings.lastTemplateId]);
-
-  useEffect(() => {
-    if (!templateFocusPending) return;
-    const timeout = window.setTimeout(() => {
-      document.getElementById("template-editor-title")?.focus();
-      consumeTemplateFocus();
-    }, 0);
-    return () => window.clearTimeout(timeout);
-  }, [consumeTemplateFocus, templateFocusPending]);
 
   const persistTemplateSelection = (templateId: string) => {
     selectionSaveQueue.current = selectionSaveQueue.current.then(async () => {
@@ -412,7 +401,7 @@ export function TemplatesView({
           ))}
         </section>
         <section className="library-editor" aria-labelledby="template-editor-title">
-          <h2 id="template-editor-title" tabIndex={-1}>
+          <h2 id="template-editor-title">
             {selected
               ? translate("features.views.LibraryViews.036")
               : translate("features.views.LibraryViews.037")}

@@ -876,12 +876,6 @@ button:disabled {
   margin: 0;
 }
 
-.overview__template-action {
-  display: flex;
-  align-items: center;
-  margin: 0 10px 8px;
-}
-
 .section-heading {
   justify-content: space-between;
   gap: 20px;

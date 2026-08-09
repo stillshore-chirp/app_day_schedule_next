@@ -20,7 +20,6 @@ interface DayOverviewProps {
   template: DayTemplate | null;
   templateState: "loading" | "error" | "ready";
   onRetryTemplate: () => void;
-  onEditTemplate: () => void;
   referenceMinute: number;
   onReferenceChange: (minute: number) => void;
 }
@@ -58,7 +57,6 @@ export function DayOverview({
   template,
   templateState,
   onRetryTemplate,
-  onEditTemplate,
   referenceMinute,
   onReferenceChange,
 }: DayOverviewProps) {
@@ -89,16 +87,6 @@ export function DayOverview({
           <i className="legend__pending" /> {translate("features.schedule.DayOverview.003")}
         </span>
       </div>
-
-      {templateState === "ready" ? (
-        <div className="overview__template-action">
-          <button className="button button--subtle" type="button" onClick={onEditTemplate}>
-            {template
-              ? translate("features.schedule.DayOverview.015")
-              : translate("features.schedule.DayOverview.016")}
-          </button>
-        </div>
-      ) : null}
 
       <div className="overview-axis" aria-hidden="true">
         {Array.from({ length: 25 }, (_, hour) => hour).map((hour) => (
