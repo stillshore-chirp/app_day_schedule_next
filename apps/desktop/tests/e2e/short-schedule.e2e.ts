@@ -66,16 +66,43 @@ describe("Day Schedule Next short schedule layout", () => {
         throw new Error("sidebar label was not found");
       if (!(scheduleTrack instanceof HTMLElement)) throw new Error("schedule track was not found");
       if (!(templateTrack instanceof HTMLElement)) throw new Error("template track was not found");
+      const labelGaps = Array.from(document.querySelectorAll(".overview-lane"), (lane) => {
+        const heading = lane.querySelector(".overview-lane__heading");
+        const track = lane.querySelector(".overview-lane__track");
+        if (!(heading instanceof HTMLElement) || !(track instanceof HTMLElement)) {
+          throw new Error("overview lane geometry was not found");
+        }
+        const headingTextRight = Math.max(
+          ...Array.from(
+            heading.querySelectorAll(".overview-lane__kind, h3"),
+            (element) => element.getBoundingClientRect().right,
+          ),
+        );
+        return track.getBoundingClientRect().left - headingTextRight;
+      });
       return {
         sidebarWidth: sidebar.getBoundingClientRect().width,
         navigationLabelDisplay: getComputedStyle(firstNavigationLabel).display,
+        labelWidths: Array.from(
+          document.querySelectorAll(".overview-lane__heading"),
+          (heading) => heading.getBoundingClientRect().width,
+        ),
+        labelsFit: Array.from(
+          document.querySelectorAll(".overview-lane__kind, .overview-lane__heading h3"),
+          (label) => label.scrollWidth <= label.clientWidth + 1,
+        ),
         scheduleTrackWidth: scheduleTrack.getBoundingClientRect().width,
         templateTrackWidth: templateTrack.getBoundingClientRect().width,
+        labelGaps,
       };
     });
     expect(collapsedLayout.sidebarWidth).toBeCloseTo(76, 0);
     expect(collapsedLayout.navigationLabelDisplay).toBe("none");
+    expect(Math.max(...collapsedLayout.labelWidths)).toBeLessThanOrEqual(65);
+    expect(collapsedLayout.labelsFit.every(Boolean)).toBe(true);
     expect(collapsedLayout.scheduleTrackWidth).toBeCloseTo(collapsedLayout.templateTrackWidth, 0);
+    expect(collapsedLayout.labelGaps).toHaveLength(2);
+    expect(Math.max(...collapsedLayout.labelGaps)).toBeLessThanOrEqual(9);
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-overview.png");
 
     await expandSidebar.click();
@@ -113,11 +140,21 @@ describe("Day Schedule Next short schedule layout", () => {
       if (!(templateTrack instanceof HTMLElement)) throw new Error("template track was not found");
       return {
         sidebarWidth: sidebar.getBoundingClientRect().width,
+        labelWidths: Array.from(
+          document.querySelectorAll(".overview-lane__heading"),
+          (heading) => heading.getBoundingClientRect().width,
+        ),
+        labelsFit: Array.from(
+          document.querySelectorAll(".overview-lane__kind, .overview-lane__heading h3"),
+          (label) => label.scrollWidth <= label.clientWidth + 1,
+        ),
         scheduleTrackWidth: scheduleTrack.getBoundingClientRect().width,
         templateTrackWidth: templateTrack.getBoundingClientRect().width,
       };
     });
     expect(narrowLayout.sidebarWidth).toBeCloseTo(76, 0);
+    expect(Math.max(...narrowLayout.labelWidths)).toBeLessThanOrEqual(65);
+    expect(narrowLayout.labelsFit.every(Boolean)).toBe(true);
     expect(narrowLayout.scheduleTrackWidth).toBeCloseTo(narrowLayout.templateTrackWidth, 0);
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-narrow.png");
 
@@ -127,6 +164,20 @@ describe("Day Schedule Next short schedule layout", () => {
       return document.documentElement.style.fontSize;
     });
     expect(rootFontSize).toBe("32px");
+    const scaledLabels = await browser.execute(() =>
+      Array.from(document.querySelectorAll(".overview-lane"), (lane) => {
+        const heading = lane.querySelector(".overview-lane__heading");
+        const track = lane.querySelector(".overview-lane__track");
+        if (!(heading instanceof HTMLElement) || !(track instanceof HTMLElement)) {
+          throw new Error("scaled overview lane geometry was not found");
+        }
+        return {
+          headingWidth: heading.getBoundingClientRect().width,
+          fitsTrackHeight: heading.scrollHeight <= track.getBoundingClientRect().height + 1,
+        };
+      }),
+    );
+    expect(scaledLabels.every(({ fitsTrackHeight }) => fitsTrackHeight)).toBe(true);
     await expect(expandSidebar).toBeDisplayed();
     await expect($("button=テンプレートを編集")).not.toBeExisting();
     await browser.saveScreenshot("./test-results/native-sidebar-collapsed-text-200.png");

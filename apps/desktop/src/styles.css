@@ -855,7 +855,7 @@ button:disabled {
 }
 
 .overview {
-  --overview-lane-label-width: clamp(118px, 12vw, 168px);
+  --overview-lane-label-width: 4rem;
 
   padding: 10px 18px;
   margin-bottom: 16px;
@@ -926,7 +926,7 @@ button:disabled {
 .overview-axis {
   position: relative;
   height: 16px;
-  margin: 0 14px 0 calc(14px + var(--overview-lane-label-width) + 10px);
+  margin: 0 14px 0 calc(14px + var(--overview-lane-label-width) + 8px);
 }
 
 .overview-lanes {
@@ -951,6 +951,7 @@ button:disabled {
   gap: 4px;
   min-width: 0;
   padding-block: 4px;
+  text-align: end;
 }
 
 .overview-lane__heading > div {
@@ -3052,7 +3053,7 @@ tbody tr:focus {
 
 @media (max-width: 840px) {
   .overview {
-    --overview-lane-label-width: 100px;
+    --overview-lane-label-width: 4rem;
 
     padding-inline: 10px;
   }
