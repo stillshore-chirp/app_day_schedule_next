@@ -1802,6 +1802,7 @@ textarea[aria-invalid="true"] {
 .markdown-field__mode {
   display: inline-flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   padding: 2px;
   border: 1px solid var(--border-strong);
   border-radius: 9px;
@@ -1820,10 +1821,40 @@ textarea[aria-invalid="true"] {
   cursor: pointer;
 }
 
-.markdown-field__mode button[aria-pressed="true"] {
+.markdown-field__mode button[aria-selected="true"] {
   color: var(--text);
   background: var(--surface-raised);
   box-shadow: 0 1px 3px rgb(30 43 66 / 14%);
+}
+
+.inspector .markdown-field__header {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.inspector .markdown-field__mode {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 100%;
+  flex-wrap: nowrap;
+}
+
+.inspector .markdown-field__mode button {
+  min-width: 0;
+  padding-inline: 3px;
+  overflow-wrap: anywhere;
+}
+
+.inspector .markdown-field__mode button:nth-child(1) {
+  flex: 4 1 0;
+}
+
+.inspector .markdown-field__mode button:nth-child(2) {
+  flex: 6.5 1 0;
+}
+
+.inspector .markdown-field__mode button:nth-child(3) {
+  flex: 1.8 1 0;
 }
 
 .markdown-preview {
@@ -1956,6 +1987,11 @@ textarea[aria-invalid="true"] {
   color: var(--text-muted);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   font-size: 0.86em;
+}
+
+.plain-text-preview__content {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .markdown-preview__blocked-link {

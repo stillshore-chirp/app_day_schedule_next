@@ -9,7 +9,7 @@ import { ScheduleEditor } from "./ScheduleEditor";
 const complexGoogleSchedule: Schedule = {
   id: "00000000-0000-4000-8000-000000000020",
   title: "複雑な繰り返し予定",
-  description: "",
+  description: "共有元の説明",
   location: "",
   startUtc: "2026-07-20T00:00:00.000Z",
   endUtc: "2026-07-20T01:00:00.000Z",
@@ -34,7 +34,7 @@ const complexGoogleSchedule: Schedule = {
 };
 
 describe("ScheduleEditor", () => {
-  it("shows an existing schedule description as Markdown and returns to the source", async () => {
+  it("starts in the plain preview, renders Markdown on request, and returns to the source", async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const user = userEvent.setup();
     const schedule: Schedule = {
@@ -64,17 +64,20 @@ describe("ScheduleEditor", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("region", { name: "説明のMarkdownプレビュー" })).toBeVisible();
+    expect(screen.getByRole("tabpanel", { name: "通常プレビュー" })).toHaveTextContent("## 手順");
+    expect(screen.queryByRole("heading", { name: "手順" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Markdownプレビュー" }));
     expect(await screen.findByRole("heading", { name: "手順" })).toBeVisible();
     expect(screen.getByRole("table")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "編集" }));
+    await user.click(screen.getByRole("tab", { name: "編集" }));
     expect(screen.getByRole("textbox", { name: "説明" })).toHaveValue(schedule.description);
   });
 
-  it("explains why a complex Google recurrence is protected while sync continues", () => {
+  it("keeps a protected Google description selectable while blocking saves", async () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
+    const user = userEvent.setup();
 
     render(
       <QueryClientProvider client={queryClient}>
@@ -97,5 +100,10 @@ describe("ScheduleEditor", () => {
     expect(screen.getByText(/予定の表示と同期は継続します/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "変更を保存" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "この端末から削除" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "編集" }));
+    const description = screen.getByRole("textbox", { name: "説明" });
+    expect(description).toHaveAttribute("readonly");
+    expect(description).not.toBeDisabled();
+    expect(description).toHaveValue(complexGoogleSchedule.description);
   });
 });
