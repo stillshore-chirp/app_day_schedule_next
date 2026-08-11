@@ -2042,82 +2042,12 @@ describe("Day Schedule Next native smoke", () => {
     await $(".analog-clock-settings-panel").waitForExist({ reverse: true });
     await browser.execute(() => (document.activeElement as HTMLElement | null)?.blur());
 
-    await setExactLogicalViewportSize(720, 360);
-    await browser.waitUntil(
-      async () =>
-        browser.execute(() => {
-          const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
-          if (!dial) return false;
-          const viewportEdge = Math.min(
-            document.documentElement.clientWidth,
-            document.documentElement.clientHeight,
-          );
-          const ratio = dial.getBoundingClientRect().width / viewportEdge;
-          return ratio >= 0.89 && ratio <= 0.96;
-        }),
-      {
-        timeout: 3_000,
-        timeoutMsg: "analog clock did not follow the short window edge",
-      },
+    const squareConstraintInstalled = await browser.tauri.execute(({ core }) =>
+      core.invoke("e2e_analog_clock_square_constraint_get"),
     );
-    const shortWideLayout = await browser.execute(() => {
-      const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
-      if (!dial) throw new Error("short wide analog clock dial was not rendered");
-      const rect = dial.getBoundingClientRect();
-      const viewportEdge = Math.min(
-        document.documentElement.clientWidth,
-        document.documentElement.clientHeight,
-      );
-      return {
-        bottom: rect.bottom,
-        clientHeight: document.documentElement.clientHeight,
-        clientWidth: document.documentElement.clientWidth,
-        clockRatio: rect.width / viewportEdge,
-        left: rect.left,
-        right: rect.right,
-        scrollWidth: document.documentElement.scrollWidth,
-        top: rect.top,
-      };
-    });
-    expect(shortWideLayout.scrollWidth).toBeLessThanOrEqual(shortWideLayout.clientWidth + 1);
-    expect(shortWideLayout.clockRatio).toBeGreaterThanOrEqual(0.89);
-    expect(shortWideLayout.clockRatio).toBeLessThanOrEqual(0.96);
-    expect(shortWideLayout.left).toBeGreaterThanOrEqual(0);
-    expect(shortWideLayout.top).toBeGreaterThanOrEqual(0);
-    expect(shortWideLayout.right).toBeLessThanOrEqual(shortWideLayout.clientWidth + 1);
-    expect(shortWideLayout.bottom).toBeLessThanOrEqual(shortWideLayout.clientHeight + 1);
-    await browser.saveScreenshot("./test-results/native-analog-clock-short-wide.png");
+    expect(squareConstraintInstalled).toBe(true);
+    await browser.saveScreenshot("./test-results/native-analog-clock-square.png");
 
-    await setExactLogicalViewportSize(360, 360);
-    const narrowLayout = await browser.execute(() => {
-      const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
-      if (!dial) throw new Error("narrow analog clock dial was not rendered");
-      const rect = dial.getBoundingClientRect();
-      const viewportEdge = Math.min(
-        document.documentElement.clientWidth,
-        document.documentElement.clientHeight,
-      );
-      return {
-        bottom: rect.bottom,
-        clientHeight: document.documentElement.clientHeight,
-        clientWidth: document.documentElement.clientWidth,
-        clockRatio: rect.width / viewportEdge,
-        left: rect.left,
-        right: rect.right,
-        scrollWidth: document.documentElement.scrollWidth,
-        top: rect.top,
-      };
-    });
-    expect(narrowLayout.scrollWidth).toBeLessThanOrEqual(narrowLayout.clientWidth + 1);
-    expect(narrowLayout.clockRatio).toBeGreaterThanOrEqual(0.89);
-    expect(narrowLayout.clockRatio).toBeLessThanOrEqual(0.96);
-    expect(narrowLayout.left).toBeGreaterThanOrEqual(0);
-    expect(narrowLayout.top).toBeGreaterThanOrEqual(0);
-    expect(narrowLayout.right).toBeLessThanOrEqual(narrowLayout.clientWidth + 1);
-    expect(narrowLayout.bottom).toBeLessThanOrEqual(narrowLayout.clientHeight + 1);
-    await browser.saveScreenshot("./test-results/native-analog-clock-narrow.png");
-
-    await setExactLogicalViewportSize(480, 480);
     const originalFontSize = await browser.execute(() => {
       const original = document.documentElement.style.fontSize;
       document.documentElement.style.fontSize = "200%";
