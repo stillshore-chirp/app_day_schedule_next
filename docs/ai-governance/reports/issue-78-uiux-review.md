@@ -26,6 +26,8 @@
 
 ## 判定
 
-macOS は AppKit の 1:1 制約が実際に登録されたこと、サイズ変更後も時計盤が主役のまま表示されること、設定 overlay と 200% text を native E2E で確認しました。Computer Use のサイズ変更は Accessibility API から寸法を直接書き換えて AppKit の live resize を迂回するため、通常 drag の代替証跡には使っていません。Windows は 8 方向と DPI 最小値の Unit test を通過済みで、native CI は PR head で確認します。
+macOS は AppKit の 1:1 制約が実際に登録されたこと、保存済み寸法を含む現在の内容領域が正方形であること、サイズ変更後も時計盤が主役のまま表示されること、設定 overlay と 200% text を native E2E で確認しました。Computer Use のサイズ変更は Accessibility API から寸法を直接書き換えて AppKit の live resize を迂回するため、通常 drag の代替証跡には使っていません。
+
+Windows x64 は native workflow でアプリの build とアナログ時計の E2E case が通過し、subclass の登録と現在の内容領域が正方形であることを確認しました。8 方向と DPI 最小値の Unit test も通過しています。workflow 全体は今回と無関係なテンプレート編集ボタンの探索失敗で failure になりました。Windows の手動 drag と Snap は未実施として残します。
 
 macOS の画面証跡: [`native-analog-clock-square.png`](../../evidence/issue-78/native-analog-clock-square.png)

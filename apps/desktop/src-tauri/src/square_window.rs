@@ -4,12 +4,25 @@ use tauri::WebviewWindow;
 const MINIMUM_CLIENT_EDGE: i32 = 360;
 
 pub async fn install_square_constraint(window: &WebviewWindow) -> Result<(), ()> {
-    platform::install(window).await
+    platform::install(window).await?;
+
+    // The window-state plugin may restore a size saved before the square constraint
+    // existed. Normalize that content size before the initially hidden window is shown.
+    let size = window.inner_size().map_err(|_| ())?;
+    let edge = size.width.min(size.height);
+    window
+        .set_size(tauri::PhysicalSize::new(edge, edge))
+        .map_err(|_| ())
 }
 
 #[cfg(feature = "e2e")]
 pub async fn constraint_is_installed(window: &WebviewWindow) -> Result<bool, ()> {
-    platform::is_installed(window).await
+    if !platform::is_installed(window).await? {
+        return Ok(false);
+    }
+
+    let size = window.inner_size().map_err(|_| ())?;
+    Ok(size.width.abs_diff(size.height) <= 1)
 }
 
 #[cfg(any(windows, test))]

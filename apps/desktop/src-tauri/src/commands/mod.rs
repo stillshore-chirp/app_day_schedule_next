@@ -1241,6 +1241,9 @@ pub async fn analog_clock_window_open(
 ) -> CommandResult<()> {
     if let Some(window) = app.get_webview_window("analog-clock") {
         window.set_maximizable(false).map_err(|_| window_error())?;
+        square_window::install_square_constraint(&window)
+            .await
+            .map_err(|_| window_error())?;
         window.show().map_err(|_| window_error())?;
         window.unminimize().map_err(|_| window_error())?;
         window.set_focus().map_err(|_| window_error())?;
