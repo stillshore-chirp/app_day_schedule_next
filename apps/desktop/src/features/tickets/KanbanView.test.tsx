@@ -19,7 +19,11 @@ function renderBoard(client: MemoryAppClient) {
   );
 }
 
-async function createTicket(client: MemoryAppClient, title = "Review release") {
+async function createTicket(
+  client: MemoryAppClient,
+  title = "Review release",
+  tags = ["release", "desktop"],
+) {
   const board = await client.ticketBoard();
   const draft: TicketDraft = {
     boardId: board.id,
@@ -30,7 +34,7 @@ async function createTicket(client: MemoryAppClient, title = "Review release") {
     priority: "high",
     dueDate: "2026-08-02",
     estimateMinutes: 30,
-    tags: ["release"],
+    tags,
     checklist: [{ title: "Run tests", completed: true }],
   };
   return client.createTicket(crypto.randomUUID(), draft);
@@ -52,11 +56,13 @@ describe("KanbanView", () => {
     );
     await user.click(within(inbox).getByRole("button", { name: "追加" }));
 
-    expect(await screen.findByText("First task")).toBeVisible();
+    const createdCard = (await screen.findByText("First task")).closest("article")!;
+    expect(createdCard).toBeVisible();
+    expect(createdCard.querySelector(".ticket-card__tag")).not.toBeInTheDocument();
     expect((await client.listTickets({})).total).toBe(1);
   });
 
-  it("shows only the priority badge and moves the focused card or dragged card", async () => {
+  it("shows priority and tag badges and moves the focused card or dragged card", async () => {
     const client = new MemoryAppClient([]);
     const created = await createTicket(client);
     const board = await client.ticketBoard();
@@ -65,8 +71,13 @@ describe("KanbanView", () => {
 
     const open = await screen.findByRole("button", { name: "Review releaseの詳細を開く" });
     const initialCard = open.closest("article")!;
-    expect(initialCard.querySelectorAll(".ticket-card__meta > span")).toHaveLength(1);
+    expect(initialCard.querySelectorAll(".ticket-card__meta > span")).toHaveLength(3);
     expect(within(initialCard).getByText("優先度: 高")).toBeVisible();
+    expect(within(initialCard).getByText("release")).toHaveClass("ticket-card__tag");
+    expect(within(initialCard).getByText("desktop")).toHaveClass("ticket-card__tag");
+    expect(open).toHaveAccessibleDescription(
+      /優先度: 高.*タグ: release.*タグ: desktop.*カードをドラッグして移動できます/,
+    );
     expect(within(initialCard).queryByRole("button", { name: "移動" })).not.toBeInTheDocument();
     expect(open).toHaveAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight ArrowUp ArrowDown");
 
@@ -105,6 +116,22 @@ describe("KanbanView", () => {
     );
   });
 
+  it("renders long and numerous tag badges without dropping card metadata", async () => {
+    const client = new MemoryAppClient([]);
+    const longTag = `long-${"x".repeat(45)}`;
+    const tags = [longTag, ...Array.from({ length: 19 }, (_, index) => `tag-${index + 2}`)];
+    await createTicket(client, "Tag stress", tags);
+    renderBoard(client);
+
+    const open = await screen.findByRole("button", { name: "Tag stressの詳細を開く" });
+    const card = open.closest("article")!;
+    expect(card.querySelectorAll(".ticket-card__tag")).toHaveLength(20);
+    expect(within(card).getByText(longTag)).toHaveClass("ticket-card__tag");
+    expect(within(card).getByText("tag-20")).toHaveClass("ticket-card__tag");
+    expect(open).toHaveAccessibleDescription(expect.stringContaining(`タグ: ${longTag}`));
+    expect(open).toHaveAccessibleDescription(expect.stringContaining("タグ: tag-20"));
+  });
+
   it("keeps edits visible on a stale-version conflict and restores focus after closing", async () => {
     class ConflictClient extends MemoryAppClient {
       override updateTicket() {
@@ -133,7 +160,7 @@ describe("KanbanView", () => {
     await user.type(title, "Changed locally");
     await user.click(screen.getByRole("button", { name: "保存" }));
 
-    expect(await screen.findByText("ほかの変更が先に保存されています")).toBeVisible();
+    expect(await screen.findByRole("alert")).toHaveTextContent("ほかの変更が先に保存されています");
     expect(title).toHaveValue("Changed locally");
     vi.spyOn(window, "confirm").mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: "詳細を閉じる" }));
@@ -157,8 +184,78 @@ describe("KanbanView", () => {
     await user.type(title, "Unsaved but retained");
     await user.click(screen.getByRole("button", { name: "保存" }));
 
-    expect(await screen.findByText("保存できませんでした")).toBeVisible();
+    expect(await screen.findByRole("alert")).toHaveTextContent("保存できませんでした");
     expect(title).toHaveValue("Unsaved but retained");
+  });
+
+  it("keeps internal clicks open and closes from the backdrop with dirty-state confirmation", async () => {
+    const client = new MemoryAppClient([]);
+    await createTicket(client);
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderBoard(client);
+
+    const opener = await screen.findByRole("button", { name: "Review releaseの詳細を開く" });
+    await user.click(opener);
+    const dialog = screen.getByRole("dialog");
+    const title = screen.getByLabelText("タイトル");
+    await user.clear(title);
+    await user.type(title, "Backdrop keeps this edit");
+
+    fireEvent.click(dialog);
+    expect(dialog).toBeVisible();
+    expect(confirm).not.toHaveBeenCalled();
+
+    fireEvent.click(dialog.parentElement!);
+    expect(confirm).toHaveBeenCalledWith("保存していない変更を破棄して閉じますか？");
+    expect(dialog).toBeVisible();
+    expect(title).toHaveValue("Backdrop keeps this edit");
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(dialog.parentElement!);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("keeps the detail open while a save is pending", async () => {
+    class PendingClient extends MemoryAppClient {
+      private finishPendingSave: (() => void) | null = null;
+
+      finishSave() {
+        this.finishPendingSave?.();
+      }
+
+      override async updateTicket(input: Parameters<MemoryAppClient["updateTicket"]>[0]) {
+        await new Promise<void>((resolve) => {
+          this.finishPendingSave = resolve;
+        });
+        return super.updateTicket(input);
+      }
+    }
+
+    const client = new PendingClient([]);
+    await createTicket(client);
+    const user = userEvent.setup();
+    renderBoard(client);
+
+    await user.click(await screen.findByRole("button", { name: "Review releaseの詳細を開く" }));
+    await user.type(screen.getByLabelText("タイトル"), " updated");
+    await user.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByText("この端末へ保存中…")).toBeVisible();
+    expect(screen.getByRole("button", { name: "詳細を閉じる" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "取り消す" })).toBeDisabled();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "アーカイブ" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "削除…" })).toBeDisabled();
+    expect(screen.getByLabelText("タイトル")).toBeDisabled();
+    expect(screen.getByPlaceholderText("カンマ区切りで入力")).toBeDisabled();
+    fireEvent.click(dialog.parentElement!);
+    expect(dialog).toBeVisible();
+
+    client.finishSave();
+    expect(await screen.findByText("この端末へ保存しました")).toBeVisible();
   });
 
   it("opens an existing ticket description as Markdown and saves the edited source", async () => {
@@ -185,7 +282,9 @@ describe("KanbanView", () => {
     await user.type(description, "# 実装計画\n\n- component test");
     expect(description).toHaveValue("# 実装計画\n\n- component test");
     await user.click(screen.getByRole("button", { name: "保存" }));
-    await screen.findByText("この端末へ保存しました");
+    const savedStatus = await screen.findByText("この端末へ保存しました");
+    expect(savedStatus.closest(".status-message")).toHaveClass("status-message--success");
+    expect(savedStatus.closest(".status-message")).toHaveAttribute("role", "status");
 
     expect((await client.ticket(created.id)).description).toContain("- component test");
   });

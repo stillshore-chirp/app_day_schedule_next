@@ -163,6 +163,7 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
 
   const closeEditor = useCallback(
     (force = false) => {
+      if (saveState === "pending") return;
       if (
         !force &&
         editor &&
@@ -174,7 +175,7 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
       setSaveState("idle");
       requestAnimationFrame(() => openerRef.current?.focus());
     },
-    [editor, form],
+    [editor, form, saveState],
   );
 
   useEffect(() => {
@@ -697,13 +698,19 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
       </p>
 
       {editor ? (
-        <div className="ticket-dialog-backdrop">
+        <div
+          className="ticket-dialog-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeEditor();
+          }}
+        >
           <div
             className="ticket-dialog"
             role="dialog"
             aria-modal="true"
             aria-labelledby="ticket-dialog-title"
             aria-hidden={deleteTarget ? true : undefined}
+            aria-busy={saveState === "pending"}
             ref={dialogRef}
           >
             <div className="ticket-dialog__header">
@@ -720,107 +727,116 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
               <button
                 className="icon-button"
                 aria-label={translate("features.tickets.KanbanView.close")}
+                disabled={saveState === "pending"}
                 onClick={() => closeEditor()}
               >
                 ×
               </button>
             </div>
             <div className="ticket-dialog__body">
-              <label>
-                {translate("features.tickets.KanbanView.title")}
-                <input
-                  ref={titleRef}
-                  required
-                  maxLength={1_024}
-                  value={form.title}
-                  onChange={(event) => setForm({ ...form, title: event.target.value })}
-                />
-              </label>
-              <MarkdownDescriptionField
-                key={editor.ticket?.id ?? "new-ticket"}
-                id="ticket-description"
-                label={translate("features.tickets.KanbanView.description")}
-                rows={8}
-                maxLength={10_000}
-                value={form.description}
-                onChange={(description) => setForm({ ...form, description })}
-              />
-              <div className="ticket-dialog__grid">
+              <fieldset className="ticket-dialog__fields" disabled={saveState === "pending"}>
+                <legend className="sr-only">
+                  {translate("features.tickets.KanbanView.fields")}
+                </legend>
                 <label>
-                  {translate("features.tickets.KanbanView.priority")}
-                  <select
-                    value={form.priority}
-                    onChange={(event) =>
-                      setForm({ ...form, priority: event.target.value as Ticket["priority"] })
-                    }
-                  >
-                    {(["urgent", "high", "normal", "low"] as const).map((priority) => (
-                      <option key={priority} value={priority}>
-                        {priorityLabel(priority)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {translate("features.tickets.KanbanView.due")}
+                  {translate("features.tickets.KanbanView.title")}
                   <input
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                    ref={titleRef}
+                    required
+                    maxLength={1_024}
+                    value={form.title}
+                    onChange={(event) => setForm({ ...form, title: event.target.value })}
                   />
                 </label>
+                <MarkdownDescriptionField
+                  key={editor.ticket?.id ?? "new-ticket"}
+                  id="ticket-description"
+                  label={translate("features.tickets.KanbanView.description")}
+                  rows={8}
+                  maxLength={10_000}
+                  value={form.description}
+                  onChange={(description) => setForm({ ...form, description })}
+                />
+                <div className="ticket-dialog__grid">
+                  <label>
+                    {translate("features.tickets.KanbanView.priority")}
+                    <select
+                      value={form.priority}
+                      onChange={(event) =>
+                        setForm({ ...form, priority: event.target.value as Ticket["priority"] })
+                      }
+                    >
+                      {(["urgent", "high", "normal", "low"] as const).map((priority) => (
+                        <option key={priority} value={priority}>
+                          {priorityLabel(priority)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    {translate("features.tickets.KanbanView.due")}
+                    <input
+                      type="date"
+                      value={form.dueDate}
+                      onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    {translate("features.tickets.KanbanView.estimate")}
+                    <input
+                      type="number"
+                      min="1"
+                      max="100800"
+                      value={form.estimateMinutes}
+                      onChange={(event) =>
+                        setForm({ ...form, estimateMinutes: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    {translate("features.tickets.KanbanView.tags")}
+                    <input
+                      value={form.tags}
+                      onChange={(event) => setForm({ ...form, tags: event.target.value })}
+                      placeholder={translate("features.tickets.KanbanView.tagsHelp")}
+                    />
+                  </label>
+                </div>
                 <label>
-                  {translate("features.tickets.KanbanView.estimate")}
-                  <input
-                    type="number"
-                    min="1"
-                    max="100800"
-                    value={form.estimateMinutes}
-                    onChange={(event) => setForm({ ...form, estimateMinutes: event.target.value })}
+                  {translate("features.tickets.KanbanView.checklist")}
+                  <textarea
+                    rows={5}
+                    value={form.checklist}
+                    onChange={(event) => setForm({ ...form, checklist: event.target.value })}
+                    placeholder={translate("features.tickets.KanbanView.checklistHelp")}
                   />
                 </label>
-                <label>
-                  {translate("features.tickets.KanbanView.tags")}
-                  <input
-                    value={form.tags}
-                    onChange={(event) => setForm({ ...form, tags: event.target.value })}
-                    placeholder={translate("features.tickets.KanbanView.tagsHelp")}
+                {editor.ticket?.completedAt ? (
+                  <p>
+                    {translate("features.tickets.KanbanView.completedAt", [
+                      new Date(editor.ticket.completedAt).toLocaleString(appLocale),
+                    ])}
+                  </p>
+                ) : null}
+                {editor.ticket &&
+                editor.ticket.archivedAt === null &&
+                editor.ticket.deletedAt === null ? (
+                  <TicketSchedulePlanner
+                    client={client}
+                    ticket={editor.ticket}
+                    today={today}
+                    timezoneId={Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}
                   />
-                </label>
-              </div>
-              <label>
-                {translate("features.tickets.KanbanView.checklist")}
-                <textarea
-                  rows={5}
-                  value={form.checklist}
-                  onChange={(event) => setForm({ ...form, checklist: event.target.value })}
-                  placeholder={translate("features.tickets.KanbanView.checklistHelp")}
-                />
-              </label>
-              {editor.ticket?.completedAt ? (
-                <p>
-                  {translate("features.tickets.KanbanView.completedAt", [
-                    new Date(editor.ticket.completedAt).toLocaleString(appLocale),
-                  ])}
-                </p>
-              ) : null}
-              {editor.ticket &&
-              editor.ticket.archivedAt === null &&
-              editor.ticket.deletedAt === null ? (
-                <TicketSchedulePlanner
-                  client={client}
-                  ticket={editor.ticket}
-                  today={today}
-                  timezoneId={Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"}
-                />
-              ) : null}
+                ) : null}
+              </fieldset>
               {saveState === "pending" ? (
                 <p role="status">{translate("features.tickets.KanbanView.saving")}</p>
               ) : null}
               {saveState === "saved" ? (
-                <p role="status" className="success-text">
-                  {translate("features.tickets.KanbanView.savedState")}
-                </p>
+                <StatusMessage
+                  tone="success"
+                  title={translate("features.tickets.KanbanView.savedState")}
+                />
               ) : null}
               {saveState === "failure" || saveState === "conflict" ? (
                 <StatusMessage
@@ -843,6 +859,7 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
               {editor.ticket ? (
                 <button
                   className="button button--subtle"
+                  disabled={saveState === "pending"}
                   onClick={() =>
                     void toggleArchive(editor.ticket!, editor.ticket!.archivedAt === null)
                   }
@@ -858,13 +875,18 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                 <button
                   className="button button--danger"
                   ref={deleteButtonRef}
+                  disabled={saveState === "pending"}
                   onClick={() => setDeleteTarget(editor.ticket)}
                 >
                   {translate("features.tickets.KanbanView.delete")}
                 </button>
               ) : null}
               <span />
-              <button className="button button--subtle" onClick={() => closeEditor()}>
+              <button
+                className="button button--subtle"
+                disabled={saveState === "pending"}
+                onClick={() => closeEditor()}
+              >
                 {translate("features.tickets.KanbanView.cancel")}
               </button>
               <button
@@ -972,6 +994,7 @@ function TicketCard({
   onMove: (direction: "left" | "right" | "up" | "down") => void;
 }) {
   const moveHintId = `ticket-move-hint-${ticket.id}`;
+  const metadataId = `ticket-metadata-${ticket.id}`;
   const mouseDragRef = useRef<{
     startX: number;
     startY: number;
@@ -1015,7 +1038,7 @@ function TicketCard({
           onOpen(event.currentTarget);
         }}
         aria-label={translate("features.tickets.KanbanView.openTicket", [ticket.title])}
-        aria-describedby={draggable ? moveHintId : undefined}
+        aria-describedby={`${metadataId}${draggable ? ` ${moveHintId}` : ""}`}
         aria-keyshortcuts={draggable ? "ArrowLeft ArrowRight ArrowUp ArrowDown" : undefined}
         title={draggable ? translate("features.tickets.KanbanView.moveHint") : undefined}
         onMouseDown={(event) => {
@@ -1092,6 +1115,19 @@ function TicketCard({
               priorityLabel(ticket.priority),
             ])}
           </span>
+          {ticket.tags.map((tag) => (
+            <span className="ticket-card__tag" key={tag.id}>
+              {tag.name}
+            </span>
+          ))}
+        </span>
+        <span className="sr-only" id={metadataId}>
+          {translate("features.tickets.KanbanView.priorityValue", [priorityLabel(ticket.priority)])}
+          {ticket.tags.length > 0
+            ? ` ${ticket.tags
+                .map((tag) => translate("features.tickets.KanbanView.tagValue", [tag.name]))
+                .join("、")}`
+            : ""}
         </span>
         {draggable ? (
           <span className="sr-only" id={moveHintId}>

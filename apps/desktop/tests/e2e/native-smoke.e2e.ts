@@ -1476,7 +1476,7 @@ describe("Day Schedule Next native smoke", () => {
   it("persists the Kanban create, edit, pointer, keyboard, completion, and archive workflows", async () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1280, 820);
-    const ticketTitle = `E2Eチケット-${Date.now()}`;
+    const ticketTitle = "E2Eチケット-タグ表示";
     await openTicketView();
     await browser.saveScreenshot("./test-results/native-ticket-board-empty.png");
 
@@ -1508,9 +1508,73 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-ticket-detail.png");
     await $('//div[@role="dialog"]//button[normalize-space(.)="保存"]').click();
     await $(
-      '//div[@role="dialog"]//*[@role="status" and contains(., "保存しました")]',
+      '//div[@role="dialog"]//section[contains(@class, "status-message--success") and @role="status" and contains(., "保存しました")]',
     ).waitForDisplayed();
-    await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
+    await browser.saveScreenshot("./test-results/native-ticket-save-success.png");
+    await browser
+      .action("pointer", { parameters: { pointerType: "mouse" } })
+      .move({ origin: "viewport", x: 8, y: 8 })
+      .down({ button: 0 })
+      .up({ button: 0 })
+      .perform();
+    await browser.releaseActions();
+    await $('//div[@role="dialog"]').waitForExist({
+      reverse: true,
+      timeoutMsg: "ticket detail did not close after clicking the backdrop",
+    });
+    await card
+      .$('.//*[contains(@class, "ticket-card__tag") and normalize-space(.)="native"]')
+      .waitForDisplayed();
+    await card
+      .$('.//*[contains(@class, "ticket-card__tag") and normalize-space(.)="evidence"]')
+      .waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-board-tags.png");
+    await persistFixtureTheme("mild");
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await openTicketView();
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-board-tags-mild.png");
+    await persistFixtureTheme("dark");
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await openTicketView();
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-ticket-board-tags-dark.png");
+    await persistFixtureTheme("light");
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await openTicketView();
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).waitForDisplayed();
+    await browser.execute(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    await browser.waitUntil(
+      () =>
+        browser.execute(() => {
+          return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) >= 32;
+        }),
+      { timeoutMsg: "200% text state did not apply before ticket evidence capture" },
+    );
+    await setLogicalWindowSize(720, 820);
+    await $(
+      `//button[@aria-label="${ticketTitle}の詳細を開く"]//*[contains(@class, "ticket-card__tag") and normalize-space(.)="evidence"]`,
+    ).scrollIntoView({ block: "center" });
+    await browser.executeAsync((done: () => void) => {
+      requestAnimationFrame(() => requestAnimationFrame(done));
+    });
+    await browser.saveScreenshot("./test-results/native-ticket-board-tags-text-200.png");
+    await browser.execute(() => {
+      document.documentElement.style.removeProperty("font-size");
+    });
+    await browser.waitUntil(
+      () =>
+        browser.execute(
+          () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) < 32,
+        ),
+      { timeoutMsg: "ticket evidence text scaling did not reset" },
+    );
+    await setLogicalWindowSize(1280, 820);
     await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
     await $(
       '//div[@role="dialog"]//*[@role="region" and @aria-label="説明のMarkdownプレビュー"]',
