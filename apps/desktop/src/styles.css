@@ -1926,6 +1926,7 @@ textarea[aria-invalid="true"] {
 
 .markdown-preview__link {
   color: var(--primary-strong);
+  cursor: pointer;
   text-decoration-thickness: 0.08em;
   text-underline-offset: 0.16em;
 }
