@@ -2,6 +2,7 @@ mod application;
 mod commands;
 mod domain;
 mod infrastructure;
+mod square_window;
 
 use std::time::Instant;
 
@@ -125,6 +126,8 @@ pub fn run() {
             commands::e2e_google_tasks_seed,
             #[cfg(feature = "e2e")]
             commands::e2e_ticket_scale_seed,
+            #[cfg(feature = "e2e")]
+            commands::e2e_analog_clock_square_constraint_get,
             commands::schedule_update,
             commands::schedule_bulk_classify,
             commands::schedule_delete,

@@ -27,6 +27,7 @@ use crate::{
         NotificationLedgerItem, OAuthConfigResult, RestoreStageResult, SyncConflictItem,
         SyncQueueItem, TicketGoogleTaskTargetUpdate,
     },
+    square_window,
 };
 
 type CommandResult<T> = Result<T, UserSafeError>;
@@ -1239,6 +1240,7 @@ pub async fn analog_clock_window_open(
     service: State<'_, AppService>,
 ) -> CommandResult<()> {
     if let Some(window) = app.get_webview_window("analog-clock") {
+        window.set_maximizable(false).map_err(|_| window_error())?;
         window.show().map_err(|_| window_error())?;
         window.unminimize().map_err(|_| window_error())?;
         window.set_focus().map_err(|_| window_error())?;
@@ -1248,7 +1250,7 @@ pub async fn analog_clock_window_open(
         .window_always_on_top("analog-clock")
         .await
         .map_err(UserSafeError::from)?;
-    WebviewWindowBuilder::new(
+    let window = WebviewWindowBuilder::new(
         &app,
         "analog-clock",
         WebviewUrl::App("index.html?window=analog-clock".into()),
@@ -1257,10 +1259,29 @@ pub async fn analog_clock_window_open(
     .inner_size(480.0, 480.0)
     .min_inner_size(360.0, 360.0)
     .resizable(true)
+    .maximizable(false)
     .always_on_top(always_on_top)
     .build()
     .map_err(|_| window_error())?;
+    if square_window::install_square_constraint(&window)
+        .await
+        .is_err()
+    {
+        let _ = window.close();
+        return Err(window_error());
+    }
     Ok(())
+}
+
+#[cfg(feature = "e2e")]
+#[tauri::command]
+pub async fn e2e_analog_clock_square_constraint_get(app: AppHandle) -> CommandResult<bool> {
+    let window = app
+        .get_webview_window("analog-clock")
+        .ok_or_else(window_error)?;
+    square_window::constraint_is_installed(&window)
+        .await
+        .map_err(|_| window_error())
 }
 
 #[tauri::command]
