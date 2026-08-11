@@ -11,7 +11,7 @@ describe("MarkdownDescriptionField accessibility", () => {
         label="説明"
         rows={8}
         value={
-          "# 計画\n\n- [x] 完了\n- [ ] 確認中\n\n| 項目 | 状態 |\n| --- | --- |\n| native | 確認中 |"
+          "# 計画\n\n- [x] 完了\n- [ ] 確認中\n\n| 項目 | 状態 |\n| --- | --- |\n| native | 確認中 |\n\n[運用手順](https://example.invalid/runbook)"
         }
         onChange={vi.fn()}
       />,

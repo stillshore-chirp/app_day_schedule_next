@@ -43,7 +43,8 @@ macOS x64 / Windows、Native E2E、installer生成は `Native release validation
 - Google HTTP、SQLite、keyring、notification adapter は Rust 側
 - frontend plugin permission は main / compact / analog-clock window ごとの最小 capability
 - general shell、general filesystem、raw SQL、arbitrary HTTP permission は不使用
-- external browser は OAuth の検証済み Google authorization URL だけを開く
+- external browser は OAuth の検証済み Google authorization URL、またはmain windowのMarkdownプレビューで利用者が明示的に実行したHTTP(S) URLだけを開く
+- Markdownプレビューのopener capabilityはmain windowとHTTP(S) scopeに限定し、WebView内遷移とopenerの暗黙リンク処理を無効にする
 
 E2E capability は `cfg(feature = "e2e")` の build だけに存在します。
 

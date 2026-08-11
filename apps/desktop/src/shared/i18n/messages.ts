@@ -1568,12 +1568,13 @@ export const jaMessages = {
   "shared.ui.MarkdownDescriptionField.previewLabel": "{0}のMarkdownプレビュー",
   "shared.ui.MarkdownDescriptionField.loading": "Markdownプレビューを準備中…",
   "shared.ui.MarkdownDescriptionField.help":
-    "Markdown書式に対応しています。外部画像は読み込まず、リンク先は文字として表示します。",
+    "Markdown書式に対応しています。外部画像は読み込まず、http / httpsリンクは外部ブラウザで開きます。",
   "shared.ui.MarkdownDescriptionField.empty": "プレビューする説明がまだありません。",
   "shared.ui.MarkdownDescriptionField.returnToEdit": "編集に戻る",
   "shared.ui.MarkdownDescriptionField.blockedLink": "安全でない形式のため開けないリンク",
-  "shared.ui.MarkdownDescriptionField.linkNotOpened":
-    "このアプリからは開かないリンク。リンク先を文字として表示しています。",
+  "shared.ui.MarkdownDescriptionField.externalLink": "外部ブラウザで開くリンク",
+  "shared.ui.MarkdownDescriptionField.linkOpenFailed":
+    "リンクを開けませんでした。既定ブラウザを確認して、もう一度お試しください。",
   "shared.ui.MarkdownDescriptionField.blockedImage": "画像「{0}」（プレビューでは読み込みません）",
   "shared.ui.MarkdownDescriptionField.imageWithoutAlt": "説明なし",
   "shared.ui.MarkdownDescriptionField.checkedTask": "完了済みのチェック項目",

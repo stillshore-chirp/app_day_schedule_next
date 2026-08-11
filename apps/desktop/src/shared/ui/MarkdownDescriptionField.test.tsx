@@ -1,8 +1,15 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MarkdownDescriptionField } from "./MarkdownDescriptionField";
+
+vi.mock("@tauri-apps/plugin-opener", () => ({
+  openUrl: vi.fn(),
+}));
+
+const openUrlMock = vi.mocked(openUrl);
 
 function ControlledField({ initialValue }: { initialValue: string }) {
   const [value, setValue] = useState(initialValue);
@@ -19,6 +26,11 @@ function ControlledField({ initialValue }: { initialValue: string }) {
 }
 
 describe("MarkdownDescriptionField", () => {
+  beforeEach(() => {
+    openUrlMock.mockReset();
+    openUrlMock.mockResolvedValue(undefined);
+  });
+
   it("renders existing GFM content first and preserves the source while switching modes", async () => {
     const user = userEvent.setup();
     render(
@@ -61,26 +73,54 @@ describe("MarkdownDescriptionField", () => {
     await waitFor(() => expect(screen.getByRole("textbox", { name: "説明" })).toHaveFocus());
   });
 
-  it("ignores raw HTML, blocks unsafe links, and never creates remote image elements", async () => {
+  it("opens HTTP links with pointer and keyboard while blocking unsafe content", async () => {
+    const user = userEvent.setup();
     const { container } = render(
       <ControlledField
         initialValue={[
           "<script>window.markdownAttack = true</script>",
           "[安全なリンク](https://example.invalid/docs)",
+          "[HTTPリンク](http://example.invalid/legacy-docs)",
           "[危険なリンク](javascript:alert(1))",
           "![外部画像](https://example.invalid/tracker.png)",
         ].join("\n\n")}
       />,
     );
 
-    expect(await screen.findByText("安全なリンク", { exact: false })).toHaveTextContent(
-      "https://example.invalid/docs",
+    const safeLink = await screen.findByRole("link", { name: /安全なリンク/ });
+    expect(safeLink).toHaveAttribute("href", "https://example.invalid/docs");
+    expect(safeLink).toHaveTextContent("https://example.invalid/docs");
+    expect(screen.getByRole("link", { name: /HTTPリンク/ })).toHaveAttribute(
+      "href",
+      "http://example.invalid/legacy-docs",
     );
-    expect(screen.queryByRole("link", { name: "安全なリンク" })).not.toBeInTheDocument();
+
+    await user.click(safeLink);
+    expect(openUrlMock).toHaveBeenLastCalledWith("https://example.invalid/docs");
+
+    safeLink.focus();
+    await user.keyboard("{Enter}");
+    expect(openUrlMock).toHaveBeenCalledTimes(2);
     expect(screen.queryByRole("link", { name: "危険なリンク" })).not.toBeInTheDocument();
     expect(screen.getByText("危険なリンク")).toHaveClass("markdown-preview__blocked-link");
     expect(screen.getByText(/画像「外部画像」/)).toBeVisible();
     expect(container.querySelector("img")).not.toBeInTheDocument();
     expect(container.querySelector("script")).not.toBeInTheDocument();
+  });
+
+  it("reports an opener failure without losing the link and allows retry", async () => {
+    const user = userEvent.setup();
+    openUrlMock.mockRejectedValueOnce(new Error("native opener unavailable"));
+    render(<ControlledField initialValue="[運用手順](https://example.invalid/runbook)" />);
+
+    const link = await screen.findByRole("link", { name: /運用手順/ });
+    await user.click(link);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("リンクを開けませんでした");
+    expect(link).toBeVisible();
+
+    await user.click(link);
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(openUrlMock).toHaveBeenCalledTimes(2);
   });
 });

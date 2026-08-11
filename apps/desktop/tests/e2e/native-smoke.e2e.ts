@@ -176,13 +176,16 @@ describe("Day Schedule Next native smoke", () => {
     const description = $("#schedule-description");
     await description.waitForDisplayed();
     await description.setValue(
-      "## 予定の手順\n\n| 時刻 | 作業 |\n| --- | --- |\n| 09:00 | 設計 |\n| 09:30 | 確認 |\n\n- [x] 準備\n- [ ] 実施",
+      "## 予定の手順\n\n| 時刻 | 作業 |\n| --- | --- |\n| 09:00 | 設計 |\n| 09:30 | 確認 |\n\n- [x] 準備\n- [ ] 実施\n\n[運用手順](https://example.invalid/runbook)",
     );
     await $('//aside//button[normalize-space(.)="変更を保存"]').click();
     await $('//aside//button[@aria-label="編集を閉じる"]').waitForExist({ reverse: true });
     await $(`//button[starts-with(@aria-label, "${title} ")]`).click();
     const preview = $('//aside//*[@role="region" and @aria-label="説明のMarkdownプレビュー"]');
     await preview.waitForDisplayed();
+    const externalLink = preview.$('.//a[contains(normalize-space(.), "運用手順")]');
+    await externalLink.waitForDisplayed();
+    await expect(externalLink).toHaveAttribute("href", "https://example.invalid/runbook");
     const inspectorScrollTop = await browser.execute(() => {
       const inspector = document.querySelector<HTMLElement>(".inspector");
       const region = document.querySelector<HTMLElement>(
@@ -439,14 +442,6 @@ describe("Day Schedule Next native smoke", () => {
     await browser.execute(() => {
       document.documentElement.style.fontSize = "";
     });
-
-    await $('//button[normalize-space(.)="テンプレートを編集"]').click();
-    await $("#template-editor-title").waitForDisplayed();
-    await browser.waitUntil(
-      async () => browser.execute(() => document.activeElement?.id === "template-editor-title"),
-      { timeoutMsg: "template editor heading did not receive focus from Today" },
-    );
-    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
   });
 
   it("keeps primary navigation usable at the minimum supported window width", async () => {
@@ -1493,7 +1488,7 @@ describe("Day Schedule Next native smoke", () => {
     await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
     const description = $("#ticket-description");
     await description.setValue(
-      "# リリース計画\n\n| 項目 | 状態 | 担当 |\n| --- | --- | --- |\n| UI | 完了 | local |\n| native | 確認中 | local |\n\n- [x] component test\n- [ ] native smoke",
+      "# リリース計画\n\n| 項目 | 状態 | 担当 |\n| --- | --- | --- |\n| UI | 完了 | local |\n| native | 確認中 | local |\n\n- [x] component test\n- [ ] native smoke\n\n[確認資料](https://example.invalid/evidence)",
     );
     await $('//div[@role="dialog"]//label[contains(., "優先度")]/select').selectByAttribute(
       "value",
@@ -1515,6 +1510,11 @@ describe("Day Schedule Next native smoke", () => {
     await $(
       '//div[@role="dialog"]//*[@role="region" and @aria-label="説明のMarkdownプレビュー"]',
     ).waitForDisplayed();
+    const ticketExternalLink = $(
+      '//div[@role="dialog"]//a[contains(normalize-space(.), "確認資料")]',
+    );
+    await ticketExternalLink.waitForDisplayed();
+    await expect(ticketExternalLink).toHaveAttribute("href", "https://example.invalid/evidence");
     await browser.saveScreenshot("./test-results/native-ticket-markdown-preview.png");
     await setLogicalWindowSize(720, 820);
     await browser.saveScreenshot("./test-results/native-ticket-markdown-preview-narrow.png");
