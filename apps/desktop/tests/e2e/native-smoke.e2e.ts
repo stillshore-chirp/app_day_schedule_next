@@ -181,16 +181,30 @@ describe("Day Schedule Next native smoke", () => {
     await $('//aside//button[normalize-space(.)="変更を保存"]').click();
     await $('//aside//button[@aria-label="編集を閉じる"]').waitForExist({ reverse: true });
     await $(`//button[starts-with(@aria-label, "${title} ")]`).click();
-    const preview = $('//aside//*[@role="region" and @aria-label="説明のMarkdownプレビュー"]');
+    const plainPreview = $("#schedule-description-plain-panel");
+    await plainPreview.waitForDisplayed();
+    await expect(plainPreview).toHaveText(/## 予定の手順/);
+    const plainExternalLink = plainPreview.$(
+      './/a[normalize-space(.)="https://example.invalid/runbook"]',
+    );
+    await plainExternalLink.waitForDisplayed();
+    await expect(plainExternalLink).toHaveAttribute("href", "https://example.invalid/runbook");
+    await browser.execute(() => {
+      const inspector = document.querySelector<HTMLElement>(".inspector");
+      const region = document.querySelector<HTMLElement>("#schedule-description-plain-panel");
+      if (!inspector || !region) throw new Error("schedule plain preview was not found");
+      inspector.scrollTop = Math.max(0, region.offsetTop - 180);
+    });
+    await browser.saveScreenshot("./test-results/native-schedule-plain-preview.png");
+    await $('//aside//*[@role="tab" and normalize-space(.)="Markdownプレビュー"]').click();
+    const preview = $("#schedule-description-markdown-panel");
     await preview.waitForDisplayed();
     const externalLink = preview.$('.//a[contains(normalize-space(.), "運用手順")]');
     await externalLink.waitForDisplayed();
     await expect(externalLink).toHaveAttribute("href", "https://example.invalid/runbook");
     const inspectorScrollTop = await browser.execute(() => {
       const inspector = document.querySelector<HTMLElement>(".inspector");
-      const region = document.querySelector<HTMLElement>(
-        '[role="region"][aria-label="説明のMarkdownプレビュー"]',
-      );
+      const region = document.querySelector<HTMLElement>("#schedule-description-markdown-panel");
       if (!inspector || !region) throw new Error("schedule Markdown preview was not found");
       inspector.scrollTop = Math.max(0, region.offsetTop - 180);
       return inspector.scrollTop;
@@ -1571,9 +1585,18 @@ describe("Day Schedule Next native smoke", () => {
     );
     await setLogicalWindowSize(1280, 820);
     await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    const ticketPlainPreview = $("#ticket-description-plain-panel");
+    await ticketPlainPreview.waitForDisplayed();
+    const ticketPlainLink = ticketPlainPreview.$(
+      './/a[normalize-space(.)="https://example.invalid/evidence"]',
+    );
+    await ticketPlainLink.waitForDisplayed();
+    await expect(ticketPlainLink).toHaveAttribute("href", "https://example.invalid/evidence");
+    await browser.saveScreenshot("./test-results/native-ticket-plain-preview.png");
     await $(
-      '//div[@role="dialog"]//*[@role="region" and @aria-label="説明のMarkdownプレビュー"]',
-    ).waitForDisplayed();
+      '//div[@role="dialog"]//*[@role="tab" and normalize-space(.)="Markdownプレビュー"]',
+    ).click();
+    await $("#ticket-description-markdown-panel").waitForDisplayed();
     const ticketExternalLink = $(
       '//div[@role="dialog"]//a[contains(normalize-space(.), "確認資料")]',
     );
@@ -1586,9 +1609,29 @@ describe("Day Schedule Next native smoke", () => {
     await browser.execute(() => {
       document.documentElement.style.fontSize = "200%";
     });
+    await browser.waitUntil(
+      () =>
+        browser.execute(
+          () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) >= 32,
+        ),
+      { timeoutMsg: "200% text state did not apply before Markdown preview capture" },
+    );
+    await browser.executeAsync((done: () => void) => {
+      requestAnimationFrame(() => requestAnimationFrame(done));
+    });
     await browser.saveScreenshot("./test-results/native-ticket-markdown-preview-text-200.png");
     await browser.execute(() => {
       document.documentElement.style.removeProperty("font-size");
+    });
+    await browser.waitUntil(
+      () =>
+        browser.execute(
+          () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) < 32,
+        ),
+      { timeoutMsg: "ticket Markdown preview text scaling did not reset" },
+    );
+    await browser.executeAsync((done: () => void) => {
+      requestAnimationFrame(() => requestAnimationFrame(done));
     });
     await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
 

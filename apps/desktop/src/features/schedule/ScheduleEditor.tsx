@@ -708,7 +708,7 @@ export function ScheduleEditor({
           rows={8}
           maxLength={10_000}
           value={state.description}
-          disabled={readOnly}
+          readOnly={readOnly}
           onChange={(description) => update("description", description)}
         />
 

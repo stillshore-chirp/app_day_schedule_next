@@ -1,17 +1,9 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMemo, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { translate } from "../i18n/messages";
-
-function safeLinkUrl(value: string): string {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : "";
-  } catch {
-    return "";
-  }
-}
+import { ExternalPreviewLink } from "./ExternalPreviewLink";
+import { safeExternalUrl } from "./external-url";
 
 const nonLinkMarkdownComponents: Pick<Components, "img" | "input"> = {
   img({ alt }) {
@@ -45,29 +37,14 @@ export function MarkdownPreviewContent({ value }: { value: string }) {
     () => ({
       ...nonLinkMarkdownComponents,
       a({ href, children }) {
-        const safeHref = href ? safeLinkUrl(href) : "";
-        return safeHref ? (
-          <a
-            className="markdown-preview__link"
-            href={safeHref}
-            title={translate("shared.ui.MarkdownDescriptionField.externalLink")}
-            onClick={(event) => {
-              event.preventDefault();
-              setLinkOpenFailed(false);
-              void openUrl(safeHref).catch(() => setLinkOpenFailed(true));
-            }}
-            onAuxClick={(event) => event.preventDefault()}
+        return (
+          <ExternalPreviewLink
+            href={href ?? ""}
+            showDestination
+            onOpenFailureChange={setLinkOpenFailed}
           >
             {children}
-            <span className="markdown-preview__link-destination"> ({safeHref})</span>
-          </a>
-        ) : (
-          <span
-            className="markdown-preview__blocked-link"
-            title={translate("shared.ui.MarkdownDescriptionField.blockedLink")}
-          >
-            {children}
-          </span>
+          </ExternalPreviewLink>
         );
       },
     }),
@@ -79,7 +56,7 @@ export function MarkdownPreviewContent({ value }: { value: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         skipHtml
-        urlTransform={safeLinkUrl}
+        urlTransform={safeExternalUrl}
         components={markdownComponents}
       >
         {value}

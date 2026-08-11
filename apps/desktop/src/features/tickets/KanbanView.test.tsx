@@ -258,7 +258,7 @@ describe("KanbanView", () => {
     expect(await screen.findByText("この端末へ保存しました")).toBeVisible();
   });
 
-  it("opens an existing ticket description as Markdown and saves the edited source", async () => {
+  it("opens an existing ticket in the plain preview, renders Markdown on request, and saves", async () => {
     const client = new MemoryAppClient([]);
     const created = await createTicket(client);
     await client.updateTicket({
@@ -271,11 +271,15 @@ describe("KanbanView", () => {
     renderBoard(client);
 
     await user.click(await screen.findByRole("button", { name: "Review releaseの詳細を開く" }));
-    expect(screen.getByRole("region", { name: "説明のMarkdownプレビュー" })).toBeVisible();
+    expect(screen.getByRole("tabpanel", { name: "通常プレビュー" })).toHaveTextContent(
+      "# 実装計画",
+    );
+    expect(screen.queryByRole("heading", { name: "実装計画" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Markdownプレビュー" }));
     expect(await screen.findByRole("heading", { name: "実装計画" })).toBeVisible();
     expect(screen.getByRole("table")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "編集" }));
+    await user.click(screen.getByRole("tab", { name: "編集" }));
     const description = screen.getByRole("textbox", { name: "説明" });
     await waitFor(() => expect(description).toHaveFocus());
     await user.clear(description);
