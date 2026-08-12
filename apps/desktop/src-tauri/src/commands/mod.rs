@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{future::Future, path::PathBuf};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
@@ -1260,7 +1260,10 @@ pub async fn analog_clock_window_open(
     )
     .title("Day Schedule Next — アナログ時計")
     .inner_size(480.0, 480.0)
-    .min_inner_size(360.0, 360.0)
+    .min_inner_size(
+        f64::from(square_window::MINIMUM_CLIENT_EDGE),
+        f64::from(square_window::MINIMUM_CLIENT_EDGE),
+    )
     .resizable(true)
     .maximizable(false)
     .always_on_top(always_on_top)
@@ -1303,8 +1306,10 @@ pub fn analog_clock_window_resize(app: AppHandle, factor: f64) -> CommandResult<
     let monitor = window.current_monitor().map_err(|_| window_error())?;
     let (max_width, max_height) = monitor.map_or((width, height), |monitor| {
         (
-            (f64::from(monitor.size().width) / scale_factor * 0.9).max(360.0),
-            (f64::from(monitor.size().height) / scale_factor * 0.9).max(360.0),
+            (f64::from(monitor.size().width) / scale_factor * 0.9)
+                .max(f64::from(square_window::MINIMUM_CLIENT_EDGE)),
+            (f64::from(monitor.size().height) / scale_factor * 0.9)
+                .max(f64::from(square_window::MINIMUM_CLIENT_EDGE)),
         )
     });
     let max_edge = max_width.min(max_height);
@@ -1329,6 +1334,33 @@ pub fn main_window_show(app: AppHandle) -> CommandResult<()> {
     Ok(())
 }
 
+#[derive(Debug)]
+enum AlwaysOnTopUpdateError<E> {
+    Native,
+    Save { error: E, rollback_failed: bool },
+}
+
+async fn apply_and_save_always_on_top<E, SetNative, Save, SaveFuture>(
+    previous: bool,
+    requested: bool,
+    mut set_native: SetNative,
+    save: Save,
+) -> Result<(), AlwaysOnTopUpdateError<E>>
+where
+    SetNative: FnMut(bool) -> Result<(), ()>,
+    Save: FnOnce(bool) -> SaveFuture,
+    SaveFuture: Future<Output = Result<(), E>>,
+{
+    set_native(requested).map_err(|()| AlwaysOnTopUpdateError::Native)?;
+    if let Err(error) = save(requested).await {
+        return Err(AlwaysOnTopUpdateError::Save {
+            error,
+            rollback_failed: set_native(previous).is_err(),
+        });
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn window_always_on_top_set(
     app: AppHandle,
@@ -1344,14 +1376,39 @@ pub async fn window_always_on_top_set(
             diagnostic_id: None,
         });
     }
-    service
-        .save_window_always_on_top(&request.label, request.always_on_top)
+    let previous = service
+        .window_always_on_top(&request.label)
         .await
         .map_err(UserSafeError::from)?;
     if let Some(window) = app.get_webview_window(&request.label) {
-        window
-            .set_always_on_top(request.always_on_top)
-            .map_err(|_| window_error())?;
+        match apply_and_save_always_on_top(
+            previous,
+            request.always_on_top,
+            |value| window.set_always_on_top(value).map_err(|_| ()),
+            |value| service.save_window_always_on_top(&request.label, value),
+        )
+        .await
+        {
+            Ok(()) => {}
+            Err(AlwaysOnTopUpdateError::Native) => return Err(window_error()),
+            Err(AlwaysOnTopUpdateError::Save {
+                error,
+                rollback_failed,
+            }) => {
+                if rollback_failed {
+                    tracing::warn!(
+                        window_label = %request.label,
+                        "failed to restore always-on-top after preference save failure"
+                    );
+                }
+                return Err(UserSafeError::from(error));
+            }
+        }
+    } else {
+        service
+            .save_window_always_on_top(&request.label, request.always_on_top)
+            .await
+            .map_err(UserSafeError::from)?;
     }
     Ok(())
 }
@@ -1532,7 +1589,9 @@ fn checked_path(value: String) -> CommandResult<PathBuf> {
 
 #[cfg(test)]
 mod analog_clock_window_tests {
-    use super::analog_clock_size;
+    use std::{cell::RefCell, rc::Rc};
+
+    use super::{AlwaysOnTopUpdateError, analog_clock_size, apply_and_save_always_on_top};
 
     #[test]
     fn accepts_only_the_supported_clock_scales() {
@@ -1540,5 +1599,31 @@ mod analog_clock_window_tests {
         assert_eq!(analog_clock_size(2.5), Some((980.0, 980.0)));
         assert_eq!(analog_clock_size(1.25), None);
         assert_eq!(analog_clock_size(f64::NAN), None);
+    }
+
+    #[tokio::test]
+    async fn restores_the_native_preference_when_saving_fails() {
+        let native_values = Rc::new(RefCell::new(Vec::new()));
+        let observed_values = Rc::clone(&native_values);
+
+        let result = apply_and_save_always_on_top(
+            false,
+            true,
+            move |value| {
+                observed_values.borrow_mut().push(value);
+                Ok(())
+            },
+            |_| async { Err("database") },
+        )
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(AlwaysOnTopUpdateError::Save {
+                error: "database",
+                rollback_failed: false,
+            })
+        ));
+        assert_eq!(native_values.borrow().as_slice(), &[true, false]);
     }
 }

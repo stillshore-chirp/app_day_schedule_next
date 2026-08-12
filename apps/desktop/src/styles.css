@@ -3532,7 +3532,7 @@ tbody tr:focus {
   z-index: 4;
   top: 14px;
   left: 14px;
-  max-width: calc(100% - 84px);
+  max-width: calc(100% - 134px);
   padding: 5px 8px;
   overflow: hidden;
   color: var(--text);
@@ -3549,11 +3549,14 @@ tbody tr:focus {
   white-space: nowrap;
 }
 
-.analog-clock-settings-trigger {
+.analog-clock-digital__compact {
+  display: none;
+}
+
+.analog-clock-corner-control {
   position: fixed;
   z-index: 5;
   top: 12px;
-  right: 12px;
   display: grid;
   width: 44px;
   height: 44px;
@@ -3568,16 +3571,30 @@ tbody tr:focus {
   opacity: 0.78;
 }
 
-.analog-clock-settings-trigger:hover,
-.analog-clock-settings-trigger:focus-visible,
-.analog-clock-settings-trigger[aria-expanded="true"] {
+.analog-clock-settings-trigger {
+  right: 12px;
+}
+
+.analog-clock-pin-trigger {
+  right: 64px;
+}
+
+.analog-clock-corner-control:hover,
+.analog-clock-corner-control:focus-visible,
+.analog-clock-settings-trigger[aria-expanded="true"],
+.analog-clock-pin-trigger[aria-pressed="true"] {
   color: var(--primary-strong);
   background: var(--surface-raised);
   border-color: var(--primary);
   opacity: 1;
 }
 
-.analog-clock-settings-trigger svg {
+.analog-clock-corner-control:disabled {
+  cursor: wait;
+  opacity: 0.48;
+}
+
+.analog-clock-corner-control svg {
   width: 24px;
   height: 24px;
   fill: none;
@@ -3585,6 +3602,32 @@ tbody tr:focus {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
+}
+
+.analog-clock-pin-trigger svg {
+  fill: none;
+}
+
+.analog-clock-pin-trigger[aria-pressed="true"] svg {
+  fill: currentcolor;
+}
+
+.analog-clock-pin-error {
+  position: fixed;
+  z-index: 6;
+  top: 64px;
+  right: 12px;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--surface-raised) 96%, var(--canvas));
+  border: 1px solid var(--danger);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .analog-clock-settings-layer {
@@ -3717,6 +3760,20 @@ tbody tr:focus {
 
   .analog-clock-volume {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 340px) {
+  .analog-clock-digital {
+    max-width: calc(100% - 134px);
+  }
+
+  .analog-clock-digital__full {
+    display: none;
+  }
+
+  .analog-clock-digital__compact {
+    display: inline;
   }
 }
 

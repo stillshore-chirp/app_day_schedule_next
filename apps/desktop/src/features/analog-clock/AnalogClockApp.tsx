@@ -42,6 +42,8 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [volume, setVolume] = useState(storedVolume);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
+  const [alwaysOnTopPending, setAlwaysOnTopPending] = useState(false);
+  const [alwaysOnTopError, setAlwaysOnTopError] = useState(false);
   const [status, setStatus] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButton = useRef<HTMLButtonElement | null>(null);
@@ -51,10 +53,24 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
     analogClockFaceSize(window.innerWidth, window.innerHeight),
   );
   const sound = useRef<TickSoundPlayer | null>(null);
+  const alwaysOnTopRequestPending = useRef(false);
   if (sound.current === null) sound.current = new TickSoundPlayer();
   const soundPlayer = sound.current;
   const lastSoundSecond = useRef(Math.floor(now.getTime() / 1_000));
   const resolvedTheme = resolvedClockTheme(themeMode, now);
+  const formattedDateTime = new Intl.DateTimeFormat(appLocale, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(now);
+  const formattedTime = new Intl.DateTimeFormat(appLocale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(now);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme;
@@ -69,9 +85,14 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
       if (next > 0) setClockFaceSize((current) => (current === next ? current : next));
     };
     const measureStage = () => updateClockFaceSize(stage.clientWidth, stage.clientHeight);
+    let resizeFrame = 0;
+    const scheduleStageMeasurement = () => {
+      window.cancelAnimationFrame(resizeFrame);
+      resizeFrame = window.requestAnimationFrame(measureStage);
+    };
 
     measureStage();
-    window.addEventListener("resize", measureStage);
+    window.addEventListener("resize", scheduleStageMeasurement);
     const observer =
       typeof ResizeObserver === "undefined"
         ? null
@@ -82,7 +103,8 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
     observer?.observe(stage);
 
     return () => {
-      window.removeEventListener("resize", measureStage);
+      window.removeEventListener("resize", scheduleStageMeasurement);
+      window.cancelAnimationFrame(resizeFrame);
       observer?.disconnect();
     };
   }, []);
@@ -155,14 +177,22 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
   };
 
   const toggleAlwaysOnTop = async (enabled: boolean) => {
+    if (alwaysOnTopRequestPending.current) return;
+    alwaysOnTopRequestPending.current = true;
     const previous = alwaysOnTop;
+    setAlwaysOnTopPending(true);
+    setAlwaysOnTopError(false);
     setAlwaysOnTop(enabled);
     try {
       await client.setWindowAlwaysOnTop("analog-clock", enabled);
       setStatus(translate(enabled ? "app.AnalogClock.016" : "app.AnalogClock.017"));
     } catch {
       setAlwaysOnTop(previous);
+      setAlwaysOnTopError(true);
       setStatus(translate("app.AnalogClock.018"));
+    } finally {
+      alwaysOnTopRequestPending.current = false;
+      setAlwaysOnTopPending(false);
     }
   };
 
@@ -189,20 +219,50 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
         <AnalogClockFace now={now} />
       </div>
 
-      <time className="analog-clock-digital" dateTime={now.toISOString()}>
-        {new Intl.DateTimeFormat(appLocale, {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        }).format(now)}
+      <time
+        className="analog-clock-digital"
+        dateTime={now.toISOString()}
+        aria-label={formattedDateTime}
+      >
+        <span className="analog-clock-digital__full">{formattedDateTime}</span>
+        <span className="analog-clock-digital__compact" aria-hidden="true">
+          {formattedTime}
+        </span>
       </time>
 
       <button
+        className="analog-clock-corner-control analog-clock-pin-trigger"
+        type="button"
+        aria-label={translate(
+          bootstrap.isLoading
+            ? "app.AnalogClock.027"
+            : bootstrap.isError
+              ? "app.AnalogClock.028"
+              : alwaysOnTop
+                ? "app.AnalogClock.026"
+                : "app.AnalogClock.025",
+        )}
+        aria-pressed={alwaysOnTop}
+        title={translate(
+          bootstrap.isLoading
+            ? "app.AnalogClock.027"
+            : bootstrap.isError
+              ? "app.AnalogClock.028"
+              : alwaysOnTop
+                ? "app.AnalogClock.026"
+                : "app.AnalogClock.025",
+        )}
+        disabled={bootstrap.isLoading || bootstrap.isError || alwaysOnTopPending}
+        onClick={() => void toggleAlwaysOnTop(!alwaysOnTop)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9 3h6l-.8 5 3.3 3.3v1.2H13v7l-1 1-1-1v-7H6.5v-1.2L9.8 8 9 3Z" />
+        </svg>
+      </button>
+
+      <button
         ref={settingsButton}
-        className="analog-clock-settings-trigger"
+        className="analog-clock-corner-control analog-clock-settings-trigger"
         type="button"
         aria-label={translate("app.AnalogClock.023")}
         aria-controls="analog-clock-settings"
@@ -217,6 +277,12 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
           <circle cx="14" cy="17" r="2" />
         </svg>
       </button>
+
+      {alwaysOnTopError && !settingsOpen ? (
+        <p className="analog-clock-pin-error" role="alert">
+          {translate("app.AnalogClock.018")}
+        </p>
+      ) : null}
 
       {settingsOpen ? (
         <div className="analog-clock-settings-layer">
@@ -324,7 +390,7 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
                 <input
                   type="checkbox"
                   checked={alwaysOnTop}
-                  disabled={bootstrap.isLoading || bootstrap.isError}
+                  disabled={bootstrap.isLoading || bootstrap.isError || alwaysOnTopPending}
                   onChange={(event) => void toggleAlwaysOnTop(event.target.checked)}
                 />
                 {translate("app.AnalogClock.011")}
