@@ -20,6 +20,8 @@ describe("AnalogClockApp accessibility", () => {
       </QueryClientProvider>,
     );
     await screen.findByRole("heading", { name: "アナログ時計" });
+    const pin = await screen.findByRole("button", { name: "常に手前に固定" });
+    expect(pin).toHaveAttribute("aria-pressed", "false");
     const result = await act(() =>
       axe.run(container, {
         runOnly: {

@@ -1,7 +1,14 @@
 use tauri::WebviewWindow;
 
-#[cfg(windows)]
-const MINIMUM_CLIENT_EDGE: i32 = 360;
+pub(crate) const MINIMUM_CLIENT_EDGE: u32 = 280;
+
+#[cfg(any(windows, test))]
+fn scaled_minimum_client_edge(dpi: u32) -> i32 {
+    (MINIMUM_CLIENT_EDGE
+        .saturating_mul(dpi.max(96))
+        .saturating_add(95)
+        / 96) as i32
+}
 
 pub async fn install_square_constraint(window: &WebviewWindow) -> Result<(), ()> {
     platform::install(window).await?;
@@ -205,7 +212,7 @@ mod platform {
         },
     };
 
-    use super::{MINIMUM_CLIENT_EDGE, Rect, ResizeEdge, constrain_to_square_client};
+    use super::{Rect, ResizeEdge, constrain_to_square_client};
 
     const SUBCLASS_ID: usize = 0x4453_4E43;
 
@@ -274,11 +281,8 @@ mod platform {
                         // caller for the duration of this callback.
                         let proposed = unsafe { *proposed_ptr };
                         // SAFETY: hwnd is a live window handle supplied by Windows.
-                        let dpi = unsafe { GetDpiForWindow(hwnd) }.max(96);
-                        let minimum_client_edge = ((MINIMUM_CLIENT_EDGE as u32)
-                            .saturating_mul(dpi)
-                            .saturating_add(95)
-                            / 96) as i32;
+                        let dpi = unsafe { GetDpiForWindow(hwnd) };
+                        let minimum_client_edge = super::scaled_minimum_client_edge(dpi);
                         let constrained = constrain_to_square_client(
                             from_windows_rect(proposed),
                             (rect_width(client_rect), rect_height(client_rect)),
@@ -360,7 +364,10 @@ mod platform {
 
 #[cfg(test)]
 mod tests {
-    use super::{Rect, ResizeEdge, constrain_to_square_client};
+    use super::{
+        MINIMUM_CLIENT_EDGE, Rect, ResizeEdge, constrain_to_square_client,
+        scaled_minimum_client_edge,
+    };
 
     const CURRENT_CLIENT: (i32, i32) = (480, 480);
     const FRAME: (i32, i32) = (16, 39);
@@ -390,8 +397,13 @@ mod tests {
         ];
 
         for (edge, anchor) in cases {
-            let constrained =
-                constrain_to_square_client(proposed, CURRENT_CLIENT, FRAME, 360, edge);
+            let constrained = constrain_to_square_client(
+                proposed,
+                CURRENT_CLIENT,
+                FRAME,
+                MINIMUM_CLIENT_EDGE as i32,
+                edge,
+            );
             let expected_edge = if matches!(edge, ResizeEdge::Top | ResizeEdge::Bottom) {
                 520
             } else {
@@ -425,8 +437,13 @@ mod tests {
             right: 596,
             bottom: 619,
         };
-        let constrained =
-            constrain_to_square_client(proposed, CURRENT_CLIENT, FRAME, 360, ResizeEdge::TopRight);
+        let constrained = constrain_to_square_client(
+            proposed,
+            CURRENT_CLIENT,
+            FRAME,
+            MINIMUM_CLIENT_EDGE as i32,
+            ResizeEdge::TopRight,
+        );
 
         assert_square_client(constrained, 600);
         assert_eq!(constrained.left, proposed.left);
@@ -452,5 +469,12 @@ mod tests {
         assert_square_client(constrained, 540);
         assert_eq!(constrained.left, proposed.left);
         assert_eq!(constrained.top, proposed.top);
+    }
+
+    #[test]
+    fn scales_the_minimum_edge_for_windows_dpi() {
+        assert_eq!(scaled_minimum_client_edge(96), 280);
+        assert_eq!(scaled_minimum_client_edge(144), 420);
+        assert_eq!(scaled_minimum_client_edge(0), 280);
     }
 }

@@ -42,11 +42,11 @@ describe("Day Schedule Next native smoke", () => {
       const outer = await browser.getWindowSize();
       await browser.setWindowSize(
         Math.max(
-          320,
+          280,
           Math.round(outer.width + (width - viewport.width) * viewport.devicePixelRatio),
         ),
         Math.max(
-          320,
+          280,
           Math.round(outer.height + (height - viewport.height) * viewport.devicePixelRatio),
         ),
       );
@@ -2042,6 +2042,48 @@ describe("Day Schedule Next native smoke", () => {
     await browser.tauri.switchWindow("analog-clock");
     const settingsButton = $('button[aria-label="時計の設定を開く"]');
     await settingsButton.waitForDisplayed();
+    const pinButton = $(".analog-clock-pin-trigger");
+    await pinButton.waitForDisplayed();
+
+    const cornerControls = await browser.execute(() => {
+      const pin = document.querySelector<HTMLElement>(".analog-clock-pin-trigger");
+      const settings = document.querySelector<HTMLElement>(".analog-clock-settings-trigger");
+      if (!pin || !settings) throw new Error("analog clock corner controls were not rendered");
+      const pinRect = pin.getBoundingClientRect();
+      const settingsRect = settings.getBoundingClientRect();
+      return {
+        gap: settingsRect.left - pinRect.right,
+        pinHeight: pinRect.height,
+        pinWidth: pinRect.width,
+        settingsHeight: settingsRect.height,
+        settingsWidth: settingsRect.width,
+      };
+    });
+    expect(cornerControls.pinWidth).toBe(44);
+    expect(cornerControls.pinHeight).toBe(44);
+    expect(cornerControls.settingsWidth).toBe(44);
+    expect(cornerControls.settingsHeight).toBe(44);
+    expect(cornerControls.gap).toBeGreaterThanOrEqual(7);
+
+    if ((await pinButton.getAttribute("aria-pressed")) === "true") await pinButton.click();
+    await browser.waitUntil(
+      async () => (await pinButton.getAttribute("aria-pressed")) === "false",
+      {
+        timeout: 3_000,
+        timeoutMsg: "analog clock pin did not reach the unpinned state",
+      },
+    );
+    expect(await pinButton.getAttribute("title")).toBe("常に手前に固定");
+    await pinButton.click();
+    await browser.waitUntil(async () => (await pinButton.getAttribute("aria-pressed")) === "true", {
+      timeout: 3_000,
+      timeoutMsg: "analog clock pin did not enable always-on-top",
+    });
+    expect(await pinButton.getAttribute("title")).toBe("常に手前を解除");
+    const pinnedPreference = (await browser.tauri.execute(({ core }) =>
+      core.invoke("bootstrap_get"),
+    )) as { windowPreferences: { analogClockAlwaysOnTop: boolean } };
+    expect(pinnedPreference.windowPreferences.analogClockAlwaysOnTop).toBe(true);
 
     const clockBefore = await browser.execute(() => ({
       hour: document.querySelector(".analog-clock-face__hand--hour")?.getAttribute("transform"),
@@ -2119,7 +2161,14 @@ describe("Day Schedule Next native smoke", () => {
     const topmostLabel = $('//label[normalize-space(.)="常に手前"]');
     await topmostLabel.waitForDisplayed();
     const topmost = topmostLabel.$('input[type="checkbox"]');
-    if (!(await topmost.isSelected())) await topmostLabel.click();
+    expect(await topmost.isSelected()).toBe(true);
+    await topmostLabel.click();
+    await browser.waitUntil(async () => !(await topmost.isSelected()), {
+      timeout: 3_000,
+      timeoutMsg: "analog clock settings did not disable always-on-top",
+    });
+    expect(await pinButton.getAttribute("aria-pressed")).toBe("false");
+    await topmostLabel.click();
     await browser.waitUntil(() => topmost.isSelected(), {
       timeout: 3_000,
       timeoutMsg: "analog clock always-on-top setting was not enabled",
@@ -2154,6 +2203,70 @@ describe("Day Schedule Next native smoke", () => {
     );
     expect(squareConstraintInstalled).toBe(true);
     await browser.saveScreenshot("./test-results/native-analog-clock-square.png");
+
+    await setExactLogicalViewportSize(280, 280);
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() => {
+          const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
+          if (!dial) return false;
+          const ratio = dial.getBoundingClientRect().width / document.documentElement.clientWidth;
+          return ratio >= 0.89 && ratio <= 0.96;
+        }),
+      {
+        timeout: 5_000,
+        timeoutMsg: "analog clock face did not follow the 280px native viewport",
+      },
+    );
+    const minimumLayout = await browser.execute(() => {
+      const digital = document.querySelector<HTMLElement>(".analog-clock-digital");
+      const fullDate = document.querySelector<HTMLElement>(".analog-clock-digital__full");
+      const compactTime = document.querySelector<HTMLElement>(".analog-clock-digital__compact");
+      const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
+      const pin = document.querySelector<HTMLElement>(".analog-clock-pin-trigger");
+      const settings = document.querySelector<HTMLElement>(".analog-clock-settings-trigger");
+      if (!digital || !fullDate || !compactTime || !dial || !pin || !settings) {
+        throw new Error("compact analog clock layout was incomplete");
+      }
+      const digitalRect = digital.getBoundingClientRect();
+      const dialRect = dial.getBoundingClientRect();
+      const pinRect = pin.getBoundingClientRect();
+      const settingsRect = settings.getBoundingClientRect();
+      return {
+        clockRatio: dialRect.width / document.documentElement.clientWidth,
+        compactTimeDisplay: getComputedStyle(compactTime).display,
+        digitalRight: digitalRect.right,
+        fullDateDisplay: getComputedStyle(fullDate).display,
+        pinHeight: pinRect.height,
+        pinLeft: pinRect.left,
+        pinWidth: pinRect.width,
+        scrollHeight: document.documentElement.scrollHeight,
+        scrollWidth: document.documentElement.scrollWidth,
+        settingsHeight: settingsRect.height,
+        settingsWidth: settingsRect.width,
+        viewportHeight: document.documentElement.clientHeight,
+        viewportWidth: document.documentElement.clientWidth,
+      };
+    });
+    expect(minimumLayout.clockRatio).toBeGreaterThanOrEqual(0.89);
+    expect(minimumLayout.clockRatio).toBeLessThanOrEqual(0.96);
+    expect(minimumLayout.viewportWidth).toBeGreaterThanOrEqual(279);
+    expect(minimumLayout.viewportWidth).toBeLessThan(360);
+    expect(minimumLayout.viewportHeight).toBeGreaterThanOrEqual(279);
+    expect(minimumLayout.viewportHeight).toBeLessThan(360);
+    expect(
+      Math.abs(minimumLayout.viewportWidth - minimumLayout.viewportHeight),
+    ).toBeLessThanOrEqual(1);
+    expect(minimumLayout.fullDateDisplay).toBe("none");
+    expect(minimumLayout.compactTimeDisplay).not.toBe("none");
+    expect(minimumLayout.digitalRight).toBeLessThanOrEqual(minimumLayout.pinLeft);
+    expect(minimumLayout.pinWidth).toBe(44);
+    expect(minimumLayout.pinHeight).toBe(44);
+    expect(minimumLayout.settingsWidth).toBe(44);
+    expect(minimumLayout.settingsHeight).toBe(44);
+    expect(minimumLayout.scrollWidth).toBeLessThanOrEqual(minimumLayout.viewportWidth + 1);
+    expect(minimumLayout.scrollHeight).toBeLessThanOrEqual(minimumLayout.viewportHeight + 1);
+    await browser.saveScreenshot("./test-results/native-analog-clock-minimum.png");
 
     const originalFontSize = await browser.execute(() => {
       const original = document.documentElement.style.fontSize;
