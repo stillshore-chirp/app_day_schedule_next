@@ -201,6 +201,8 @@ describe("Day Schedule Next native smoke", () => {
     await chooseScheduleTime("開始時刻の候補", "10:10");
     await expect(startTimeInput).toHaveValue("10:10");
     await expect(endTimeInput).toHaveValue("10:40");
+    await expect($('select[aria-label="開始時刻の候補"]')).toHaveValue("10:10");
+    await expect($('select[aria-label="終了時刻の候補"]')).toHaveValue("10:40");
     await chooseScheduleTime("終了時刻の候補", "10:45");
     await $('//button[@aria-label="5分後へ移動"]').click();
     await expect(startTimeInput).toHaveValue("10:15");
@@ -253,17 +255,53 @@ describe("Day Schedule Next native smoke", () => {
       const inspector = document.querySelector<HTMLElement>(".inspector");
       const actions = document.querySelector<HTMLElement>(".inspector__actions");
       const body = document.querySelector<HTMLElement>(".inspector__form-body");
-      if (!inspector || !actions || !body) throw new Error("schedule editor layout was not found");
+      const dock = document.querySelector<HTMLElement>(".now-dock");
+      const startInput = document.querySelector<HTMLInputElement>("#schedule-start-time");
+      const endInput = document.querySelector<HTMLInputElement>("#schedule-end-time");
+      const startSelect = document.querySelector<HTMLSelectElement>(
+        'select[aria-label="開始時刻の候補"]',
+      );
+      const endSelect = document.querySelector<HTMLSelectElement>(
+        'select[aria-label="終了時刻の候補"]',
+      );
+      if (
+        !inspector ||
+        !actions ||
+        !body ||
+        !startInput ||
+        !endInput ||
+        !startSelect ||
+        !endSelect
+      ) {
+        throw new Error("schedule editor layout was not found");
+      }
       const inspectorRect = inspector.getBoundingClientRect();
       const actionsRect = actions.getBoundingClientRect();
+      const dockRect = dock?.getBoundingClientRect();
+      const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
       return {
+        actionsAboveDock: dockRect ? actionsRect.bottom <= dockRect.top + 1 : true,
+        actionsHeight: actionsRect.height,
         actionsVisible:
           actionsRect.top >= inspectorRect.top && actionsRect.bottom <= inspectorRect.bottom + 1,
+        controlWidths: [startInput, startSelect, endInput, endSelect].map(
+          (control) => control.getBoundingClientRect().width,
+        ),
+        endSelectValue: endSelect.value,
         horizontalOverflow: body.scrollWidth - body.clientWidth,
+        minimumReadableWidth: rootFontSize * 6,
+        startSelectValue: startSelect.value,
       };
     });
+    expect(zoomGeometry.actionsAboveDock).toBe(true);
+    expect(zoomGeometry.actionsHeight).toBeGreaterThan(0);
     expect(zoomGeometry.actionsVisible).toBe(true);
     expect(zoomGeometry.horizontalOverflow).toBeLessThanOrEqual(1);
+    expect(
+      zoomGeometry.controlWidths.every((width) => width >= zoomGeometry.minimumReadableWidth),
+    ).toBe(true);
+    expect(zoomGeometry.startSelectValue).toBe("10:15");
+    expect(zoomGeometry.endSelectValue).toBe("10:30");
     await browser.saveScreenshot("./test-results/native-schedule-editor-text-200.png");
     await browser.execute(async () => {
       document.documentElement.style.fontSize = "100%";

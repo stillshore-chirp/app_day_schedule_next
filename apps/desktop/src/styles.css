@@ -2090,7 +2090,7 @@ textarea[aria-invalid="true"] {
 
 .schedule-time-card__times {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -2101,13 +2101,20 @@ textarea[aria-invalid="true"] {
 }
 
 .time-input {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) 76px;
   gap: 5px;
 }
 
+.time-input > input {
+  min-width: min(100%, 12rem);
+  flex: 2 1 12rem;
+}
+
 .time-input__choices {
+  min-width: min(100%, 8rem);
+  flex: 1 1 8rem;
   padding-inline: 7px;
   font-size: 0.72rem;
 }

@@ -1126,7 +1126,7 @@ function TimeInput({
         <select
           className="time-input__choices"
           aria-label={choiceLabel}
-          value=""
+          value={value}
           disabled={disabled}
           onChange={(event) => {
             if (event.target.value) {
@@ -1134,7 +1134,9 @@ function TimeInput({
             }
           }}
         >
-          <option value="">{translate("features.schedule.ScheduleEditor.103")}</option>
+          <option value="" disabled>
+            {translate("features.schedule.ScheduleEditor.103")}
+          </option>
           {options.map((option) => (
             <option key={option} value={option}>
               {option}

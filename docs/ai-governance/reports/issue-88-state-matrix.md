@@ -17,7 +17,7 @@
 | DST fold                 | 2 候補の UTC instant                           | 保存する offset を選択                               | 日時・timezone 変更後は選び直す               | radio group、instant を名前で確認          | component / Rust domain            |
 | validation / busy        | 項目エラー、保存中表示                         | 訂正後に再実行                                       | 入力を保持し、busy 中の二重保存を防止         | error association / disabled               | component / existing save path     |
 | 読み取り専用 Google 予定 | 理由と Google 側での回復案内                   | 説明を選択・コピー、複製                             | 時刻・詳細・保存・削除を無効化                | read-only textarea、disabled controls      | component                          |
-| 200%文字                 | 拡大した label、入力、候補、アクション         | Inspector 内縦スクロール                             | 横 overflow なし、下部アクションを維持        | 名前の省略なし                             | native geometry + screenshot / axe |
+| 200%文字                 | 拡大した label、入力、候補、アクション         | Inspector 内縦スクロール                             | 外枠の横 overflow と下部アクションを確認      | control 幅の検査不足を Issue #90 で補完    | native geometry + screenshot / axe |
 
 ## 非対象と残る確認
 
