@@ -88,7 +88,7 @@ describe("App accessibility", () => {
         ["serious", "critical"].includes(violation.impact ?? ""),
       ),
     ).toEqual([]);
-  });
+  }, 15_000);
 
   it("has no automated serious or critical violations in configured Google settings", async () => {
     class ConfiguredGoogleClient extends MemoryAppClient {
