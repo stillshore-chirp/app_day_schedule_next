@@ -14,6 +14,15 @@ import { formatDuration, localDateTimeInput } from "../../shared/time";
 import { MarkdownDescriptionField } from "../../shared/ui/MarkdownDescriptionField";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 import { ScheduleTicketLink } from "./ScheduleTicketLink";
+import {
+  addLocalMinutes,
+  combineLocalDateAndTime,
+  localDatePart,
+  localDayOffset,
+  localDurationMinutes,
+  localTimePart,
+  timeOptions,
+} from "./schedule-editor-time";
 
 interface ScheduleEditorProps {
   client: AppClient;
@@ -56,6 +65,27 @@ interface FormState {
   startNotificationMinutes: string;
   endNotificationMinutes: string;
   timezoneId: string;
+}
+
+const DEFAULT_SCHEDULE_COLOR = "#6F96F4";
+
+function hasAdvancedValues(state: FormState, defaultTimezoneId: string): boolean {
+  return (
+    state.priority !== "normal" ||
+    state.recurrenceRule !== "" ||
+    state.recurrenceSupplementalLines.length > 0 ||
+    state.recurrenceExdates.length > 0 ||
+    state.allDay ||
+    state.timezoneId !== defaultTimezoneId ||
+    state.startNotificationMinutes !== "" ||
+    state.endNotificationMinutes !== "" ||
+    state.project !== "" ||
+    state.category !== "" ||
+    state.tags !== "" ||
+    state.status !== "scheduled" ||
+    state.color.toUpperCase() !== DEFAULT_SCHEDULE_COLOR.toUpperCase() ||
+    state.location !== ""
+  );
 }
 
 function defaultTimes(selectedDate: Date): { start: string; end: string } {
@@ -106,7 +136,7 @@ function toState(
     project: schedule?.project ?? "",
     category: schedule?.category ?? "",
     tags: schedule?.tags.join(", ") ?? "",
-    color: schedule?.color ?? "#6F96F4",
+    color: schedule?.color ?? DEFAULT_SCHEDULE_COLOR,
     status: schedule?.status ?? "scheduled",
     allDay: schedule?.allDay ?? false,
     priority: schedule?.priority ?? "normal",
@@ -137,6 +167,10 @@ export function ScheduleEditor({
   const [state, setState] = useState(() =>
     toState(schedule, selectedDate, timezoneId, initialRange),
   );
+  const [detailsOpen, setDetailsOpen] = useState(() => {
+    const initialState = toState(schedule, selectedDate, timezoneId, initialRange);
+    return mode === "edit" && hasAdvancedValues(initialState, timezoneId);
+  });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [deletePending, setDeletePending] = useState(false);
   const [ambiguity, setAmbiguity] = useState<Record<"start" | "end", string[] | undefined>>({
@@ -159,7 +193,9 @@ export function ScheduleEditor({
   });
 
   useEffect(() => {
-    setState(toState(schedule, selectedDate, timezoneId, initialRange));
+    const nextState = toState(schedule, selectedDate, timezoneId, initialRange);
+    setState(nextState);
+    setDetailsOpen(mode === "edit" && hasAdvancedValues(nextState, timezoneId));
     setErrors({});
     setDeletePending(false);
     setAmbiguity({ start: undefined, end: undefined });
@@ -169,20 +205,85 @@ export function ScheduleEditor({
   }, [schedule, selectedDate, timezoneId, mode, initialRange]);
 
   const duration = useMemo(() => {
-    const minutes = Math.round((Date.parse(state.end) - Date.parse(state.start)) / 60_000);
-    return Number.isFinite(minutes) && minutes > 0
+    const minutes = localDurationMinutes(state.start, state.end);
+    return minutes !== null && Number.isFinite(minutes) && minutes > 0
       ? formatDuration(minutes)
       : translate("features.schedule.ScheduleEditor.001");
   }, [state.end, state.start]);
+
+  const durationMinutes = useMemo(
+    () => localDurationMinutes(state.start, state.end),
+    [state.end, state.start],
+  );
+  const endDayOffset = useMemo(
+    () => localDayOffset(state.start, state.end),
+    [state.end, state.start],
+  );
 
   const update = <Key extends keyof FormState>(key: Key, value: FormState[Key]) => {
     setState((current) => ({ ...current, [key]: value }));
   };
 
-  const updateLocalTime = (edge: "start" | "end", value: string) => {
-    update(edge, value);
-    setFoldChoice((current) => ({ ...current, [edge]: undefined }));
-    setAmbiguity((current) => ({ ...current, [edge]: undefined }));
+  const clearTimeErrors = () => {
+    setErrors((current) => {
+      const next = { ...current };
+      delete next.startUtc;
+      delete next.endUtc;
+      delete next.form;
+      return next;
+    });
+  };
+
+  const updateTimeRange = (next: (current: FormState) => Pick<FormState, "start" | "end">) => {
+    setState((current) => ({ ...current, ...next(current) }));
+    setFoldChoice({ start: undefined, end: undefined });
+    setAmbiguity({ start: undefined, end: undefined });
+    clearTimeErrors();
+  };
+
+  const updateStartDate = (date: string) => {
+    updateTimeRange((current) => {
+      const nextStart = combineLocalDateAndTime(date, localTimePart(current.start));
+      const minutes = localDurationMinutes(current.start, current.end);
+      const nextEnd = nextStart && minutes !== null ? addLocalMinutes(nextStart, minutes) : null;
+      return nextStart && nextEnd
+        ? { start: nextStart, end: nextEnd }
+        : { start: current.start, end: current.end };
+    });
+  };
+
+  const updateStartTime = (time: string) => {
+    updateTimeRange((current) => {
+      const nextStart = combineLocalDateAndTime(localDatePart(current.start), time);
+      const minutes = localDurationMinutes(current.start, current.end);
+      const nextEnd = nextStart && minutes !== null ? addLocalMinutes(nextStart, minutes) : null;
+      return nextStart && nextEnd
+        ? { start: nextStart, end: nextEnd }
+        : { start: current.start, end: current.end };
+    });
+  };
+
+  const updateEndTime = (time: string) => {
+    updateTimeRange((current) => {
+      let nextEnd = combineLocalDateAndTime(localDatePart(current.end), time);
+      if (
+        nextEnd &&
+        localDatePart(current.end) === localDatePart(current.start) &&
+        (localDurationMinutes(current.start, nextEnd) ?? 0) <= 0
+      ) {
+        nextEnd = addLocalMinutes(nextEnd, 1440);
+      }
+      return nextEnd
+        ? { start: current.start, end: nextEnd }
+        : { start: current.start, end: current.end };
+    });
+  };
+
+  const updateEndDate = (date: string) => {
+    updateTimeRange((current) => ({
+      start: current.start,
+      end: combineLocalDateAndTime(date, localTimePart(current.end)) ?? current.end,
+    }));
   };
 
   const setAllDay = (checked: boolean) => {
@@ -203,15 +304,30 @@ export function ScheduleEditor({
   };
 
   const shift = (minutes: number) => {
-    const start = addMinutes(new Date(state.start), minutes);
-    const end = addMinutes(new Date(state.end), minutes);
-    update("start", localDateTimeInput(start.toISOString()));
-    update("end", localDateTimeInput(end.toISOString()));
+    updateTimeRange((current) => ({
+      start: addLocalMinutes(current.start, minutes) ?? current.start,
+      end: addLocalMinutes(current.end, minutes) ?? current.end,
+    }));
   };
 
-  const resize = (edge: "start" | "end", minutes: number) => {
-    const value = addMinutes(new Date(edge === "start" ? state.start : state.end), minutes);
-    update(edge, localDateTimeInput(value.toISOString()));
+  const resizeDuration = (minutes: number) => {
+    updateTimeRange((current) => {
+      const currentMinutes = localDurationMinutes(current.start, current.end);
+      if (currentMinutes === null || currentMinutes + minutes < 1) {
+        return { start: current.start, end: current.end };
+      }
+      return {
+        start: current.start,
+        end: addLocalMinutes(current.end, minutes) ?? current.end,
+      };
+    });
+  };
+
+  const setDuration = (minutes: number) => {
+    updateTimeRange((current) => ({
+      start: current.start,
+      end: addLocalMinutes(current.start, minutes) ?? current.end,
+    }));
   };
 
   const showRecurrencePreview = async () => {
@@ -334,6 +450,10 @@ export function ScheduleEditor({
     );
   };
 
+  const showEndDate = localDatePart(state.start) !== localDatePart(state.end);
+  const advancedConfigured = hasAdvancedValues(state, timezoneId);
+  const timeEditingDisabled = readOnly || state.allDay;
+
   return (
     <aside className="inspector" aria-labelledby="inspector-title">
       <div className="inspector__header">
@@ -360,357 +480,568 @@ export function ScheduleEditor({
       </div>
 
       <form className="inspector__form" onSubmit={(event) => void submit(event)} noValidate>
-        {readOnly ? (
-          <StatusMessage
-            tone="warning"
-            title={translate(
-              protectedGoogleRecurrence
-                ? "features.schedule.ScheduleEditor.095"
-                : "features.schedule.ScheduleEditor.014",
-            )}
-          >
-            {translate(
-              protectedGoogleRecurrence
-                ? "features.schedule.ScheduleEditor.096"
-                : "features.schedule.ScheduleEditor.015",
-            )}
-          </StatusMessage>
-        ) : null}
-        <label>
-          {translate("features.schedule.ScheduleEditor.016")}
-          <input
-            autoFocus
-            value={state.title}
-            onChange={(event) => update("title", event.target.value)}
-            aria-invalid={Boolean(errors.title)}
-            aria-describedby={errors.title ? "title-error" : undefined}
-          />
-        </label>
-        {errors.title ? (
-          <p className="field-error" id="title-error">
-            {errors.title}
-          </p>
-        ) : null}
+        <div className="inspector__form-body">
+          {readOnly ? (
+            <StatusMessage
+              tone="warning"
+              title={translate(
+                protectedGoogleRecurrence
+                  ? "features.schedule.ScheduleEditor.095"
+                  : "features.schedule.ScheduleEditor.014",
+              )}
+            >
+              {translate(
+                protectedGoogleRecurrence
+                  ? "features.schedule.ScheduleEditor.096"
+                  : "features.schedule.ScheduleEditor.015",
+              )}
+            </StatusMessage>
+          ) : null}
+          <label>
+            {translate("features.schedule.ScheduleEditor.016")}
+            <input
+              autoFocus
+              value={state.title}
+              onChange={(event) => update("title", event.target.value)}
+              aria-invalid={Boolean(errors.title)}
+              aria-describedby={errors.title ? "title-error" : undefined}
+            />
+          </label>
+          {errors.title ? (
+            <p className="field-error" id="title-error">
+              {errors.title}
+            </p>
+          ) : null}
 
-        <div className="field-pair">
-          <label>
-            {translate("features.schedule.ScheduleEditor.017")}
-            <input
-              type="datetime-local"
-              value={state.start}
-              onChange={(event) => updateLocalTime("start", event.target.value)}
-              aria-invalid={Boolean(errors.startUtc)}
-            />
-          </label>
-          <label>
-            {translate("features.schedule.ScheduleEditor.018")}
-            <input
-              type="datetime-local"
-              value={state.end}
-              onChange={(event) => updateLocalTime("end", event.target.value)}
-              aria-invalid={Boolean(errors.endUtc)}
-            />
-          </label>
-          <label>
-            {translate("features.schedule.ScheduleEditor.019")}
-            <select
-              value={state.priority}
-              onChange={(event) => update("priority", event.target.value as FormState["priority"])}
-            >
-              <option value="low">{translate("features.schedule.ScheduleEditor.020")}</option>
-              <option value="normal">{translate("features.schedule.ScheduleEditor.021")}</option>
-              <option value="high">{translate("features.schedule.ScheduleEditor.022")}</option>
-              <option value="urgent">{translate("features.schedule.ScheduleEditor.023")}</option>
-            </select>
-          </label>
-        </div>
-        <div className="field-pair">
-          <label>
-            {translate("features.schedule.ScheduleEditor.024")}
-            <select
-              value={presetRecurrence(state.recurrenceRule)}
-              onChange={(event) => {
-                update("recurrenceRule", event.target.value);
-                update("recurrenceSupplementalLines", []);
-                setRecurrencePreview(null);
-              }}
-            >
-              <option value="">{translate("features.schedule.ScheduleEditor.025")}</option>
-              <option value="FREQ=DAILY">
-                {translate("features.schedule.ScheduleEditor.026")}
-              </option>
-              <option value="FREQ=WEEKLY">
-                {translate("features.schedule.ScheduleEditor.027")}
-              </option>
-              <option value="FREQ=MONTHLY">
-                {translate("features.schedule.ScheduleEditor.028")}
-              </option>
-              <option value="FREQ=YEARLY">
-                {translate("features.schedule.ScheduleEditor.029")}
-              </option>
-              <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR">
-                {translate("features.schedule.ScheduleEditor.030")}
-              </option>
-              <option value="custom">{translate("features.schedule.ScheduleEditor.031")}</option>
-            </select>
-          </label>
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={state.allDay}
-              onChange={(event) => setAllDay(event.target.checked)}
-            />
-            {translate("features.schedule.ScheduleEditor.032")}
-          </label>
-        </div>
-        {presetRecurrence(state.recurrenceRule) === "custom" ? (
-          <label>
-            {translate("features.schedule.ScheduleEditor.033")}
-            <input
-              value={state.recurrenceRule}
-              onChange={(event) => {
-                update("recurrenceRule", event.target.value);
-                update("recurrenceSupplementalLines", []);
-                setRecurrencePreview(null);
-              }}
-              placeholder="FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH"
-            />
-          </label>
-        ) : null}
-        {state.recurrenceRule ? (
-          <div className="recurrence-preview">
-            <button className="button" type="button" onClick={() => void showRecurrencePreview()}>
-              {translate("features.schedule.ScheduleEditor.034")}
-            </button>
-            {recurrencePreview ? (
-              <div role="status">
-                <p>
-                  {recurrencePreview.items.length}
-                  {translate("features.schedule.ScheduleEditor.035")}
-                  {recurrencePreview.infinite
-                    ? translate("features.schedule.ScheduleEditor.036")
-                    : translate("features.schedule.ScheduleEditor.037")}
-                </p>
-                <ol>
-                  {recurrencePreview.items.map((item) => (
-                    <li key={item.startUtc}>
-                      {new Intl.DateTimeFormat(appLocale, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                        timeZone: state.timezoneId,
-                      }).format(new Date(item.startUtc))}
-                    </li>
-                  ))}
-                </ol>
-                {recurrencePreview.warnings.map((warning) => (
-                  <p className="field-error" key={warning}>
-                    {warning}
-                  </p>
-                ))}
+          <fieldset className="schedule-time-card">
+            <legend>{translate("features.schedule.ScheduleEditor.097")}</legend>
+            <label>
+              {translate("features.schedule.ScheduleEditor.098")}
+              <input
+                type="date"
+                value={localDatePart(state.start)}
+                disabled={readOnly}
+                aria-invalid={Boolean(errors.startUtc)}
+                aria-describedby={errors.startUtc ? "schedule-start-error" : undefined}
+                onChange={(event) => updateStartDate(event.target.value)}
+              />
+            </label>
+            <div className="schedule-time-card__times">
+              <TimeInput
+                id="schedule-start-time"
+                label={translate("features.schedule.ScheduleEditor.099")}
+                choiceLabel={translate("features.schedule.ScheduleEditor.101")}
+                value={localTimePart(state.start)}
+                options={timeOptions(snapMinutes, localTimePart(state.start))}
+                disabled={timeEditingDisabled}
+                invalid={Boolean(errors.startUtc)}
+                describedBy={errors.startUtc ? "schedule-start-error" : undefined}
+                onChange={updateStartTime}
+              />
+              <TimeInput
+                id="schedule-end-time"
+                label={translate("features.schedule.ScheduleEditor.100")}
+                choiceLabel={translate("features.schedule.ScheduleEditor.102")}
+                value={localTimePart(state.end)}
+                options={timeOptions(snapMinutes, localTimePart(state.end))}
+                disabled={timeEditingDisabled}
+                invalid={Boolean(errors.endUtc)}
+                describedBy={errors.endUtc ? "schedule-end-error" : undefined}
+                onChange={updateEndTime}
+              />
+            </div>
+            {showEndDate ? (
+              <div className="schedule-time-card__end-date">
+                {endDayOffset === 1 ? (
+                  <span className="state-chip">
+                    {translate("features.schedule.ScheduleEditor.104")}
+                  </span>
+                ) : null}
+                <label>
+                  {translate("features.schedule.ScheduleEditor.105")}
+                  <input
+                    type="date"
+                    value={localDatePart(state.end)}
+                    disabled={readOnly || state.allDay}
+                    aria-invalid={Boolean(errors.endUtc)}
+                    aria-describedby={errors.endUtc ? "schedule-end-error" : undefined}
+                    onChange={(event) => updateEndDate(event.target.value)}
+                  />
+                </label>
               </div>
             ) : null}
-          </div>
-        ) : null}
-        {mode === "edit" && schedule?.recurrenceRule ? (
-          <fieldset className="recurrence-scope">
-            <legend>{translate("features.schedule.ScheduleEditor.038")}</legend>
-            <label>
-              <input
-                type="radio"
-                name="recurrence-scope"
-                checked={recurrenceScope === "this"}
-                onChange={() => setRecurrenceScope("this")}
-              />
-              {translate("features.schedule.ScheduleEditor.039")}
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="recurrence-scope"
-                checked={recurrenceScope === "following"}
-                onChange={() => setRecurrenceScope("following")}
-              />
-              {translate("features.schedule.ScheduleEditor.040")}
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="recurrence-scope"
-                checked={recurrenceScope === "series"}
-                onChange={() => setRecurrenceScope("series")}
-              />
-              {translate("features.schedule.ScheduleEditor.041")}
-            </label>
-            <p className="field-help">{translate("features.schedule.ScheduleEditor.042")}</p>
+            <p className="field-help">
+              {translate("features.schedule.ScheduleEditor.044")}
+              {duration} {translate("features.schedule.ScheduleEditor.045")}
+              {state.timezoneId}
+            </p>
+            {errors.startUtc ? (
+              <p className="field-error" id="schedule-start-error">
+                {errors.startUtc}
+              </p>
+            ) : null}
+            {errors.endUtc ? (
+              <p className="field-error" id="schedule-end-error">
+                {errors.endUtc}
+              </p>
+            ) : null}
+            {errors.form ? <p className="field-error">{errors.form}</p> : null}
           </fieldset>
-        ) : null}
-        <label>
-          {translate("features.schedule.ScheduleEditor.043")}
-          <input
-            list="schedule-timezones"
-            value={state.timezoneId}
-            onChange={(event) => {
-              update("timezoneId", event.target.value);
-              setFoldChoice({ start: undefined, end: undefined });
-              setAmbiguity({ start: undefined, end: undefined });
-            }}
-            placeholder="Asia/Tokyo"
-          />
-          <datalist id="schedule-timezones">
-            <option value="Asia/Tokyo" />
-            <option value="UTC" />
-            <option value="America/New_York" />
-            <option value="America/Los_Angeles" />
-            <option value="Europe/London" />
-            <option value="Europe/Berlin" />
-            <option value="Australia/Sydney" />
-          </datalist>
-        </label>
-        {ambiguity.start ? (
-          <AmbiguousTimeChoice
-            edge="start"
-            candidates={ambiguity.start}
-            timezoneId={state.timezoneId}
-            selected={foldChoice.start}
-            onChange={(value) => setFoldChoice({ ...foldChoice, start: value })}
-          />
-        ) : null}
-        {ambiguity.end ? (
-          <AmbiguousTimeChoice
-            edge="end"
-            candidates={ambiguity.end}
-            timezoneId={state.timezoneId}
-            selected={foldChoice.end}
-            onChange={(value) => setFoldChoice({ ...foldChoice, end: value })}
-          />
-        ) : null}
-        {(errors.startUtc ?? errors.endUtc) ? (
-          <p className="field-error">{errors.startUtc ?? errors.endUtc}</p>
-        ) : null}
-        {errors.form ? <p className="field-error">{errors.form}</p> : null}
-        <p className="field-help">
-          {translate("features.schedule.ScheduleEditor.044")}
-          {duration} {translate("features.schedule.ScheduleEditor.045")}
-          {state.timezoneId}
-        </p>
-        {mode === "edit" ? (
-          <p className="field-help">
-            {translate("features.schedule.ScheduleEditor.046")}
-            {formatElapsedSeconds(focusSummary.data?.workSeconds ?? 0)}
-          </p>
-        ) : null}
 
-        {mode === "edit" && schedule && !readOnly ? (
-          <ScheduleTicketLink
-            client={client}
-            schedule={schedule}
-            {...(onOpenTickets ? { onOpenTickets } : {})}
-          />
-        ) : null}
-
-        <fieldset>
-          <legend>{translate("features.schedule.ScheduleEditor.047")}</legend>
-          <div className="field-pair">
-            <NotificationSelect
-              label={translate("features.schedule.ScheduleEditor.048")}
-              value={state.startNotificationMinutes}
-              onChange={(value) => update("startNotificationMinutes", value)}
+          {ambiguity.start ? (
+            <AmbiguousTimeChoice
+              edge="start"
+              candidates={ambiguity.start}
+              timezoneId={state.timezoneId}
+              selected={foldChoice.start}
+              onChange={(value) => {
+                setFoldChoice({ ...foldChoice, start: value });
+                clearTimeErrors();
+              }}
             />
-            <NotificationSelect
-              label={translate("features.schedule.ScheduleEditor.049")}
-              value={state.endNotificationMinutes}
-              onChange={(value) => update("endNotificationMinutes", value)}
+          ) : null}
+          {ambiguity.end ? (
+            <AmbiguousTimeChoice
+              edge="end"
+              candidates={ambiguity.end}
+              timezoneId={state.timezoneId}
+              selected={foldChoice.end}
+              onChange={(value) => {
+                setFoldChoice({ ...foldChoice, end: value });
+                clearTimeErrors();
+              }}
             />
-          </div>
-          <p className="field-help">{translate("features.schedule.ScheduleEditor.050")}</p>
-        </fieldset>
+          ) : null}
 
-        {mode === "edit" ? (
-          <fieldset className="time-adjuster">
-            <legend>{translate("features.schedule.ScheduleEditor.051")}</legend>
-            <div className="button-row button-row--wrap">
-              <button type="button" onClick={() => shift(-snapMinutes)}>
-                −{snapMinutes}
-                {translate("features.schedule.ScheduleEditor.052")}
-              </button>
-              <button type="button" onClick={() => shift(snapMinutes)}>
-                ＋{snapMinutes}
-                {translate("features.schedule.ScheduleEditor.053")}
-              </button>
-              <button type="button" onClick={() => resize("start", -snapMinutes)}>
-                {translate("features.schedule.ScheduleEditor.054")}
-              </button>
-              <button type="button" onClick={() => resize("end", snapMinutes)}>
-                {translate("features.schedule.ScheduleEditor.055")}
-              </button>
+          <MarkdownDescriptionField
+            key={schedule?.id ?? "new-schedule"}
+            id="schedule-description"
+            label={translate("features.schedule.ScheduleEditor.067")}
+            rows={5}
+            maxLength={10_000}
+            value={state.description}
+            readOnly={readOnly}
+            onChange={(description) => update("description", description)}
+          />
+
+          <div className="time-adjuster">
+            <div className="time-adjuster__group">
+              <span>{translate("features.schedule.ScheduleEditor.106")}</span>
+              <div className="button-row button-row--wrap">
+                <button
+                  type="button"
+                  disabled={timeEditingDisabled}
+                  aria-label={translate("features.schedule.ScheduleEditor.108", [snapMinutes])}
+                  onClick={() => shift(-snapMinutes)}
+                >
+                  −{translate("features.schedule.ScheduleEditor.113", [snapMinutes])}
+                </button>
+                <button
+                  type="button"
+                  disabled={timeEditingDisabled}
+                  aria-label={translate("features.schedule.ScheduleEditor.109", [snapMinutes])}
+                  onClick={() => shift(snapMinutes)}
+                >
+                  ＋{translate("features.schedule.ScheduleEditor.113", [snapMinutes])}
+                </button>
+              </div>
             </div>
-          </fieldset>
-        ) : null}
+            <div className="time-adjuster__group">
+              <span>{translate("features.schedule.ScheduleEditor.107")}</span>
+              <div className="button-row button-row--wrap">
+                <button
+                  type="button"
+                  disabled={timeEditingDisabled || (durationMinutes ?? 0) <= snapMinutes}
+                  aria-label={translate("features.schedule.ScheduleEditor.110", [snapMinutes])}
+                  onClick={() => resizeDuration(-snapMinutes)}
+                >
+                  −{translate("features.schedule.ScheduleEditor.113", [snapMinutes])}
+                </button>
+                <button
+                  type="button"
+                  disabled={timeEditingDisabled}
+                  aria-label={translate("features.schedule.ScheduleEditor.111", [snapMinutes])}
+                  onClick={() => resizeDuration(snapMinutes)}
+                >
+                  ＋{translate("features.schedule.ScheduleEditor.113", [snapMinutes])}
+                </button>
+                {[15, 30, 60].map((minutes) => (
+                  <button
+                    type="button"
+                    key={minutes}
+                    disabled={timeEditingDisabled}
+                    aria-label={translate("features.schedule.ScheduleEditor.112", [minutes])}
+                    aria-pressed={durationMinutes === minutes}
+                    onClick={() => setDuration(minutes)}
+                  >
+                    {translate("features.schedule.ScheduleEditor.113", [minutes])}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
 
-        <div className="field-pair">
-          <label>
-            {translate("features.schedule.ScheduleEditor.056")}
-            <input
-              value={state.project}
-              onChange={(event) => update("project", event.target.value)}
-            />
-          </label>
-          <label>
-            {translate("features.schedule.ScheduleEditor.057")}
-            <input
-              value={state.category}
-              onChange={(event) => update("category", event.target.value)}
-            />
-          </label>
+          <details
+            className="schedule-details"
+            open={detailsOpen}
+            onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+          >
+            <summary>
+              <span>{translate("features.schedule.ScheduleEditor.114")}</span>
+              {advancedConfigured ? (
+                <span className="state-chip">
+                  {translate("features.schedule.ScheduleEditor.115")}
+                </span>
+              ) : null}
+            </summary>
+            <div className="schedule-details__body">
+              <div className="field-pair">
+                <label>
+                  {translate("features.schedule.ScheduleEditor.019")}
+                  <select
+                    value={state.priority}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      update("priority", event.target.value as FormState["priority"])
+                    }
+                  >
+                    <option value="low">{translate("features.schedule.ScheduleEditor.020")}</option>
+                    <option value="normal">
+                      {translate("features.schedule.ScheduleEditor.021")}
+                    </option>
+                    <option value="high">
+                      {translate("features.schedule.ScheduleEditor.022")}
+                    </option>
+                    <option value="urgent">
+                      {translate("features.schedule.ScheduleEditor.023")}
+                    </option>
+                  </select>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={state.allDay}
+                    disabled={readOnly}
+                    onChange={(event) => setAllDay(event.target.checked)}
+                  />
+                  {translate("features.schedule.ScheduleEditor.032")}
+                </label>
+              </div>
+              <label>
+                {translate("features.schedule.ScheduleEditor.024")}
+                <select
+                  value={presetRecurrence(state.recurrenceRule)}
+                  disabled={readOnly}
+                  onChange={(event) => {
+                    update("recurrenceRule", event.target.value);
+                    update("recurrenceSupplementalLines", []);
+                    setRecurrencePreview(null);
+                  }}
+                >
+                  <option value="">{translate("features.schedule.ScheduleEditor.025")}</option>
+                  <option value="FREQ=DAILY">
+                    {translate("features.schedule.ScheduleEditor.026")}
+                  </option>
+                  <option value="FREQ=WEEKLY">
+                    {translate("features.schedule.ScheduleEditor.027")}
+                  </option>
+                  <option value="FREQ=MONTHLY">
+                    {translate("features.schedule.ScheduleEditor.028")}
+                  </option>
+                  <option value="FREQ=YEARLY">
+                    {translate("features.schedule.ScheduleEditor.029")}
+                  </option>
+                  <option value="FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR">
+                    {translate("features.schedule.ScheduleEditor.030")}
+                  </option>
+                  <option value="custom">
+                    {translate("features.schedule.ScheduleEditor.031")}
+                  </option>
+                </select>
+              </label>
+              {presetRecurrence(state.recurrenceRule) === "custom" ? (
+                <label>
+                  {translate("features.schedule.ScheduleEditor.033")}
+                  <input
+                    value={state.recurrenceRule}
+                    disabled={readOnly}
+                    onChange={(event) => {
+                      update("recurrenceRule", event.target.value);
+                      update("recurrenceSupplementalLines", []);
+                      setRecurrencePreview(null);
+                    }}
+                    placeholder="FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH"
+                  />
+                </label>
+              ) : null}
+              {state.recurrenceRule ? (
+                <div className="recurrence-preview">
+                  <button
+                    className="button"
+                    type="button"
+                    onClick={() => void showRecurrencePreview()}
+                  >
+                    {translate("features.schedule.ScheduleEditor.034")}
+                  </button>
+                  {recurrencePreview ? (
+                    <div role="status">
+                      <p>
+                        {recurrencePreview.items.length}
+                        {translate("features.schedule.ScheduleEditor.035")}
+                        {recurrencePreview.infinite
+                          ? translate("features.schedule.ScheduleEditor.036")
+                          : translate("features.schedule.ScheduleEditor.037")}
+                      </p>
+                      <ol>
+                        {recurrencePreview.items.map((item) => (
+                          <li key={item.startUtc}>
+                            {new Intl.DateTimeFormat(appLocale, {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                              timeZone: state.timezoneId,
+                            }).format(new Date(item.startUtc))}
+                          </li>
+                        ))}
+                      </ol>
+                      {recurrencePreview.warnings.map((warning) => (
+                        <p className="field-error" key={warning}>
+                          {warning}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {mode === "edit" && schedule?.recurrenceRule ? (
+                <fieldset className="recurrence-scope">
+                  <legend>{translate("features.schedule.ScheduleEditor.038")}</legend>
+                  <label>
+                    <input
+                      type="radio"
+                      name="recurrence-scope"
+                      checked={recurrenceScope === "this"}
+                      disabled={readOnly}
+                      onChange={() => setRecurrenceScope("this")}
+                    />
+                    {translate("features.schedule.ScheduleEditor.039")}
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="recurrence-scope"
+                      checked={recurrenceScope === "following"}
+                      disabled={readOnly}
+                      onChange={() => setRecurrenceScope("following")}
+                    />
+                    {translate("features.schedule.ScheduleEditor.040")}
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="recurrence-scope"
+                      checked={recurrenceScope === "series"}
+                      disabled={readOnly}
+                      onChange={() => setRecurrenceScope("series")}
+                    />
+                    {translate("features.schedule.ScheduleEditor.041")}
+                  </label>
+                  <p className="field-help">{translate("features.schedule.ScheduleEditor.042")}</p>
+                </fieldset>
+              ) : null}
+              <label>
+                {translate("features.schedule.ScheduleEditor.043")}
+                <input
+                  list="schedule-timezones"
+                  value={state.timezoneId}
+                  disabled={readOnly}
+                  onChange={(event) => {
+                    update("timezoneId", event.target.value);
+                    setFoldChoice({ start: undefined, end: undefined });
+                    setAmbiguity({ start: undefined, end: undefined });
+                    clearTimeErrors();
+                  }}
+                  placeholder="Asia/Tokyo"
+                />
+                <datalist id="schedule-timezones">
+                  <option value="Asia/Tokyo" />
+                  <option value="UTC" />
+                  <option value="America/New_York" />
+                  <option value="America/Los_Angeles" />
+                  <option value="Europe/London" />
+                  <option value="Europe/Berlin" />
+                  <option value="Australia/Sydney" />
+                </datalist>
+              </label>
+              {mode === "edit" ? (
+                <p className="field-help">
+                  {translate("features.schedule.ScheduleEditor.046")}
+                  {formatElapsedSeconds(focusSummary.data?.workSeconds ?? 0)}
+                </p>
+              ) : null}
+
+              {mode === "edit" && schedule && !readOnly ? (
+                <ScheduleTicketLink
+                  client={client}
+                  schedule={schedule}
+                  {...(onOpenTickets ? { onOpenTickets } : {})}
+                />
+              ) : null}
+
+              <fieldset>
+                <legend>{translate("features.schedule.ScheduleEditor.047")}</legend>
+                <div className="field-pair">
+                  <NotificationSelect
+                    label={translate("features.schedule.ScheduleEditor.048")}
+                    value={state.startNotificationMinutes}
+                    disabled={readOnly}
+                    onChange={(value) => update("startNotificationMinutes", value)}
+                  />
+                  <NotificationSelect
+                    label={translate("features.schedule.ScheduleEditor.049")}
+                    value={state.endNotificationMinutes}
+                    disabled={readOnly}
+                    onChange={(value) => update("endNotificationMinutes", value)}
+                  />
+                </div>
+                <p className="field-help">{translate("features.schedule.ScheduleEditor.050")}</p>
+              </fieldset>
+
+              <div className="field-pair">
+                <label>
+                  {translate("features.schedule.ScheduleEditor.056")}
+                  <input
+                    value={state.project}
+                    disabled={readOnly}
+                    onChange={(event) => update("project", event.target.value)}
+                  />
+                </label>
+                <label>
+                  {translate("features.schedule.ScheduleEditor.057")}
+                  <input
+                    value={state.category}
+                    disabled={readOnly}
+                    onChange={(event) => update("category", event.target.value)}
+                  />
+                </label>
+              </div>
+              <label>
+                {translate("features.schedule.ScheduleEditor.058")}
+                <input
+                  value={state.tags}
+                  disabled={readOnly}
+                  onChange={(event) => update("tags", event.target.value)}
+                />
+              </label>
+              <div className="field-pair">
+                <label>
+                  {translate("features.schedule.ScheduleEditor.059")}
+                  <select
+                    value={state.status}
+                    disabled={readOnly}
+                    onChange={(event) =>
+                      update("status", event.target.value as FormState["status"])
+                    }
+                  >
+                    <option value="not_started">
+                      {translate("features.schedule.ScheduleEditor.060")}
+                    </option>
+                    <option value="scheduled">
+                      {translate("features.schedule.ScheduleEditor.061")}
+                    </option>
+                    <option value="in_progress">
+                      {translate("features.schedule.ScheduleEditor.062")}
+                    </option>
+                    <option value="completed">
+                      {translate("features.schedule.ScheduleEditor.063")}
+                    </option>
+                    <option value="cancelled">
+                      {translate("features.schedule.ScheduleEditor.064")}
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  {translate("features.schedule.ScheduleEditor.065")}
+                  <input
+                    type="color"
+                    value={state.color}
+                    disabled={readOnly}
+                    onChange={(event) => update("color", event.target.value)}
+                  />
+                </label>
+              </div>
+              <label>
+                {translate("features.schedule.ScheduleEditor.066")}
+                <input
+                  value={state.location}
+                  disabled={readOnly}
+                  onChange={(event) => update("location", event.target.value)}
+                />
+              </label>
+
+              {mode === "edit" && onDuplicate ? (
+                <button
+                  className="button"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onDuplicate()}
+                >
+                  {translate("features.schedule.ScheduleEditor.072")}
+                </button>
+              ) : null}
+
+              {mode === "edit" && onDelete && !readOnly ? (
+                <div className="danger-zone">
+                  {!deletePending ? (
+                    <button
+                      className="button button--danger-outline"
+                      type="button"
+                      onClick={() => setDeletePending(true)}
+                    >
+                      {translate("features.schedule.ScheduleEditor.073")}
+                    </button>
+                  ) : (
+                    <div role="alert">
+                      <strong>{translate("features.schedule.ScheduleEditor.074")}</strong>
+                      <p>
+                        {schedule?.recurrenceRule
+                          ? recurrenceScope === "this"
+                            ? translate("features.schedule.ScheduleEditor.075")
+                            : recurrenceScope === "following"
+                              ? translate("features.schedule.ScheduleEditor.076")
+                              : translate("features.schedule.ScheduleEditor.077")
+                          : translate("features.schedule.ScheduleEditor.078")}
+                        {translate("features.schedule.ScheduleEditor.079")}
+                      </p>
+                      <div className="button-row">
+                        <button
+                          className="button button--danger"
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void onDelete(
+                              schedule?.recurrenceRule
+                                ? { scope: recurrenceScope, occurrenceStartUtc: schedule.startUtc }
+                                : undefined,
+                            )
+                          }
+                        >
+                          {translate("features.schedule.ScheduleEditor.080")}
+                        </button>
+                        <button
+                          className="button"
+                          type="button"
+                          onClick={() => setDeletePending(false)}
+                        >
+                          {translate("features.schedule.ScheduleEditor.081")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </details>
         </div>
-        <label>
-          {translate("features.schedule.ScheduleEditor.058")}
-          <input value={state.tags} onChange={(event) => update("tags", event.target.value)} />
-        </label>
-        <div className="field-pair">
-          <label>
-            {translate("features.schedule.ScheduleEditor.059")}
-            <select
-              value={state.status}
-              onChange={(event) => update("status", event.target.value as FormState["status"])}
-            >
-              <option value="not_started">
-                {translate("features.schedule.ScheduleEditor.060")}
-              </option>
-              <option value="scheduled">{translate("features.schedule.ScheduleEditor.061")}</option>
-              <option value="in_progress">
-                {translate("features.schedule.ScheduleEditor.062")}
-              </option>
-              <option value="completed">{translate("features.schedule.ScheduleEditor.063")}</option>
-              <option value="cancelled">{translate("features.schedule.ScheduleEditor.064")}</option>
-            </select>
-          </label>
-          <label>
-            {translate("features.schedule.ScheduleEditor.065")}
-            <input
-              type="color"
-              value={state.color}
-              onChange={(event) => update("color", event.target.value)}
-            />
-          </label>
-        </div>
-        <label>
-          {translate("features.schedule.ScheduleEditor.066")}
-          <input
-            value={state.location}
-            onChange={(event) => update("location", event.target.value)}
-          />
-        </label>
-        <MarkdownDescriptionField
-          key={schedule?.id ?? "new-schedule"}
-          id="schedule-description"
-          label={translate("features.schedule.ScheduleEditor.067")}
-          rows={8}
-          maxLength={10_000}
-          value={state.description}
-          readOnly={readOnly}
-          onChange={(description) => update("description", description)}
-        />
 
         <div className="inspector__actions">
           <button className="button button--primary" type="submit" disabled={busy || readOnly}>
@@ -723,64 +1054,7 @@ export function ScheduleEditor({
           <button className="button" type="button" onClick={onClose}>
             {translate("features.schedule.ScheduleEditor.071")}
           </button>
-          {mode === "edit" && onDuplicate ? (
-            <button
-              className="button"
-              type="button"
-              disabled={busy}
-              onClick={() => void onDuplicate()}
-            >
-              {translate("features.schedule.ScheduleEditor.072")}
-            </button>
-          ) : null}
         </div>
-
-        {mode === "edit" && onDelete && !readOnly ? (
-          <div className="danger-zone">
-            {!deletePending ? (
-              <button
-                className="button button--danger-outline"
-                type="button"
-                onClick={() => setDeletePending(true)}
-              >
-                {translate("features.schedule.ScheduleEditor.073")}
-              </button>
-            ) : (
-              <div role="alert">
-                <strong>{translate("features.schedule.ScheduleEditor.074")}</strong>
-                <p>
-                  {schedule?.recurrenceRule
-                    ? recurrenceScope === "this"
-                      ? translate("features.schedule.ScheduleEditor.075")
-                      : recurrenceScope === "following"
-                        ? translate("features.schedule.ScheduleEditor.076")
-                        : translate("features.schedule.ScheduleEditor.077")
-                    : translate("features.schedule.ScheduleEditor.078")}
-                  {translate("features.schedule.ScheduleEditor.079")}
-                </p>
-                <div className="button-row">
-                  <button
-                    className="button button--danger"
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      void onDelete(
-                        schedule?.recurrenceRule
-                          ? { scope: recurrenceScope, occurrenceStartUtc: schedule.startUtc }
-                          : undefined,
-                      )
-                    }
-                  >
-                    {translate("features.schedule.ScheduleEditor.080")}
-                  </button>
-                  <button className="button" type="button" onClick={() => setDeletePending(false)}>
-                    {translate("features.schedule.ScheduleEditor.081")}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : null}
       </form>
     </aside>
   );
@@ -812,6 +1086,64 @@ function formatElapsedSeconds(totalSeconds: number): string {
   return hours > 0
     ? translate("features.schedule.ScheduleEditor.082", [hours, minutes, seconds])
     : translate("features.schedule.ScheduleEditor.083", [minutes, seconds]);
+}
+
+function TimeInput({
+  id,
+  label,
+  choiceLabel,
+  value,
+  options,
+  disabled,
+  invalid,
+  describedBy,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  choiceLabel: string;
+  value: string;
+  options: string[];
+  disabled: boolean;
+  invalid: boolean;
+  describedBy: string | undefined;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="schedule-time-field">
+      <label htmlFor={id}>{label}</label>
+      <span className="time-input">
+        <input
+          id={id}
+          type="time"
+          step={60}
+          value={value}
+          disabled={disabled}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <select
+          className="time-input__choices"
+          aria-label={choiceLabel}
+          value=""
+          disabled={disabled}
+          onChange={(event) => {
+            if (event.target.value) {
+              onChange(event.target.value);
+            }
+          }}
+        >
+          <option value="">{translate("features.schedule.ScheduleEditor.103")}</option>
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </span>
+    </div>
+  );
 }
 
 function AmbiguousTimeChoice({
@@ -859,16 +1191,18 @@ function AmbiguousTimeChoice({
 function NotificationSelect({
   label,
   value,
+  disabled,
   onChange,
 }: {
   label: string;
   value: string;
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
   return (
     <label>
       {label}
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
         <option value="">{translate("features.schedule.ScheduleEditor.088")}</option>
         <option value="0">{translate("features.schedule.ScheduleEditor.089")}</option>
         <option value="5">{translate("features.schedule.ScheduleEditor.090")}</option>
