@@ -146,6 +146,23 @@ describe("Day Schedule Next native smoke", () => {
     expect(applied).toEqual({ documentTheme: theme, persistedTheme: theme });
   };
 
+  const chooseScheduleTime = async (label: string, value: string) => {
+    await browser.execute(
+      ({ label, value }) => {
+        const select = Array.from(document.querySelectorAll<HTMLSelectElement>("select")).find(
+          (candidate) => candidate.getAttribute("aria-label") === label,
+        );
+        if (!select) throw new Error(`schedule time select was not found: ${label}`);
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(
+          select,
+          value,
+        );
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      },
+      { label, value },
+    );
+  };
+
   it("boots the real Tauri application and reaches the native IPC boundary", async () => {
     await $(".app-shell").waitForDisplayed();
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
@@ -167,12 +184,119 @@ describe("Day Schedule Next native smoke", () => {
     const titleInput = $('//aside//label[contains(., "タイトル")]/input');
     await titleInput.waitForDisplayed();
     await titleInput.setValue(title);
+    const startTimeInput = $("#schedule-start-time");
+    const endTimeInput = $("#schedule-end-time");
+    await browser.execute(() => {
+      const input = document.querySelector<HTMLInputElement>("#schedule-start-time");
+      if (!input) throw new Error("schedule start time input was not found");
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+        input,
+        "10:07",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect(startTimeInput).toHaveValue("10:07");
+    await expect(endTimeInput).toHaveValue("10:37");
+    await chooseScheduleTime("開始時刻の候補", "10:10");
+    await expect(startTimeInput).toHaveValue("10:10");
+    await expect(endTimeInput).toHaveValue("10:40");
+    await chooseScheduleTime("終了時刻の候補", "10:45");
+    await $('//button[@aria-label="5分後へ移動"]').click();
+    await expect(startTimeInput).toHaveValue("10:15");
+    await expect(endTimeInput).toHaveValue("10:50");
+    await $('//button[@aria-label="5分短くする"]').click();
+    await expect(endTimeInput).toHaveValue("10:45");
+    await $('//button[@aria-label="所要時間を15分にする"]').click();
+    await expect(endTimeInput).toHaveValue("10:30");
+    await $("#schedule-description").setValue("合成予定の入力証跡");
+
+    const details = $(".schedule-details");
+    await expect(details).not.toHaveAttribute("open");
+    const primaryGeometry = await browser.execute(() => {
+      const inspector = document.querySelector<HTMLElement>(".inspector");
+      const actions = document.querySelector<HTMLElement>(".inspector__actions");
+      const body = document.querySelector<HTMLElement>(".inspector__form-body");
+      if (!inspector || !actions || !body) throw new Error("schedule editor layout was not found");
+      const inspectorRect = inspector.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      return {
+        actionsVisible:
+          actionsRect.top >= inspectorRect.top && actionsRect.bottom <= inspectorRect.bottom + 1,
+        horizontalOverflow: body.scrollWidth - body.clientWidth,
+      };
+    });
+    expect(primaryGeometry.actionsVisible).toBe(true);
+    expect(primaryGeometry.horizontalOverflow).toBeLessThanOrEqual(1);
+    await setExactLogicalViewportSize(1180, 820);
+    await browser.execute(() => {
+      const body = document.querySelector<HTMLElement>(".inspector__form-body");
+      if (!body) throw new Error("schedule editor body was not found");
+      body.scrollTop = 0;
+    });
+    await browser.saveScreenshot("./test-results/native-schedule-editor-primary.png");
+
+    await browser.execute(async () => {
+      document.documentElement.style.fontSize = "200%";
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+    });
+    await browser.waitUntil(
+      async () =>
+        browser.execute(
+          () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) >= 32,
+        ),
+      { timeout: 2_000 },
+    );
+    const zoomGeometry = await browser.execute(() => {
+      const inspector = document.querySelector<HTMLElement>(".inspector");
+      const actions = document.querySelector<HTMLElement>(".inspector__actions");
+      const body = document.querySelector<HTMLElement>(".inspector__form-body");
+      if (!inspector || !actions || !body) throw new Error("schedule editor layout was not found");
+      const inspectorRect = inspector.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      return {
+        actionsVisible:
+          actionsRect.top >= inspectorRect.top && actionsRect.bottom <= inspectorRect.bottom + 1,
+        horizontalOverflow: body.scrollWidth - body.clientWidth,
+      };
+    });
+    expect(zoomGeometry.actionsVisible).toBe(true);
+    expect(zoomGeometry.horizontalOverflow).toBeLessThanOrEqual(1);
+    await browser.saveScreenshot("./test-results/native-schedule-editor-text-200.png");
+    await browser.execute(async () => {
+      document.documentElement.style.fontSize = "100%";
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+    });
+    await browser.waitUntil(
+      async () =>
+        browser.execute(
+          () =>
+            Number.parseFloat(getComputedStyle(document.querySelector(".inspector h2")!).fontSize) <
+            30,
+        ),
+      { timeout: 2_000 },
+    );
+
+    await chooseScheduleTime("開始時刻の候補", "23:30");
+    await chooseScheduleTime("終了時刻の候補", "00:30");
+    await expect($('//span[normalize-space(.)="翌日"]')).toBeDisplayed();
+    await $('//label[contains(., "終了日")]/input[@type="date"]').waitForDisplayed();
+    await browser.saveScreenshot("./test-results/native-schedule-editor-cross-midnight.png");
+    await browser.execute(() => {
+      document.documentElement.style.fontSize = "";
+    });
     await $('//aside//button[normalize-space(.)="予定を作成"]').click();
     const created = $(`//*[normalize-space(.)="${title}"]`);
     await created.waitForDisplayed();
+    await setExactLogicalViewportSize(1024, 640);
     await saveAppShellAtLogicalSize("./test-results/native-today.png", 1024, 640);
 
     await $(`//button[starts-with(@aria-label, "${title} ")]`).click();
+    await $('//aside//*[@role="tab" and normalize-space(.)="編集"]').click();
     const description = $("#schedule-description");
     await description.waitForDisplayed();
     await description.setValue(
@@ -190,7 +314,7 @@ describe("Day Schedule Next native smoke", () => {
     await plainExternalLink.waitForDisplayed();
     await expect(plainExternalLink).toHaveAttribute("href", "https://example.invalid/runbook");
     await browser.execute(() => {
-      const inspector = document.querySelector<HTMLElement>(".inspector");
+      const inspector = document.querySelector<HTMLElement>(".inspector__form-body");
       const region = document.querySelector<HTMLElement>("#schedule-description-plain-panel");
       if (!inspector || !region) throw new Error("schedule plain preview was not found");
       inspector.scrollTop = Math.max(0, region.offsetTop - 180);
@@ -203,7 +327,7 @@ describe("Day Schedule Next native smoke", () => {
     await externalLink.waitForDisplayed();
     await expect(externalLink).toHaveAttribute("href", "https://example.invalid/runbook");
     const inspectorScrollTop = await browser.execute(() => {
-      const inspector = document.querySelector<HTMLElement>(".inspector");
+      const inspector = document.querySelector<HTMLElement>(".inspector__form-body");
       const region = document.querySelector<HTMLElement>("#schedule-description-markdown-panel");
       if (!inspector || !region) throw new Error("schedule Markdown preview was not found");
       inspector.scrollTop = Math.max(0, region.offsetTop - 180);

@@ -1677,9 +1677,12 @@ button:disabled {
 .inspector {
   position: absolute;
   inset: 0 0 76px auto;
+  display: grid;
   width: 360px;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
   padding: 18px;
-  overflow: auto;
+  overflow: hidden;
   background: var(--surface-raised);
   border-left: 1px solid var(--border);
   box-shadow: -10px 0 24px rgb(30 43 66 / 8%);
@@ -1696,9 +1699,23 @@ button:disabled {
   font-size: 1.2rem;
 }
 
-.inspector__form,
 .settings-grid section {
   display: grid;
+  gap: 13px;
+}
+
+.inspector__form {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.inspector__form-body {
+  display: grid;
+  min-height: 0;
+  padding: 2px 4px 18px 2px;
+  overflow-y: auto;
+  align-content: start;
   gap: 13px;
 }
 
@@ -2036,20 +2053,123 @@ textarea[aria-invalid="true"] {
 }
 
 .time-adjuster {
+  display: grid;
+  gap: 10px;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
+  background: var(--surface-soft);
 }
 
-.time-adjuster legend {
-  padding: 0 5px;
+.time-adjuster__group {
+  display: grid;
+  gap: 6px;
+}
+
+.time-adjuster__group > span {
   color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.schedule-time-card {
+  display: grid;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.schedule-time-card > legend {
+  padding: 0 5px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.schedule-time-card__times {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.schedule-time-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.time-input {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 5px;
+}
+
+.time-input__choices {
+  padding-inline: 7px;
   font-size: 0.72rem;
 }
 
-.inspector__actions {
+.schedule-time-card__end-date {
+  display: flex;
+  align-items: end;
   gap: 8px;
-  padding-top: 5px;
+}
+
+.schedule-time-card__end-date label {
+  min-width: 0;
+  flex: 1;
+}
+
+.schedule-time-card__end-date .state-chip {
+  min-height: 26px;
+  margin-bottom: 7px;
+  white-space: nowrap;
+}
+
+.time-adjuster .button-row--wrap button,
+.time-input select {
+  min-height: 44px;
+}
+
+.time-adjuster button[aria-pressed="true"] {
+  color: var(--primary-strong);
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.schedule-details {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.schedule-details > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.schedule-details__body {
+  display: grid;
+  padding: 4px 12px 14px;
+  gap: 13px;
+}
+
+.inspector__actions {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
 }
 
 .danger-zone {

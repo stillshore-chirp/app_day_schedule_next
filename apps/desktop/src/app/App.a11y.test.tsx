@@ -61,6 +61,35 @@ describe("App accessibility", () => {
     expect(screen.getByLabelText("タイトル")).toHaveFocus();
   });
 
+  it("has no automated serious or critical violations in schedule creation", async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <App client={new MemoryAppClient()} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("heading", { name: "詳細タイムライン" });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "n", metaKey: true }));
+    });
+    await screen.findByRole("heading", { name: "予定を作成" });
+
+    const result = await act(() =>
+      axe.run(container, {
+        runOnly: {
+          type: "tag",
+          values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"],
+        },
+        rules: { "color-contrast": { enabled: false } },
+      }),
+    );
+    expect(
+      result.violations.filter((violation) =>
+        ["serious", "critical"].includes(violation.impact ?? ""),
+      ),
+    ).toEqual([]);
+  });
+
   it("has no automated serious or critical violations in configured Google settings", async () => {
     class ConfiguredGoogleClient extends MemoryAppClient {
       override googleConnection(): Promise<GoogleConnection> {
