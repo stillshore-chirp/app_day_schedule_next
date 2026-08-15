@@ -2090,7 +2090,7 @@ textarea[aria-invalid="true"] {
 
 .schedule-time-card__times {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -2102,14 +2102,60 @@ textarea[aria-invalid="true"] {
 
 .time-input {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr) 76px;
   gap: 5px;
 }
 
+.time-input > input {
+  min-width: 0;
+}
+
+.time-input__choice-trigger {
+  position: relative;
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  place-items: center;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+
+.time-input__choice-trigger:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.time-input__choice-trigger[data-disabled="true"] {
+  opacity: 0.55;
+}
+
 .time-input__choices {
-  padding-inline: 7px;
-  font-size: 0.72rem;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.time-input__choices:disabled {
+  cursor: not-allowed;
+}
+
+.time-input__choice-icon {
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  pointer-events: none;
+  transform: translateY(-2px) rotate(45deg);
 }
 
 .schedule-time-card__end-date {
@@ -2129,8 +2175,7 @@ textarea[aria-invalid="true"] {
   white-space: nowrap;
 }
 
-.time-adjuster .button-row--wrap button,
-.time-input select {
+.time-adjuster .button-row--wrap button {
   min-height: 44px;
 }
 

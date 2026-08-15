@@ -93,16 +93,27 @@ describe("ScheduleEditor", () => {
 
     const start = screen.getByLabelText("開始時刻");
     const end = screen.getByLabelText("終了時刻");
+    const startChoice = screen.getByLabelText("開始時刻の候補");
+    const endChoice = screen.getByLabelText("終了時刻の候補");
+    expect(startChoice).toHaveAttribute("title", "開始時刻の候補");
+    expect(endChoice).toHaveAttribute("title", "終了時刻の候補");
+    expect(startChoice.parentElement).toHaveClass("time-input__choice-trigger");
+    expect(endChoice.parentElement).toHaveClass("time-input__choice-trigger");
     fireEvent.change(start, { target: { value: "10:07" } });
     expect(start).toHaveValue("10:07");
     expect(end).toHaveValue("10:37");
+    expect(startChoice).toHaveValue("10:07");
+    expect(endChoice).toHaveValue("10:37");
     expect(screen.getByRole("option", { name: "10:07" })).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("開始時刻の候補"), "10:10");
+    await user.selectOptions(startChoice, "10:10");
     expect(start).toHaveValue("10:10");
     expect(end).toHaveValue("10:40");
-    await user.selectOptions(screen.getByLabelText("終了時刻の候補"), "10:45");
+    expect(startChoice).toHaveValue("10:10");
+    expect(endChoice).toHaveValue("10:40");
+    await user.selectOptions(endChoice, "10:45");
     expect(end).toHaveValue("10:45");
+    expect(endChoice).toHaveValue("10:45");
 
     await user.click(screen.getByRole("button", { name: "5分後へ移動" }));
     expect(start).toHaveValue("10:15");
