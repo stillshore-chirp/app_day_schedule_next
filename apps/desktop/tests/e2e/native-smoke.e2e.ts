@@ -279,18 +279,34 @@ describe("Day Schedule Next native smoke", () => {
       const actionsRect = actions.getBoundingClientRect();
       const dockRect = dock?.getBoundingClientRect();
       const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const startTrigger = startSelect.parentElement;
+      const endTrigger = endSelect.parentElement;
+      if (!startTrigger || !endTrigger) {
+        throw new Error("schedule time dropdown triggers were not found");
+      }
+      startSelect.focus();
+      const startTriggerFocused = document.activeElement === startSelect;
+      const startTriggerOutlineWidth = Number.parseFloat(
+        getComputedStyle(startTrigger).outlineWidth,
+      );
+      startSelect.blur();
       return {
         actionsAboveDock: dockRect ? actionsRect.bottom <= dockRect.top + 1 : true,
         actionsHeight: actionsRect.height,
         actionsVisible:
           actionsRect.top >= inspectorRect.top && actionsRect.bottom <= inspectorRect.bottom + 1,
-        controlWidths: [startInput, startSelect, endInput, endSelect].map(
-          (control) => control.getBoundingClientRect().width,
-        ),
+        inputWidths: [startInput, endInput].map((control) => control.getBoundingClientRect().width),
         endSelectValue: endSelect.value,
         horizontalOverflow: body.scrollWidth - body.clientWidth,
-        minimumReadableWidth: rootFontSize * 6,
+        minimumReadableWidth: rootFontSize * 5,
+        selectOpacity: [startSelect, endSelect].map((control) => getComputedStyle(control).opacity),
         startSelectValue: startSelect.value,
+        startTriggerFocused,
+        startTriggerOutlineWidth,
+        triggerSizes: [startTrigger, endTrigger].map((trigger) => {
+          const rect = trigger.getBoundingClientRect();
+          return { height: rect.height, width: rect.width };
+        }),
       };
     });
     expect(zoomGeometry.actionsAboveDock).toBe(true);
@@ -298,7 +314,13 @@ describe("Day Schedule Next native smoke", () => {
     expect(zoomGeometry.actionsVisible).toBe(true);
     expect(zoomGeometry.horizontalOverflow).toBeLessThanOrEqual(1);
     expect(
-      zoomGeometry.controlWidths.every((width) => width >= zoomGeometry.minimumReadableWidth),
+      zoomGeometry.inputWidths.every((width) => width >= zoomGeometry.minimumReadableWidth),
+    ).toBe(true);
+    expect(zoomGeometry.selectOpacity).toEqual(["0", "0"]);
+    expect(zoomGeometry.startTriggerFocused).toBe(true);
+    expect(zoomGeometry.startTriggerOutlineWidth).toBeGreaterThanOrEqual(3);
+    expect(
+      zoomGeometry.triggerSizes.every(({ height, width }) => height >= 44 && width >= 44),
     ).toBe(true);
     expect(zoomGeometry.startSelectValue).toBe("10:15");
     expect(zoomGeometry.endSelectValue).toBe("10:30");

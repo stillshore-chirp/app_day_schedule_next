@@ -1123,26 +1123,32 @@ function TimeInput({
           aria-describedby={describedBy}
           onChange={(event) => onChange(event.target.value)}
         />
-        <select
-          className="time-input__choices"
-          aria-label={choiceLabel}
-          value={value}
-          disabled={disabled}
-          onChange={(event) => {
-            if (event.target.value) {
-              onChange(event.target.value);
-            }
-          }}
-        >
-          <option value="" disabled>
-            {translate("features.schedule.ScheduleEditor.103")}
-          </option>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
+        <span className="time-input__choice-trigger" data-disabled={disabled ? "true" : "false"}>
+          <select
+            className="time-input__choices"
+            aria-label={choiceLabel}
+            aria-invalid={invalid}
+            aria-describedby={describedBy}
+            title={choiceLabel}
+            value={value}
+            disabled={disabled}
+            onChange={(event) => {
+              if (event.target.value) {
+                onChange(event.target.value);
+              }
+            }}
+          >
+            <option value="" disabled>
+              {translate("features.schedule.ScheduleEditor.103")}
             </option>
-          ))}
-        </select>
+            {options.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <span className="time-input__choice-icon" aria-hidden="true" />
+        </span>
       </span>
     </div>
   );

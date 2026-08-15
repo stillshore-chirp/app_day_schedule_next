@@ -95,6 +95,10 @@ describe("ScheduleEditor", () => {
     const end = screen.getByLabelText("終了時刻");
     const startChoice = screen.getByLabelText("開始時刻の候補");
     const endChoice = screen.getByLabelText("終了時刻の候補");
+    expect(startChoice).toHaveAttribute("title", "開始時刻の候補");
+    expect(endChoice).toHaveAttribute("title", "終了時刻の候補");
+    expect(startChoice.parentElement).toHaveClass("time-input__choice-trigger");
+    expect(endChoice.parentElement).toHaveClass("time-input__choice-trigger");
     fireEvent.change(start, { target: { value: "10:07" } });
     expect(start).toHaveValue("10:07");
     expect(end).toHaveValue("10:37");
