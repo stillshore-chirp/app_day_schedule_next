@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DayTemplate } from "../shared/contracts";
+import type { DayTemplate, Schedule } from "../shared/contracts";
 import { MemoryAppClient } from "../shared/ipc/memory-client";
 import { App } from "./App";
 import { useUiStore } from "./ui-store";
@@ -15,6 +15,42 @@ afterEach(() => {
 });
 
 describe("App time-tool navigation", () => {
+  it("keeps priority tickets visible when the schedule query fails", async () => {
+    class FailingScheduleClient extends MemoryAppClient {
+      override listSchedules(): Promise<{ items: Schedule[]; total: number }> {
+        return Promise.reject(new Error("synthetic schedule query failure"));
+      }
+    }
+    const client = new FailingScheduleClient([]);
+    const board = await client.ticketBoard();
+    await client.createTicket(crypto.randomUUID(), {
+      boardId: board.id,
+      columnId: board.columns.find((column) => column.kind === "next")!.id,
+      parentTicketId: null,
+      title: "予定障害中も確認する優先チケット",
+      description: "synthetic fixture",
+      priority: "urgent",
+      dueDate: null,
+      estimateMinutes: null,
+      tags: [],
+      checklist: [],
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App client={client} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("予定を読み込めませんでした");
+    expect(await screen.findByText("予定障害中も確認する優先チケット")).toBeVisible();
+    expect(screen.getByRole("button", { name: /優先チケット/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.queryByRole("heading", { name: "詳細タイムライン" })).toBeNull();
+  });
+
   it("starts with an icon-only sidebar and preserves an explicit expanded choice", async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -127,7 +163,15 @@ describe("App time-tool navigation", () => {
     expect(
       screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent),
     ).toEqual(
-      expect.arrayContaining(["Inbox", "Backlog", "Next", "In Progress", "Waiting", "Done"]),
+      expect.arrayContaining([
+        "Inbox",
+        "Backlog",
+        "Next",
+        "In Progress",
+        "Waiting",
+        "Done",
+        "Omit",
+      ]),
     );
     expect(screen.queryByRole("heading", { name: "詳細タイムライン" })).toBeNull();
     expect(screen.queryByRole("searchbox", { name: "予定を検索" })).toBeNull();

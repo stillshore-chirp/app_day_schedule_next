@@ -4,6 +4,8 @@
 
 Ticket is the local source of truth. The adapter synchronizes only `title`, `notes`, date-only `due`, `completed`, `parent`, and Task List. Priority, estimate, tags, checklist, Schedule links, and Focus records remain local and are never encoded into remote notes.
 
+Local completion corresponds only to the Done column. Omit is a local, non-completed reference column. Moving between non-Done columns, including Omit, creates no Google Tasks Outbox work because the column is local-only. Moving Omit to Done completes the Google Task, and moving Done to Omit reopens it. Google Tasks does not receive an Omit column value.
+
 Google Tasks limits used by validation are title 1,024 characters, notes 8,192 characters, and list page size 100. Values are counted as Unicode characters and are rejected without truncation. Assigned tasks are excluded from the initial release.
 
 Official references:

@@ -39,7 +39,22 @@ const ticketDraft: TicketDraft = {
 };
 
 describe("MemoryAppClient", () => {
-  it("implements idempotent versioned ticket lifecycle and Done restoration", async () => {
+  it("restores a Done ticket to its previous non-Done column", async () => {
+    const client = new MemoryAppClient([]);
+    const created = await client.createTicket(crypto.randomUUID(), ticketDraft);
+    const done = await client.moveTicket({
+      operationId: crypto.randomUUID(),
+      id: created.id,
+      expectedVersion: created.version,
+      targetColumnId: "00000000-0000-4000-8000-000000000106",
+    });
+    const reopened = await client.reopenTicket(crypto.randomUUID(), done.id, done.version);
+
+    expect(reopened.columnId).toBe(ticketDraft.columnId);
+    expect(reopened.completedAt).toBeNull();
+  });
+
+  it("keeps Omit incomplete and restores Done tickets to Omit", async () => {
     const client = new MemoryAppClient([]);
     const operationId = crypto.randomUUID();
     const created = await client.createTicket(operationId, ticketDraft);
@@ -51,19 +66,27 @@ describe("MemoryAppClient", () => {
       expectedVersion: created.version,
       patch: { title: "updated synthetic ticket" },
     });
-    const done = await client.moveTicket({
+    const omitted = await client.moveTicket({
       operationId: crypto.randomUUID(),
       id: updated.id,
       expectedVersion: updated.version,
+      targetColumnId: "00000000-0000-4000-8000-000000000107",
+    });
+    expect(omitted.completedAt).toBeNull();
+    const done = await client.moveTicket({
+      operationId: crypto.randomUUID(),
+      id: omitted.id,
+      expectedVersion: omitted.version,
       targetColumnId: "00000000-0000-4000-8000-000000000106",
     });
     expect(done.completedAt).not.toBeNull();
     const reopened = await client.reopenTicket(crypto.randomUUID(), done.id, done.version);
-    expect(reopened.columnId).toBe(ticketDraft.columnId);
+    expect(reopened.columnId).toBe("00000000-0000-4000-8000-000000000107");
     expect(reopened.completedAt).toBeNull();
     expect((await client.ticketHistory(created.id)).map((item) => item.action)).toEqual([
       "reopen",
       "complete",
+      "move",
       "update",
       "create",
     ]);

@@ -15,6 +15,8 @@ pub const DEFAULT_TICKET_BOARD_ID: Uuid = Uuid::from_u128(0x00000000_0000_4000_8
 pub const INBOX_TICKET_COLUMN_ID: Uuid = Uuid::from_u128(0x00000000_0000_4000_8000_000000000101);
 #[cfg(test)]
 pub const DONE_TICKET_COLUMN_ID: Uuid = Uuid::from_u128(0x00000000_0000_4000_8000_000000000106);
+#[cfg(test)]
+pub const OMIT_TICKET_COLUMN_ID: Uuid = Uuid::from_u128(0x00000000_0000_4000_8000_000000000107);
 
 impl Database {
     pub async fn ticket_board(&self, board_id: Uuid) -> AppResult<TicketBoard> {
@@ -1057,6 +1059,7 @@ fn parse_column_kind(value: &str) -> AppResult<TicketColumnKind> {
         "in_progress" => Ok(TicketColumnKind::InProgress),
         "waiting" => Ok(TicketColumnKind::Waiting),
         "done" => Ok(TicketColumnKind::Done),
+        "omit" => Ok(TicketColumnKind::Omit),
         _ => Err(AppError::database(
             "ticket-column-kind",
             "unknown column kind",
@@ -1171,11 +1174,25 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fresh_database_seeds_one_board_and_six_columns_once() {
+    async fn fresh_database_seeds_one_board_and_seven_columns_once() {
         let database = Database::open_memory().await.unwrap();
+        let board = database.default_ticket_board().await.unwrap();
+        assert_eq!(board.columns.len(), 7);
         assert_eq!(
-            database.default_ticket_board().await.unwrap().columns.len(),
-            6
+            board
+                .columns
+                .iter()
+                .map(|column| (column.kind, column.name.as_str(), column.sort_order))
+                .collect::<Vec<_>>(),
+            vec![
+                (TicketColumnKind::Inbox, "Inbox", 0),
+                (TicketColumnKind::Backlog, "Backlog", 1),
+                (TicketColumnKind::Next, "Next", 2),
+                (TicketColumnKind::InProgress, "In Progress", 3),
+                (TicketColumnKind::Waiting, "Waiting", 4),
+                (TicketColumnKind::Done, "Done", 5),
+                (TicketColumnKind::Omit, "Omit", 6),
+            ]
         );
         let boards: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ticket_boards")
             .fetch_one(&database.pool)
@@ -1279,7 +1296,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn done_reopens_to_previous_column_and_delete_is_hidden_by_default() {
+    async fn done_reopens_to_previous_non_done_column() {
+        let database = Database::open_memory().await.unwrap();
+        let created = database
+            .create_ticket(
+                Uuid::new_v4(),
+                draft("restore previous column", INBOX_TICKET_COLUMN_ID),
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        let done = database
+            .move_ticket(
+                Uuid::new_v4(),
+                created.id,
+                created.version,
+                DONE_TICKET_COLUMN_ID,
+                None,
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        assert!(done.completed_at.is_some());
+        assert_eq!(done.last_non_done_column_id, Some(INBOX_TICKET_COLUMN_ID));
+
+        let reopened = database
+            .reopen_ticket(Uuid::new_v4(), created.id, done.version, Utc::now())
+            .await
+            .unwrap();
+        assert_eq!(reopened.column_id, INBOX_TICKET_COLUMN_ID);
+        assert!(reopened.completed_at.is_none());
+    }
+
+    #[tokio::test]
+    async fn omit_stays_incomplete_and_done_reopens_to_omit() {
         let database = Database::open_memory().await.unwrap();
         let created = database
             .create_ticket(
@@ -1289,11 +1339,24 @@ mod tests {
             )
             .await
             .unwrap();
-        let done = database
+        let omitted = database
             .move_ticket(
                 Uuid::new_v4(),
                 created.id,
                 0,
+                OMIT_TICKET_COLUMN_ID,
+                None,
+                Utc::now(),
+            )
+            .await
+            .unwrap();
+        assert!(omitted.completed_at.is_none());
+        assert_eq!(omitted.last_non_done_column_id, Some(OMIT_TICKET_COLUMN_ID));
+        let done = database
+            .move_ticket(
+                Uuid::new_v4(),
+                created.id,
+                omitted.version,
                 DONE_TICKET_COLUMN_ID,
                 None,
                 Utc::now(),
@@ -1301,15 +1364,15 @@ mod tests {
             .await
             .unwrap();
         assert!(done.completed_at.is_some());
-        assert_eq!(done.last_non_done_column_id, Some(INBOX_TICKET_COLUMN_ID));
+        assert_eq!(done.last_non_done_column_id, Some(OMIT_TICKET_COLUMN_ID));
         let reopened = database
-            .reopen_ticket(Uuid::new_v4(), created.id, 1, Utc::now())
+            .reopen_ticket(Uuid::new_v4(), created.id, done.version, Utc::now())
             .await
             .unwrap();
-        assert_eq!(reopened.column_id, INBOX_TICKET_COLUMN_ID);
+        assert_eq!(reopened.column_id, OMIT_TICKET_COLUMN_ID);
         assert!(reopened.completed_at.is_none());
         database
-            .delete_ticket(Uuid::new_v4(), created.id, 2, Utc::now())
+            .delete_ticket(Uuid::new_v4(), created.id, reopened.version, Utc::now())
             .await
             .unwrap();
         assert_eq!(
@@ -1431,7 +1494,7 @@ mod tests {
         );
         assert_eq!(
             database.default_ticket_board().await.unwrap().columns.len(),
-            6
+            7
         );
     }
 
@@ -1493,5 +1556,201 @@ mod tests {
         assert_eq!(version, "14");
         assert_eq!(schedules, 1);
         assert_eq!(columns, 6);
+    }
+
+    #[tokio::test]
+    async fn migration_v18_preserves_v17_ticket_and_google_task_references() {
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")
+            .unwrap()
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let v17 = sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                super::super::database::MIGRATOR
+                    .migrations
+                    .iter()
+                    .filter(|migration| migration.version <= 17)
+                    .cloned()
+                    .collect(),
+            ),
+            ..super::super::database::MIGRATOR
+        };
+        v17.run(&pool).await.unwrap();
+
+        let now = Utc::now().to_rfc3339();
+        let ticket_id = Uuid::new_v4();
+        let account_id = Uuid::new_v4();
+        let list_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO tickets(id, board_id, column_id, last_non_done_column_id, title, description, priority, sort_key, version, created_at_utc, updated_at_utc) VALUES (?, ?, ?, ?, 'preserved ticket', '', 'high', 1024, 0, ?, ?)",
+        )
+        .bind(ticket_id.to_string())
+        .bind(DEFAULT_TICKET_BOARD_ID.to_string())
+        .bind(INBOX_TICKET_COLUMN_ID.to_string())
+        .bind(INBOX_TICKET_COLUMN_ID.to_string())
+        .bind(&now)
+        .bind(&now)
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query("INSERT INTO google_accounts(id, display_label, scopes_json, status, created_at_utc, updated_at_utc) VALUES (?, 'Synthetic Google', '[]', 'connected', ?, ?)")
+            .bind(account_id.to_string())
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO google_task_lists(id, google_account_id, remote_list_id, display_name, created_at_utc, updated_at_utc) VALUES (?, ?, 'synthetic-list', 'Synthetic list', ?, ?)")
+            .bind(list_id.to_string())
+            .bind(account_id.to_string())
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO google_task_mappings(ticket_id, google_task_list_id, remote_task_id, base_snapshot_json, created_at_utc, updated_at_utc) VALUES (?, ?, 'synthetic-task', '{}', ?, ?)")
+            .bind(ticket_id.to_string())
+            .bind(list_id.to_string())
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        super::super::database::run_migrations(&pool).await.unwrap();
+
+        let version: String =
+            sqlx::query_scalar("SELECT value FROM app_meta WHERE key = 'schema_version'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let columns: Vec<(String, String, i32)> = sqlx::query_as(
+            "SELECT kind, name, sort_order FROM ticket_columns WHERE board_id = ? ORDER BY sort_order",
+        )
+        .bind(DEFAULT_TICKET_BOARD_ID.to_string())
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        let preserved: (String, Option<String>) =
+            sqlx::query_as("SELECT column_id, last_non_done_column_id FROM tickets WHERE id = ?")
+                .bind(ticket_id.to_string())
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let mappings: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM google_task_mappings")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let foreign_key_violations = sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+        let invalid_kind = sqlx::query("INSERT INTO ticket_columns(id, board_id, kind, name, sort_order, version, created_at_utc, updated_at_utc) VALUES (?, ?, 'unknown', 'Unknown', 7, 0, ?, ?)")
+            .bind(Uuid::new_v4().to_string())
+            .bind(DEFAULT_TICKET_BOARD_ID.to_string())
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await;
+
+        assert_eq!(version, "18");
+        assert_eq!(columns.len(), 7);
+        assert_eq!(columns.last(), Some(&("omit".into(), "Omit".into(), 6)));
+        assert_eq!(
+            preserved,
+            (
+                INBOX_TICKET_COLUMN_ID.to_string(),
+                Some(INBOX_TICKET_COLUMN_ID.to_string())
+            )
+        );
+        assert_eq!(mappings, 1);
+        assert!(foreign_key_violations.is_empty());
+        assert!(invalid_kind.is_err());
+    }
+
+    #[tokio::test]
+    async fn migration_v18_rolls_back_when_foreign_key_validation_fails() {
+        let options = SqliteConnectOptions::from_str("sqlite::memory:")
+            .unwrap()
+            .foreign_keys(true);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(options)
+            .await
+            .unwrap();
+        let v17 = sqlx::migrate::Migrator {
+            migrations: std::borrow::Cow::Owned(
+                super::super::database::MIGRATOR
+                    .migrations
+                    .iter()
+                    .filter(|migration| migration.version <= 17)
+                    .cloned()
+                    .collect(),
+            ),
+            ..super::super::database::MIGRATOR
+        };
+        v17.run(&pool).await.unwrap();
+
+        let now = Utc::now().to_rfc3339();
+        let mut connection = pool.acquire().await.unwrap();
+        sqlx::query("PRAGMA foreign_keys = OFF")
+            .execute(&mut *connection)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO tickets(id, board_id, column_id, last_non_done_column_id, title, description, priority, sort_key, version, created_at_utc, updated_at_utc) VALUES (?, ?, ?, ?, 'orphan fixture', '', 'normal', 1024, 0, ?, ?)",
+        )
+        .bind(Uuid::new_v4().to_string())
+        .bind(DEFAULT_TICKET_BOARD_ID.to_string())
+        .bind(Uuid::new_v4().to_string())
+        .bind(INBOX_TICKET_COLUMN_ID.to_string())
+        .bind(&now)
+        .bind(&now)
+        .execute(&mut *connection)
+        .await
+        .unwrap();
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(&mut *connection)
+            .await
+            .unwrap();
+        drop(connection);
+
+        assert!(super::super::database::run_migrations(&pool).await.is_err());
+
+        let version: String =
+            sqlx::query_scalar("SELECT value FROM app_meta WHERE key = 'schema_version'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let columns: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ticket_columns")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let applied_v18: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM _sqlx_migrations WHERE version = 18")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        let foreign_keys_enabled: bool = sqlx::query_scalar("PRAGMA foreign_keys")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let omit_rejected = sqlx::query("INSERT INTO ticket_columns(id, board_id, kind, name, sort_order, version, created_at_utc, updated_at_utc) VALUES (?, ?, 'omit', 'Omit', 6, 0, ?, ?)")
+            .bind(Uuid::new_v4().to_string())
+            .bind(DEFAULT_TICKET_BOARD_ID.to_string())
+            .bind(&now)
+            .bind(&now)
+            .execute(&pool)
+            .await;
+
+        assert_eq!(version, "17");
+        assert_eq!(columns, 6);
+        assert_eq!(applied_v18, 0);
+        assert!(foreign_keys_enabled);
+        assert!(omit_rejected.is_err());
     }
 }

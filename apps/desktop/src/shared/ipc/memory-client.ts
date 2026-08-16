@@ -78,6 +78,7 @@ const defaultTicketColumns: Array<[string, TicketBoard["columns"][number]["kind"
   ["00000000-0000-4000-8000-000000000104", "in_progress", "In Progress"],
   ["00000000-0000-4000-8000-000000000105", "waiting", "Waiting"],
   ["00000000-0000-4000-8000-000000000106", "done", "Done"],
+  ["00000000-0000-4000-8000-000000000107", "omit", "Omit"],
 ];
 
 const defaultTicketBoard: TicketBoard = {
@@ -255,7 +256,7 @@ export class MemoryAppClient implements AppClient {
   async bootstrap(): Promise<Bootstrap> {
     const now = new Date();
     return {
-      schemaVersion: 17,
+      schemaVersion: 18,
       appVersion: "0.1.0-test",
       today: now.toISOString().slice(0, 10),
       timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo",
@@ -1127,7 +1128,7 @@ export class MemoryAppClient implements AppClient {
   async diagnostics(): Promise<DiagnosticsSnapshot> {
     return {
       appVersion: "0.1.0-test",
-      schemaVersion: 17,
+      schemaVersion: 18,
       databaseState: "ready",
       scheduleCount: this.schedules.filter((item) => item.deletedAt === null).length,
       deletedCount: this.schedules.filter((item) => item.deletedAt !== null).length,
@@ -1458,7 +1459,7 @@ export class MemoryAppClient implements AppClient {
       id: crypto.randomUUID(),
       fileName: "synthetic-backup.sqlite3",
       sizeBytes: 0,
-      schemaVersion: 17,
+      schemaVersion: 18,
       appVersion: "demo",
       verified: true,
       createdAt: new Date().toISOString(),

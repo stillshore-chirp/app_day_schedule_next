@@ -130,9 +130,10 @@
 ### 8.1 Ticket foundation
 
 - Ticketは「何を完了させるか」、Scheduleは「いつ作業するか」を表し、完了状態を暗黙に連動させない。
-- 既定boardは`Inbox / Backlog / Next / In Progress / Waiting / Done`を持ち、列順と列内順序を永続化する。
+- 既定boardは`Inbox / Backlog / Next / In Progress / Waiting / Done / Omit`を持ち、列順と列内順序を永続化する。Omitは対応対象から外したTicketを削除せず参照保存する非完了列とする。
 - Ticket titleはtrim後1〜1024文字を損失なく保持し、dueは時刻を持たないlocal dateとして保存する。
 - Doneへの移動時は直前の非Done列を記録し、再開時はその列、利用不能ならInboxへ戻す。
+- Ticketの完了日時とGoogle TasksのcompletedはDoneだけに対応させ、Omitへの移動では完了扱いにしない。
 - archiveとdelete tombstoneを区別し、通常queryはtombstoneを返さない。
 - Ticket本体、tag、checklist、変更履歴は1 user actionにつき同一transactionで確定する。
 - parent自己参照と循環を拒否し、列移動・並べ替え・親子変更はoptimistic versionで古い操作を拒否する。

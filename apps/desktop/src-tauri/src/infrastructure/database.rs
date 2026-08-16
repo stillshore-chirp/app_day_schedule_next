@@ -22,6 +22,47 @@ use crate::domain::{
 
 pub(crate) static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
 
+pub(crate) async fn run_migrations(pool: &SqlitePool) -> AppResult<()> {
+    let mut connection = pool
+        .acquire()
+        .await
+        .map_err(|error| AppError::database("migration-connection", error))?;
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&mut *connection)
+        .await
+        .map_err(|error| AppError::database("migration-foreign-keys-disable", error))?;
+    let migration_result = MIGRATOR.run(&mut *connection).await;
+    let foreign_keys_result = sqlx::query("PRAGMA foreign_keys = ON")
+        .execute(&mut *connection)
+        .await;
+    foreign_keys_result
+        .map_err(|error| AppError::database("migration-foreign-keys-enable", error))?;
+    let foreign_keys_enabled: bool = sqlx::query_scalar("PRAGMA foreign_keys")
+        .fetch_one(&mut *connection)
+        .await
+        .map_err(|error| AppError::database("migration-foreign-keys-status", error))?;
+    if !foreign_keys_enabled {
+        return Err(AppError::database(
+            "migration-foreign-keys-status",
+            "foreign key enforcement is disabled after migration",
+        ));
+    }
+    if let Err(error) = migration_result {
+        return Err(AppError::database("migration", error));
+    }
+    let foreign_key_violations = sqlx::query("PRAGMA foreign_key_check")
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(|error| AppError::database("migration-foreign-key-check", error))?;
+    if !foreign_key_violations.is_empty() {
+        return Err(AppError::database(
+            "migration-foreign-key-check",
+            "foreign key violations remain after migration",
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct Database {
     pub(crate) pool: SqlitePool,
@@ -102,10 +143,7 @@ impl Database {
             .connect_with(options)
             .await
             .map_err(|error| AppError::database("open", error))?;
-        MIGRATOR
-            .run(&pool)
-            .await
-            .map_err(|error| AppError::database("migration", error))?;
+        run_migrations(&pool).await?;
         let database = Self {
             pool,
             path: Some(Arc::new(path.to_path_buf())),
@@ -126,10 +164,7 @@ impl Database {
             .connect_with(options)
             .await
             .map_err(|error| AppError::database("test-open", error))?;
-        MIGRATOR
-            .run(&pool)
-            .await
-            .map_err(|error| AppError::database("test-migration", error))?;
+        run_migrations(&pool).await?;
         let database = Self { pool, path: None };
         database.backfill_all_day_local_dates().await?;
         Ok(database)
@@ -1740,7 +1775,7 @@ impl Database {
         self.integrity_check().await?;
         Ok(DiagnosticsSnapshot {
             app_version: app_version.into(),
-            schema_version: 17,
+            schema_version: 18,
             database_state: "ready",
             schedule_count: schedule_count.max(0) as u64,
             deleted_count: deleted_count.max(0) as u64,
@@ -3217,7 +3252,7 @@ mod tests {
             .unwrap();
         }
 
-        MIGRATOR.run(&pool).await.unwrap();
+        run_migrations(&pool).await.unwrap();
 
         let synced: (String, Option<String>, Option<String>) = sqlx::query_as(
             "SELECT sync_state, sync_token, last_sync_completed_at_utc FROM google_calendars WHERE id = ?",
@@ -3248,7 +3283,7 @@ mod tests {
             )
         );
         assert_eq!(never, ("never".into(), None, None));
-        assert_eq!(schema_version, "17");
+        assert_eq!(schema_version, "18");
     }
 
     #[tokio::test]
@@ -3286,7 +3321,7 @@ mod tests {
         .await
         .unwrap();
 
-        MIGRATOR.run(&pool).await.unwrap();
+        run_migrations(&pool).await.unwrap();
 
         let stored: (Option<String>, String, String) = sqlx::query_as(
             "SELECT recurrence_rule, recurrence_exdates_json, recurrence_supplemental_lines_json FROM schedule_items WHERE id = ?",
@@ -3315,7 +3350,7 @@ mod tests {
                 "[]".into()
             )
         );
-        assert_eq!(schema_version, "17");
+        assert_eq!(schema_version, "18");
         assert!(invalid.is_err());
     }
 
@@ -3374,7 +3409,7 @@ mod tests {
         .unwrap();
 
         let started = std::time::Instant::now();
-        MIGRATOR.run(&pool).await.unwrap();
+        run_migrations(&pool).await.unwrap();
         let elapsed = started.elapsed();
         let migrated_count: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM schedule_items WHERE recurrence_supplemental_lines_json = '[]'",

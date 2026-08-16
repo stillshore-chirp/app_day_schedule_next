@@ -1288,7 +1288,7 @@ mod tests {
             .await
             .unwrap();
 
-        super::super::database::MIGRATOR.run(&pool).await.unwrap();
+        super::super::database::run_migrations(&pool).await.unwrap();
 
         let version: String =
             sqlx::query_scalar("SELECT value FROM app_meta WHERE key = 'schema_version'")
@@ -1307,7 +1307,7 @@ mod tests {
             .fetch_one(&pool)
             .await
             .unwrap();
-        assert_eq!(version, "17");
+        assert_eq!(version, "18");
         assert_eq!((schedules, tickets, links), (1, 1, 0));
     }
 
