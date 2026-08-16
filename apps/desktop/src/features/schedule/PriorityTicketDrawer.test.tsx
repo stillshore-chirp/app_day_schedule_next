@@ -3,7 +3,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import axe from "axe-core";
 import { describe, expect, it } from "vitest";
-import type { TicketDraft } from "../../shared/contracts";
+import type { Ticket, TicketDraft, TicketQuery } from "../../shared/contracts";
 import { MemoryAppClient } from "../../shared/ipc/memory-client";
 import { PriorityTicketDrawer } from "./PriorityTicketDrawer";
 
@@ -102,22 +102,64 @@ describe("PriorityTicketDrawer", () => {
   });
 
   it("keeps more than one page of high-priority tickets reachable", async () => {
-    const client = new MemoryAppClient([]);
-    const board = await client.ticketBoard();
-    await Promise.all(
-      Array.from({ length: 1_001 }, (_, index) =>
-        createTicket(client, {
-          columnId: board.columns[0]!.id,
+    const seedClient = new MemoryAppClient([]);
+    const board = await seedClient.ticketBoard();
+    class PagedTicketClient extends MemoryAppClient {
+      readonly requests: TicketQuery[] = [];
+      private readonly priorityTickets: Ticket[];
+
+      constructor(columnId: string) {
+        super([]);
+        const now = new Date().toISOString();
+        this.priorityTickets = Array.from({ length: 1_001 }, (_, index) => ({
+          id: `priority-ticket-${index + 1}`,
+          boardId: board.id,
+          columnId,
+          lastNonDoneColumnId: columnId,
+          parentTicketId: null,
           title: `大量の優先チケット ${index + 1}`,
-          priority: "high",
-        }),
-      ),
-    );
+          description: "synthetic fixture",
+          priority: "high" as const,
+          dueDate: null,
+          estimateMinutes: 30,
+          sortKey: (index + 1) * 1_024,
+          tags: [],
+          checklist: [],
+          version: 0,
+          createdAt: now,
+          updatedAt: now,
+          completedAt: null,
+          archivedAt: null,
+          deletedAt: null,
+        }));
+      }
+
+      override listTickets(query: TicketQuery) {
+        this.requests.push(query);
+        const matching = query.priority === "high" ? this.priorityTickets : [];
+        const offset = query.offset ?? 0;
+        const limit = query.limit ?? 500;
+        return Promise.resolve({
+          contractVersion: 1 as const,
+          items: matching.slice(offset, offset + limit),
+          total: matching.length,
+        });
+      }
+    }
+    const client = new PagedTicketClient(board.columns[0]!.id);
     renderDrawer(client);
 
     const list = await screen.findByRole("list");
     await waitFor(() => expect(within(list).getAllByRole("article")).toHaveLength(1_001));
-  });
+    expect(
+      client.requests
+        .filter((query) => query.priority === "high")
+        .map(({ limit, offset }) => ({ limit, offset })),
+    ).toEqual([
+      { limit: 1_000, offset: 0 },
+      { limit: 1_000, offset: 1_000 },
+    ]);
+  }, 15_000);
 
   it("distinguishes query failure and remains accessible", async () => {
     class FailureClient extends MemoryAppClient {
@@ -129,6 +171,9 @@ describe("PriorityTicketDrawer", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "優先チケットを読み込めませんでした",
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /優先チケット/ })).toHaveTextContent("0件"),
     );
     expect(screen.getByRole("button", { name: "再読み込み" })).toBeVisible();
     const result = await act(() =>
