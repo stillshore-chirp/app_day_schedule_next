@@ -269,6 +269,7 @@ export const ticketColumnKindSchema = z.enum([
   "in_progress",
   "waiting",
   "done",
+  "omit",
 ]);
 
 export const ticketColumnSchema = z.object({

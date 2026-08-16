@@ -39,6 +39,7 @@ pub enum TicketColumnKind {
     InProgress,
     Waiting,
     Done,
+    Omit,
 }
 
 impl TicketColumnKind {

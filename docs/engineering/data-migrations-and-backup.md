@@ -127,3 +127,11 @@ Rules:
 - 作業秒は`focus_history`を正本とし、帰属表へdurationを複製しない。pause、break、重複終了で実績を二重加算しない。
 - SQLite backup / restoreは帰属snapshotとFocus履歴をDB全体としてround-tripする。JSON format version 1 / 2はTicket、関連、帰属を対象外とし、移行には検証済みSQLite backupを使う。
 - downgradeは非対応とし、v16 DBを古いbinaryで開かない。
+
+## 15. Ticket Omit column compatibility
+
+- schema version 18は既定boardのDone右隣へ、固定ID・`sort_order = 6`のOmit列を追加する。既存Ticketの列、列内順、`last_non_done_column_id`、履歴、Schedule関連、Focus帰属、Google Tasks mapping / Outboxを変更しない。
+- `ticket_columns.kind`のCHECK制約を拡張するため、migrationは事前検証済みbackupを作成したうえで列tableを同一transaction内で再構築する。SQLite接続のforeign key enforcementは再構築中だけ停止し、同じmigration transaction内のguardで`PRAGMA foreign_key_check`が空でなければrollbackする。migration終了後はenforcementを再有効化し、commit済みschemaにも同じcheckを再実行する。
+- Omitは非完了列であり、Omitへの移動では`completed_at_utc`を設定しない。OmitからDoneへ移した後の再開先はOmitとする。
+- fresh DB、v17 upgrade、既存参照・row count・unique/check/index・foreign key整合性、migration再実行、backup / restore round-tripを検証する。
+- downgradeは非対応とし、v18 DBを古いbinaryで開いてOmit列を未知kindとして扱わない。

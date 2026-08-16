@@ -54,14 +54,14 @@ cargo test --workspace --all-features
 - UTC instant、IANA timezone、半開区間、終日 local date
 - DST gap / overlap、月末、曜日／count 再発、単一／これ以降／series 編集
 - SQLite migration、optimistic concurrency、history、Outbox atomicity、50,000件検索
-- Ticketのtitle / tag / checklist境界、v14 seed / upgrade、parent循環、operation ID冪等性、Done復帰、500件reorder
+- Ticketのtitle / tag / checklist境界、v14 seed / upgrade、v18 Omit seed / upgrade・参照保持、parent循環、operation ID冪等性、Done復帰、Omit非完了、500件reorder
 - v15 Ticket―Schedule link migration、1:N / Schedule unique active link、link / unlink / relink、archive / delete分離、DST / 日跨ぎ、集計再計算、Outbox再起動冪等性、backup / restore round-trip、JSON置換拒否
 - template preview / apply / one-action Undo、built-in constraint、library reorder
 - notification delivery key、grace、Quick Block active linkage、Focus transition / history / 予定別実績集計
 - 予定分類の最大500件原子的変更、1 action Undo、read-only拒否
 - JSON import fingerprint、legacy preview / transaction、backup / staged restore
 - Google Desktop OAuth build設定validation、client secret不要契約、PKCE、再接続時のcalendar / sync token保持、initial / incremental / pagination / delete / 410 / 401 / 412 / 429 / 5xx / offline、3-way merge
-- Google Tasks migration、Ticket / Outbox原子性、title / notes上限、list pagination、全page後commit、watermark重複窓、remote delete / complete、Local専用field保持、uncertain create、3-way conflict、malformed remote shadow、background polling
+- Google Tasks migration、Ticket / Outbox原子性、title / notes上限、list pagination、全page後commit、watermark重複窓、remote delete / complete、Done / Omit完了境界、Local専用field保持、uncertain create、3-way conflict、malformed remote shadow、background polling
 - structured diagnostic export の redaction
 - operation ID ごとの cancel isolation、同期 token / local event 保持、export `.part` cleanup、backup file / history 非生成
 

@@ -171,7 +171,7 @@ describe("Day Schedule Next native smoke", () => {
     await expect(heading).toBeDisplayed();
     await expect(heading).toHaveText("今日の予定");
     const bootstrap = await browser.tauri.execute(({ core }) => core.invoke("bootstrap_get"));
-    expect(bootstrap).toMatchObject({ schemaVersion: 17, databaseState: "ready" });
+    expect(bootstrap).toMatchObject({ schemaVersion: 18, databaseState: "ready" });
   });
 
   it("creates and persists a schedule through the native IPC and SQLite boundary", async () => {
@@ -1503,10 +1503,10 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-google-tasks-ticket-detail.png");
   });
 
-  it("assigns a ticket from Today, edits its schedule, then unlinks and relinks it", async () => {
+  it("shows a priority ticket in Today, then schedules, edits, unlinks, and relinks it", async () => {
     await persistFixtureTheme("light");
     await setLogicalWindowSize(1280, 820);
-    const ticketTitle = `E2E予定化-${Date.now()}`;
+    const ticketTitle = `E2E優先-${"LongToken".repeat(8)}-${Date.now()}`;
     await openTicketView();
     await $(
       '//section[.//h2[normalize-space(.)="Next"]]//input[@placeholder="タイトルだけで追加"]',
@@ -1515,72 +1515,113 @@ describe("Day Schedule Next native smoke", () => {
       '//section[.//h2[normalize-space(.)="Next"]]//button[normalize-space(.)="追加"]',
     ).click();
     await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    const prioritySelect = $('//div[@role="dialog"]//label[contains(., "優先度")]/select');
+    await browser.execute(() => {
+      const select = Array.from(
+        document.querySelectorAll<HTMLLabelElement>('div[role="dialog"] label'),
+      )
+        .find((label) => label.textContent?.includes("優先度"))
+        ?.querySelector<HTMLSelectElement>("select");
+      if (!select) throw new Error("ticket priority select was not found");
+      select.value = "high";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await expect(prioritySelect).toHaveValue("high");
     await $('//div[@role="dialog"]//label[contains(., "見積時間")]/input').setValue("30");
     await $('//div[@role="dialog"]//button[normalize-space(.)="保存"]').click();
     await $(
       '//div[@role="dialog"]//*[@role="status" and contains(., "保存しました")]',
     ).waitForDisplayed();
     await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
+    const savedPriorityTicket = (await browser.tauri.execute(
+      ({ core }, expectedTitle) =>
+        core.invoke("ticket_list", {
+          query: { search: expectedTitle, limit: 10 },
+        }),
+      ticketTitle,
+    )) as { items: Array<{ columnId: string; priority: string; title: string }> };
+    expect(savedPriorityTicket.items).toHaveLength(1);
+    expect(savedPriorityTicket.items[0]).toEqual(
+      expect.objectContaining({ priority: "high", title: ticketTitle }),
+    );
 
     await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
     await $(".today-heading h1").waitForDisplayed();
-    const drawerToggle = $('//button[contains(., "未配置チケット")]');
-    await drawerToggle.click();
-    const drawerTicket = $(
-      `//section[contains(@class, "unplaced-ticket-drawer")]//button[contains(., "${ticketTitle}")]`,
-    );
-    await drawerTicket.waitForDisplayed();
-    await browser.saveScreenshot("./test-results/native-ticket-schedule-drawer-open.png");
-    await browser.execute((expectedTitle) => {
-      const ticket = Array.from(
-        document.querySelectorAll<HTMLButtonElement>(".unplaced-ticket-list button"),
-      ).find((button) => button.textContent?.includes(expectedTitle));
-      if (!ticket) throw new Error("ticket drag fixture was not found");
-      const dataTransfer = new DataTransfer();
-      ticket.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
-    }, ticketTitle);
+    const drawerToggle = $('//button[contains(., "優先チケット")]');
     await browser.waitUntil(
-      async () => (await $(".timeline-canvas").getAttribute("data-ticket-drop-target")) === "true",
-      { timeoutMsg: "timeline did not become a ticket drop target" },
+      async () => (await drawerToggle.getAttribute("aria-expanded")) === "true",
+      {
+        timeoutMsg: "priority ticket drawer was not open by default",
+      },
     );
-    await browser.execute(() => {
-      const canvas = document.querySelector<HTMLElement>(".timeline-canvas");
-      if (!canvas) throw new Error("ticket drop canvas was not found");
-      const dataTransfer = new DataTransfer();
-      dataTransfer.setData("text/plain", "synthetic-ticket");
-      const bounds = canvas.getBoundingClientRect();
-      canvas.dispatchEvent(
-        new DragEvent("drop", {
-          bubbles: true,
-          cancelable: true,
-          clientY: bounds.top + bounds.height / 3,
-          dataTransfer,
-        }),
-      );
+    await browser.waitUntil(
+      async () =>
+        !(await $(".priority-ticket-drawer__content").getText()).includes("読み込んでいます"),
+      { timeoutMsg: "priority ticket drawer did not finish loading" },
+    );
+    expect(await $(".priority-ticket-drawer__content").getText()).not.toContain(
+      "読み込めませんでした",
+    );
+    const drawerTicketSelector = `//section[contains(@class, "priority-ticket-drawer")]//article[.//strong[normalize-space(.)="${ticketTitle}"]]`;
+    const drawerTicket = $(drawerTicketSelector);
+    await drawerTicket.waitForDisplayed();
+    await expect(drawerTicket).toHaveText(expect.stringContaining("優先度: 高"));
+    const drawerControls = await browser.execute(() => {
+      const drawer = document.querySelector<HTMLElement>(".priority-ticket-drawer");
+      if (!drawer) throw new Error("priority ticket drawer was not found");
+      return {
+        selectCount: drawer.querySelectorAll("select").length,
+        buttonLabels: Array.from(drawer.querySelectorAll("button")).map((button) =>
+          button.textContent?.trim(),
+        ),
+        text: drawer.textContent ?? "",
+      };
     });
-    const preview = $(
-      `//section[contains(@class, "status-message")][.//strong[contains(., "${ticketTitle}") and contains(., "仮配置")]]`,
+    expect(drawerControls.selectCount).toBe(0);
+    expect(drawerControls.buttonLabels).toHaveLength(1);
+    expect(drawerControls.text).not.toContain("タイムラインへドラッグ");
+    await browser.saveScreenshot("./test-results/native-priority-tickets-open.png");
+
+    await drawerToggle.click();
+    await browser.waitUntil(
+      async () => (await drawerToggle.getAttribute("aria-expanded")) === "false",
+      { timeoutMsg: "priority ticket drawer did not collapse" },
     );
-    await preview.waitForDisplayed();
+    await drawerTicket.waitForDisplayed({ reverse: true });
+    await drawerToggle.click();
+    await $(drawerTicketSelector).waitForDisplayed();
     await browser.execute(() => {
       const workspace = document.querySelector<HTMLElement>(".workspace-main");
       if (!workspace) throw new Error("Today workspace was not found");
       workspace.scrollTop = 0;
     });
-    await browser.saveScreenshot("./test-results/native-ticket-timeline-drag-preview.png");
-    await preview.$('.//button[normalize-space(.)="取消"]').click();
     await setLogicalWindowSize(720, 820);
     await browser.execute(() => {
       const workspace = document.querySelector<HTMLElement>(".workspace-main");
-      const drawer = document.querySelector<HTMLElement>(".unplaced-ticket-drawer");
-      if (!workspace || !drawer) throw new Error("ticket drawer was not found");
+      const drawer = document.querySelector<HTMLElement>(".priority-ticket-drawer");
+      if (!workspace || !drawer) throw new Error("priority ticket drawer was not found");
       workspace.scrollTop = drawer.offsetTop;
     });
-    await browser.saveScreenshot("./test-results/native-ticket-schedule-drawer-narrow.png");
+    const narrowGeometry = await browser.execute(() => {
+      const drawer = document.querySelector<HTMLElement>(".priority-ticket-drawer");
+      const card = drawer?.querySelector<HTMLElement>(".priority-ticket-card");
+      if (!drawer || !card) throw new Error("priority ticket card was not found");
+      return {
+        drawerClientWidth: drawer.clientWidth,
+        drawerScrollWidth: drawer.scrollWidth,
+        cardClientWidth: card.clientWidth,
+        cardScrollWidth: card.scrollWidth,
+      };
+    });
+    expect(narrowGeometry.drawerScrollWidth).toBeLessThanOrEqual(
+      narrowGeometry.drawerClientWidth + 1,
+    );
+    expect(narrowGeometry.cardScrollWidth).toBeLessThanOrEqual(narrowGeometry.cardClientWidth + 1);
+    await browser.saveScreenshot("./test-results/native-priority-tickets-narrow.png");
     await setLogicalWindowSize(1280, 820);
     await browser.execute(() => {
-      const panel = document.querySelector<HTMLElement>(".unplaced-ticket-drawer");
-      if (!panel) throw new Error("ticket drawer was not found for text scaling");
+      const panel = document.querySelector<HTMLElement>(".priority-ticket-drawer");
+      if (!panel) throw new Error("priority ticket drawer was not found for text scaling");
       panel.querySelectorAll<HTMLElement>("*").forEach((element) => {
         element.dataset.e2eOriginalFontSize = element.style.fontSize;
         const size = Number.parseFloat(window.getComputedStyle(element).fontSize);
@@ -1589,23 +1630,45 @@ describe("Day Schedule Next native smoke", () => {
     });
     await browser.execute(() => {
       const workspace = document.querySelector<HTMLElement>(".workspace-main");
-      const drawer = document.querySelector<HTMLElement>(".unplaced-ticket-drawer");
-      if (!workspace || !drawer) throw new Error("ticket drawer was not found");
+      const drawer = document.querySelector<HTMLElement>(".priority-ticket-drawer");
+      if (!workspace || !drawer) throw new Error("priority ticket drawer was not found");
       workspace.scrollTop = drawer.offsetTop;
     });
-    await browser.saveScreenshot("./test-results/native-ticket-schedule-drawer-text-200.png");
+    const scaledGeometry = await browser.execute(() => {
+      const drawer = document.querySelector<HTMLElement>(".priority-ticket-drawer");
+      const card = drawer?.querySelector<HTMLElement>(".priority-ticket-card");
+      if (!drawer || !card) throw new Error("scaled priority ticket card was not found");
+      return {
+        drawerClientWidth: drawer.clientWidth,
+        drawerScrollWidth: drawer.scrollWidth,
+        cardClientWidth: card.clientWidth,
+        cardScrollWidth: card.scrollWidth,
+      };
+    });
+    expect(scaledGeometry.drawerScrollWidth).toBeLessThanOrEqual(
+      scaledGeometry.drawerClientWidth + 1,
+    );
+    expect(scaledGeometry.cardScrollWidth).toBeLessThanOrEqual(scaledGeometry.cardClientWidth + 1);
+    await browser.saveScreenshot("./test-results/native-priority-tickets-text-200.png");
     await browser.execute(() => {
       document
-        .querySelectorAll<HTMLElement>(".unplaced-ticket-drawer [data-e2e-original-font-size]")
+        .querySelectorAll<HTMLElement>(".priority-ticket-drawer [data-e2e-original-font-size]")
         .forEach((element) => {
           element.style.fontSize = element.dataset.e2eOriginalFontSize ?? "";
           delete element.dataset.e2eOriginalFontSize;
         });
     });
-    await drawerTicket.click();
+
+    await openTicketView();
+    await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
+    await $('//div[@role="dialog"]//button[normalize-space(.)="新しい予定を作成"]').click();
     await $(
-      '//div[contains(@class, "unplaced-ticket-form")]//button[normalize-space(.)="予定を作成"]',
-    ).click();
+      '//div[@role="dialog"]//*[@role="status" and contains(., "予定を作成")]',
+    ).waitForDisplayed();
+    await $('//div[@role="dialog"]//button[@aria-label="詳細を閉じる"]').click();
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+    await $(".today-heading h1").waitForDisplayed();
+    await $(drawerTicketSelector).waitForDisplayed();
     await $(
       `//*[contains(@class, "timeline-event") and contains(., "${ticketTitle}")]`,
     ).waitForDisplayed();
@@ -1671,6 +1734,13 @@ describe("Day Schedule Next native smoke", () => {
     await setLogicalWindowSize(1280, 820);
     const ticketTitle = "E2Eチケット-タグ表示";
     await openTicketView();
+    expect(
+      await browser.execute(() =>
+        Array.from(document.querySelectorAll<HTMLElement>(".ticket-column h2")).map((heading) =>
+          heading.textContent?.trim(),
+        ),
+      ),
+    ).toEqual(["Inbox", "Backlog", "Next", "In Progress", "Waiting", "Done", "Omit"]);
     await browser.saveScreenshot("./test-results/native-ticket-board-empty.png");
 
     await $(
@@ -1688,10 +1758,16 @@ describe("Day Schedule Next native smoke", () => {
     await description.setValue(
       "# リリース計画\n\n| 項目 | 状態 | 担当 |\n| --- | --- | --- |\n| UI | 完了 | local |\n| native | 確認中 | local |\n\n- [x] component test\n- [ ] native smoke\n\n[確認資料](https://example.invalid/evidence)",
     );
-    await $('//div[@role="dialog"]//label[contains(., "優先度")]/select').selectByAttribute(
-      "value",
-      "urgent",
-    );
+    await browser.execute(() => {
+      const select = Array.from(
+        document.querySelectorAll<HTMLLabelElement>('div[role="dialog"] label'),
+      )
+        .find((label) => label.textContent?.includes("優先度"))
+        ?.querySelector<HTMLSelectElement>("select");
+      if (!select) throw new Error("ticket priority select was not found");
+      select.value = "urgent";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await $('//div[@role="dialog"]//label[contains(., "期限")]/input').setValue("2026-08-01");
     await $('//div[@role="dialog"]//label[contains(., "見積時間")]/input').setValue("45");
     await $('//div[@role="dialog"]//label[contains(., "タグ")]/input').setValue("native, evidence");
@@ -1823,32 +1899,84 @@ describe("Day Schedule Next native smoke", () => {
     const pointerTarget = $(
       '//section[.//h2[normalize-space(.)="Backlog"]]//*[contains(@class, "ticket-column__cards")]',
     );
-    await browser
-      .action("pointer", { parameters: { pointerType: "mouse" } })
-      .move({ origin: pointerSource })
-      .down({ button: 0 })
-      .pause(150)
-      .move({ origin: pointerSource, x: 20, duration: 300 })
-      .perform(true);
+    await pointerSource.waitForDisplayed();
+    await pointerTarget.waitForDisplayed();
+    const pointerPoints = await browser.execute((titleText) => {
+      const source = document.querySelector<HTMLElement>(
+        `button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`,
+      );
+      const target = Array.from(document.querySelectorAll<HTMLElement>(".ticket-column"))
+        .find((column) => column.querySelector("h2")?.textContent?.trim() === "Backlog")
+        ?.querySelector<HTMLElement>(".ticket-column__cards");
+      if (!source || !target) throw new Error("ticket pointer source or target was not found");
+      const sourceBounds = source.getBoundingClientRect();
+      const targetBounds = target.getBoundingClientRect();
+      return {
+        source: {
+          x: Math.round(sourceBounds.left + sourceBounds.width / 2),
+          y: Math.round(sourceBounds.top + sourceBounds.height / 2),
+        },
+        target: {
+          x: Math.round(targetBounds.left + targetBounds.width / 2),
+          y: Math.round(targetBounds.top + Math.min(60, targetBounds.height / 2)),
+        },
+      };
+    }, ticketTitle);
+    await browser.execute(({ source }) => {
+      const button = document.elementFromPoint(source.x, source.y);
+      if (!(button instanceof HTMLElement)) throw new Error("ticket pointer source was not found");
+      button.dispatchEvent(
+        new MouseEvent("mousedown", {
+          bubbles: true,
+          button: 0,
+          buttons: 1,
+          clientX: source.x,
+          clientY: source.y,
+        }),
+      );
+      window.dispatchEvent(
+        new MouseEvent("mousemove", {
+          bubbles: true,
+          buttons: 1,
+          clientX: source.x + 40,
+          clientY: source.y,
+        }),
+      );
+    }, pointerPoints);
     await browser.waitUntil(
       async () => (await $(".ticket-board").getAttribute("data-dragging")) === "true",
-      { timeoutMsg: "real pointer movement did not start the ticket drag preview" },
+      { timeoutMsg: "native mouse movement did not start the ticket drag preview" },
     );
     await browser.saveScreenshot("./test-results/native-ticket-drag-preview.png");
-    await browser.keys(["Escape"]);
-    await browser.waitUntil(
-      async () => (await $(".ticket-board").getAttribute("data-dragging")) === "false",
-      { timeoutMsg: "Escape did not cancel the real pointer drag" },
-    );
-    await browser.releaseActions();
-    await browser
-      .action("pointer", { parameters: { pointerType: "mouse" } })
-      .move({ origin: pointerSource })
-      .down({ button: 0 })
-      .pause(150)
-      .move({ origin: pointerTarget, duration: 800 })
-      .up({ button: 0 })
-      .perform();
+    expect(
+      await browser.execute(
+        ({ target }) =>
+          document
+            .elementFromPoint(target.x, target.y)
+            ?.closest(".ticket-column")
+            ?.querySelector("h2")
+            ?.textContent?.trim(),
+        pointerPoints,
+      ),
+    ).toBe("Backlog");
+    await browser.execute(({ target }) => {
+      window.dispatchEvent(
+        new MouseEvent("mousemove", {
+          bubbles: true,
+          buttons: 1,
+          clientX: target.x,
+          clientY: target.y,
+        }),
+      );
+      window.dispatchEvent(
+        new MouseEvent("mouseup", {
+          bubbles: true,
+          button: 0,
+          clientX: target.x,
+          clientY: target.y,
+        }),
+      );
+    }, pointerPoints);
     await $(
       `//section[.//h2[normalize-space(.)="Backlog"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
     ).waitForDisplayed({ timeoutMsg: "pointer drag did not move the ticket to Backlog" });
@@ -1877,6 +2005,31 @@ describe("Day Schedule Next native smoke", () => {
     await browser.execute(() => {
       window.confirm = () => true;
     });
+    await browser.execute((titleText) => {
+      document
+        .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)
+        ?.focus();
+    }, ticketTitle);
+    await browser.keys("ArrowRight");
+    await $(
+      `//section[.//h2[normalize-space(.)="Omit"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
+    ).waitForDisplayed();
+    const omitted = (await browser.tauri.execute(
+      ({ core }, expectedTitle) =>
+        core.invoke("ticket_list", { query: { search: expectedTitle, limit: 10 } }),
+      ticketTitle,
+    )) as { items: Array<{ completedAt: string | null }> };
+    expect(omitted.items[0]?.completedAt).toBeNull();
+    await browser.saveScreenshot("./test-results/native-ticket-omit.png");
+    await browser.execute((titleText) => {
+      document
+        .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)
+        ?.focus();
+    }, ticketTitle);
+    await browser.keys("ArrowLeft");
+    await $(
+      `//section[.//h2[normalize-space(.)="Done"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
+    ).waitForDisplayed();
     await browser.execute((titleText) => {
       document
         .querySelector<HTMLElement>(`button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`)

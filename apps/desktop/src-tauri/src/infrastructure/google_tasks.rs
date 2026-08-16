@@ -2527,6 +2527,9 @@ pub(crate) async fn enqueue_ticket_task_outbox(
     entity_version: u64,
     now: &str,
 ) -> AppResult<()> {
+    if matches!(operation, "move" | "reorder") {
+        return Ok(());
+    }
     let enabled: bool =
         sqlx::query_scalar("SELECT enabled FROM google_tasks_config WHERE singleton = 1")
             .fetch_one(&mut **transaction)
@@ -2714,7 +2717,10 @@ mod tests {
     use crate::{
         domain::google_tasks::GOOGLE_TASK_NOTES_MAX_CHARS,
         domain::{TicketDraft, TicketPriority},
-        infrastructure::ticket_repository::{DEFAULT_TICKET_BOARD_ID, INBOX_TICKET_COLUMN_ID},
+        infrastructure::ticket_repository::{
+            DEFAULT_TICKET_BOARD_ID, DONE_TICKET_COLUMN_ID, INBOX_TICKET_COLUMN_ID,
+            OMIT_TICKET_COLUMN_ID,
+        },
     };
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -2808,6 +2814,121 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn omit_is_local_only_and_only_done_crossings_change_google_completion() {
+        let database = Database::open_memory().await.unwrap();
+        let (_, list_id) = seed_tasks(&database, None).await;
+        let now = Utc::now();
+        let created = database
+            .create_ticket(Uuid::new_v4(), ticket_draft("Omit sync boundary"), now)
+            .await
+            .unwrap();
+        sqlx::query("UPDATE google_task_outbox SET completed_at_utc = ? WHERE ticket_id = ?")
+            .bind(timestamp(now))
+            .bind(created.id.to_string())
+            .execute(&database.pool)
+            .await
+            .unwrap();
+        let base = GoogleTaskSnapshot {
+            title: created.title.clone(),
+            notes: created.description.clone(),
+            due_date: created.due_date,
+            completed: false,
+            parent_ticket_id: created.parent_ticket_id,
+            task_list_id: list_id,
+        };
+        sqlx::query("INSERT INTO google_task_mappings(ticket_id, google_task_list_id, remote_task_id, base_snapshot_json, created_at_utc, updated_at_utc) VALUES (?, ?, 'synthetic-omit-task', ?, ?, ?)")
+            .bind(created.id.to_string())
+            .bind(list_id.to_string())
+            .bind(serde_json::to_string(&base).unwrap())
+            .bind(timestamp(now))
+            .bind(timestamp(now))
+            .execute(&database.pool)
+            .await
+            .unwrap();
+
+        let omitted = database
+            .move_ticket(
+                Uuid::new_v4(),
+                created.id,
+                created.version,
+                OMIT_TICKET_COLUMN_ID,
+                None,
+                now,
+            )
+            .await
+            .unwrap();
+        let omitted_outbox: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM google_task_outbox WHERE ticket_id = ? AND entity_version = ?",
+        )
+        .bind(created.id.to_string())
+        .bind(i64::try_from(omitted.version).unwrap())
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert!(
+            !ticket_snapshot(&database, &omitted, list_id)
+                .await
+                .unwrap()
+                .completed
+        );
+        assert_eq!(omitted_outbox, 0);
+
+        let done = database
+            .move_ticket(
+                Uuid::new_v4(),
+                created.id,
+                omitted.version,
+                DONE_TICKET_COLUMN_ID,
+                None,
+                now,
+            )
+            .await
+            .unwrap();
+        let done_operation: String = sqlx::query_scalar(
+            "SELECT operation_type FROM google_task_outbox WHERE ticket_id = ? AND entity_version = ?",
+        )
+        .bind(created.id.to_string())
+        .bind(i64::try_from(done.version).unwrap())
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert!(
+            ticket_snapshot(&database, &done, list_id)
+                .await
+                .unwrap()
+                .completed
+        );
+        assert_eq!(done_operation, "complete");
+
+        let reopened_to_omit = database
+            .move_ticket(
+                Uuid::new_v4(),
+                created.id,
+                done.version,
+                OMIT_TICKET_COLUMN_ID,
+                None,
+                now,
+            )
+            .await
+            .unwrap();
+        let reopen_operation: String = sqlx::query_scalar(
+            "SELECT operation_type FROM google_task_outbox WHERE ticket_id = ? AND entity_version = ?",
+        )
+        .bind(created.id.to_string())
+        .bind(i64::try_from(reopened_to_omit.version).unwrap())
+        .fetch_one(&database.pool)
+        .await
+        .unwrap();
+        assert!(
+            !ticket_snapshot(&database, &reopened_to_omit, list_id)
+                .await
+                .unwrap()
+                .completed
+        );
+        assert_eq!(reopen_operation, "reopen");
+    }
+
+    #[tokio::test]
     async fn migration_17_installs_tasks_tables_without_remote_content_in_diagnostics() {
         let database = Database::open_memory().await.unwrap();
         let version: String =
@@ -2815,7 +2936,7 @@ mod tests {
                 .fetch_one(&database.pool)
                 .await
                 .unwrap();
-        assert_eq!(version, "17");
+        assert_eq!(version, "18");
         for table in [
             "google_tasks_config",
             "google_task_lists",

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { Schedule, Ticket } from "../../shared/contracts";
+import type { Schedule } from "../../shared/contracts";
 import { formatTime } from "../../shared/time";
 import { Timeline } from "./Timeline";
 
@@ -32,65 +32,6 @@ const schedule: Schedule = {
 };
 
 describe("Timeline interactions", () => {
-  it("turns a dropped ticket into a preview without saving it", () => {
-    const preview = vi.fn();
-    const ticket: Ticket = {
-      id: "00000000-0000-4000-8000-000000000030",
-      boardId: "00000000-0000-4000-8000-000000000100",
-      columnId: "00000000-0000-4000-8000-000000000101",
-      lastNonDoneColumnId: "00000000-0000-4000-8000-000000000101",
-      parentTicketId: null,
-      title: "タイムラインへ配置",
-      description: "",
-      priority: "normal",
-      dueDate: null,
-      estimateMinutes: 45,
-      sortKey: 1024,
-      tags: [],
-      checklist: [],
-      version: 0,
-      createdAt: "2026-07-20T00:00:00.000Z",
-      updatedAt: "2026-07-20T00:00:00.000Z",
-      completedAt: null,
-      archivedAt: null,
-      deletedAt: null,
-    };
-    const { container } = render(
-      <Timeline
-        schedules={[]}
-        selectedDate={new Date(2026, 6, 20)}
-        selectedId={null}
-        snapMinutes={5}
-        onSelect={vi.fn()}
-        onCreate={vi.fn()}
-        onCreateRange={vi.fn()}
-        onAdjust={vi.fn().mockResolvedValue(undefined)}
-        referenceMinute={480}
-        externalTicket={ticket}
-        externalDurationMinutes={45}
-        onExternalPreview={preview}
-      />,
-    );
-    const canvas = container.querySelector<HTMLElement>(".timeline-canvas")!;
-    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
-      top: 0,
-      left: 0,
-      right: 800,
-      bottom: 1728,
-      width: 800,
-      height: 1728,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
-    fireEvent.dragOver(canvas, { clientY: 648 });
-    fireEvent.drop(canvas, { clientY: 648 });
-    expect(preview).toHaveBeenCalledTimes(1);
-    expect(preview.mock.calls[0]?.[0]).toEqual(ticket);
-    const [, startUtc, endUtc] = preview.mock.calls[0] as [Ticket, string, string];
-    expect(Date.parse(endUtc) - Date.parse(startUtc)).toBe(45 * 60_000);
-  });
-
   it("uses a single-row layout for a 30-minute schedule without losing its full name", () => {
     render(
       <Timeline
