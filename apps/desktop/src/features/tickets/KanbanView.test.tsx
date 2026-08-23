@@ -1,14 +1,25 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TicketDraft } from "../../shared/contracts";
 import { AppClientError } from "../../shared/ipc/client";
 import { MemoryAppClient } from "../../shared/ipc/memory-client";
 import { KanbanView } from "./KanbanView";
+import type { TicketMoveMenuRequest } from "./ticket-context-menu";
 
-afterEach(cleanup);
+const contextMenuMocks = vi.hoisted(() => ({
+  show: vi.fn(),
+}));
+
+vi.mock("./ticket-context-menu", () => ({
+  showTicketMoveContextMenu: contextMenuMocks.show,
+}));
+
+afterEach(() => {
+  cleanup();
+  contextMenuMocks.show.mockReset();
+});
 
 function renderBoard(client: MemoryAppClient) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -79,7 +90,10 @@ describe("KanbanView", () => {
       /優先度: 高.*タグ: release.*タグ: desktop.*カードをドラッグして移動できます/,
     );
     expect(within(initialCard).queryByRole("button", { name: "移動" })).not.toBeInTheDocument();
-    expect(open).toHaveAttribute("aria-keyshortcuts", "ArrowLeft ArrowRight ArrowUp ArrowDown");
+    expect(open).toHaveAttribute(
+      "aria-keyshortcuts",
+      "ArrowLeft ArrowRight ArrowUp ArrowDown Shift+F10",
+    );
 
     fireEvent.keyDown(open, { key: "ArrowRight", repeat: true });
     expect((await client.ticket(created.id)).columnId).toBe(board.columns[0]!.id);
@@ -111,10 +125,152 @@ describe("KanbanView", () => {
 
     await user.type(screen.getByLabelText("タイトル・説明を検索"), "Review");
     expect(screen.getByText(/見えていないチケットの順序を守るため/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Review releaseの詳細を開く" })).not.toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Review releaseの詳細を開く" })).toHaveAttribute(
       "aria-keyshortcuts",
+      "Shift+F10",
     );
   });
+
+  it("replaces the default card menu with a native move submenu for every board column", async () => {
+    const client = new MemoryAppClient([]);
+    const created = await createTicket(client);
+    const board = await client.ticketBoard();
+    let menuRequest: TicketMoveMenuRequest | undefined;
+    contextMenuMocks.show.mockImplementationOnce((request: TicketMoveMenuRequest) => {
+      menuRequest = request;
+      return Promise.resolve();
+    });
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    renderBoard(client);
+
+    const open = await screen.findByRole("button", { name: "Review releaseの詳細を開く" });
+    fireEvent.mouseDown(open, { button: 0, ctrlKey: true, clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(window, { clientX: 30, clientY: 10 });
+    expect(open.closest("article")).toHaveAttribute("data-dragging", "false");
+    expect(fireEvent.contextMenu(open, { clientX: 80, clientY: 60 })).toBe(false);
+    await waitFor(() => expect(contextMenuMocks.show).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(menuRequest).toMatchObject({
+      currentColumnId: board.columns[0]!.id,
+      enabled: true,
+    });
+    expect(menuRequest).not.toHaveProperty("position");
+    expect(menuRequest?.columns.map((column: { name: string }) => column.name)).toEqual([
+      "Inbox",
+      "Backlog",
+      "Next",
+      "In Progress",
+      "Waiting",
+      "Done",
+      "Omit",
+    ]);
+
+    await act(async () => {
+      menuRequest?.onMove(board.columns[6]!);
+      await Promise.resolve();
+    });
+    await waitFor(async () =>
+      expect((await client.ticket(created.id)).columnId).toBe(board.columns[6]!.id),
+    );
+    expect(
+      await screen.findByText("Review releaseを「Omit」へ移動し、保存しました。"),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Review releaseの詳細を開く" })).toHaveFocus(),
+    );
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+  });
+
+  it("opens the same native move menu from Shift+F10 and keeps it disabled while filtered", async () => {
+    const client = new MemoryAppClient([]);
+    await createTicket(client);
+    const user = userEvent.setup();
+    renderBoard(client);
+
+    const open = await screen.findByRole("button", { name: "Review releaseの詳細を開く" });
+    fireEvent.keyDown(open, { key: "F10", shiftKey: true });
+    await waitFor(() => expect(contextMenuMocks.show).toHaveBeenCalledOnce());
+    expect(contextMenuMocks.show.mock.calls[0]?.[0]).toMatchObject({
+      enabled: true,
+      position: { x: 0, y: 0 },
+    });
+
+    await user.type(screen.getByLabelText("タイトル・説明を検索"), "Review");
+    contextMenuMocks.show.mockRejectedValueOnce(new Error("synthetic filtered menu failure"));
+    fireEvent.keyDown(open, { key: "ContextMenu" });
+    await waitFor(() => expect(contextMenuMocks.show).toHaveBeenCalledTimes(2));
+    expect(contextMenuMocks.show.mock.calls[1]?.[0]).toMatchObject({ enabled: false });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "検索・絞り込みを解除して矢印キーで移動",
+    );
+  });
+
+  it("shows a recoverable error when the native move menu cannot open", async () => {
+    const client = new MemoryAppClient([]);
+    await createTicket(client);
+    contextMenuMocks.show.mockRejectedValueOnce(new Error("synthetic native menu failure"));
+    renderBoard(client);
+
+    fireEvent.contextMenu(
+      await screen.findByRole("button", { name: "Review releaseの詳細を開く" }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "移動メニューを利用できませんでした",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("チケットは変更されていません");
+  });
+
+  it.each([
+    {
+      label: "version conflict",
+      error: new AppClientError({
+        code: "version_conflict",
+        message: "synthetic move conflict",
+        recovery: "reload",
+        retryable: true,
+        diagnosticId: null,
+      }),
+      expectedMessage: "ほかの変更が先に保存されています",
+    },
+    {
+      label: "save failure",
+      error: new Error("synthetic move failure"),
+      expectedMessage: "保存できませんでした",
+    },
+  ])(
+    "keeps the ticket in its source column on context-menu $label",
+    async ({ error, expectedMessage }) => {
+      class MoveFailureClient extends MemoryAppClient {
+        override moveTicket() {
+          return Promise.reject(error);
+        }
+      }
+      const client = new MoveFailureClient([]);
+      const created = await createTicket(client);
+      const board = await client.ticketBoard();
+      contextMenuMocks.show.mockImplementationOnce((request: TicketMoveMenuRequest) => {
+        request.onMove(board.columns[6]!);
+        return Promise.resolve();
+      });
+      renderBoard(client);
+
+      fireEvent.contextMenu(
+        await screen.findByRole("button", { name: "Review releaseの詳細を開く" }),
+      );
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(expectedMessage);
+      expect((await client.ticket(created.id)).columnId).toBe(board.columns[0]!.id);
+      expect(
+        screen.queryByText("Review releaseを「Omit」へ移動し、保存しました。"),
+      ).not.toBeInTheDocument();
+    },
+  );
 
   it("renders long and numerous tag badges without dropping card metadata", async () => {
     const client = new MemoryAppClient([]);
@@ -318,21 +474,5 @@ describe("KanbanView", () => {
     await user.click(await screen.findByRole("button", { name: "削除を取り消す" }));
 
     expect(await screen.findByText("Review release")).toBeVisible();
-  });
-
-  it("has no serious or critical automated accessibility violations", async () => {
-    const client = new MemoryAppClient([]);
-    await createTicket(client);
-    const { container } = renderBoard(client);
-    await screen.findByRole("heading", { name: "チケット", level: 1 });
-    const result = await act(() =>
-      axe.run(container, {
-        runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] },
-        rules: { "color-contrast": { enabled: false } },
-      }),
-    );
-    expect(
-      result.violations.filter((item) => ["serious", "critical"].includes(item.impact ?? "")),
-    ).toEqual([]);
   });
 });

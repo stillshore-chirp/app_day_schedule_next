@@ -1396,6 +1396,12 @@ export const jaMessages = {
   "features.tickets.KanbanView.saveFailed": "保存できませんでした",
   "features.tickets.KanbanView.failureRecovery":
     "入力は保持されています。接続や保存先を確認してから再試行してください。",
+  "features.tickets.KanbanView.menuFailed": "移動メニューを利用できませんでした",
+  "features.tickets.KanbanView.menuFailureRecovery":
+    "チケットは変更されていません。矢印キーで移動するか、アプリを開き直して再試行してください。",
+  "features.tickets.KanbanView.menuFailureRecoveryFiltered":
+    "チケットは変更されていません。検索・絞り込みを解除して矢印キーで移動するか、アプリを開き直して再試行してください。",
+  "features.tickets.KanbanView.dismiss": "閉じる",
   "features.tickets.KanbanView.reload": "最新状態を読み込む",
   "features.tickets.KanbanView.deleteComplete": "チケットを削除しました",
   "features.tickets.KanbanView.undoDelete": "削除を取り消す",
@@ -1420,11 +1426,16 @@ export const jaMessages = {
   "features.tickets.KanbanView.estimateValue": "見積: {0}分",
   "features.tickets.KanbanView.checklistValue": "チェック: {0}/{1}",
   "features.tickets.KanbanView.moveHint":
-    "カードをドラッグして移動できます。キーボードでは矢印キーで移動します。",
+    "カードをドラッグして移動できます。キーボードでは矢印キー、任意の列へは右クリックまたはShift+F10の「移動」を使います。",
+  "features.tickets.KanbanView.contextMoveHint":
+    "右クリックまたはShift+F10で移動メニューを開きます。",
+  "features.tickets.KanbanView.contextMove": "移動",
+  "features.tickets.KanbanView.currentColumn": "{0}（現在）",
   "features.tickets.KanbanView.moveBoundary": "これ以上その方向へ移動できません。",
   "features.tickets.KanbanView.dragStarted": "{0}のドラッグを開始しました。Escで取り消せます。",
   "features.tickets.KanbanView.moveCancelled": "移動を取り消しました。",
   "features.tickets.KanbanView.moved": "{0}を移動し、保存しました。",
+  "features.tickets.KanbanView.movedToColumn": "{0}を「{1}」へ移動し、保存しました。",
   "features.tickets.KanbanView.created": "{0}を作成し、保存しました。",
   "features.tickets.KanbanView.saved": "{0}を保存しました。",
   "features.tickets.KanbanView.archived": "{0}をアーカイブしました。",
