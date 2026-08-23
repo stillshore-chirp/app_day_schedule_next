@@ -11,6 +11,8 @@
 | root `AGENTS.md` | Codex・Claude Code・Cursorが常時共有する短い作業契約 |
 | nested `AGENTS.md` | frontend、Rust / Tauri、native E2E、docs、GitHub automationのpath固有契約 |
 | `docs/agent-harness.md` | 4層、3製品接続、instruction budget、正本・adapter・Skillの配置 |
+| `docs/testing/index.md` | Day Schedule固有risk lane、test種別、local / CI検証選択、fixture、native / visual / platform matrix |
+| `docs/engineering/desktop-platform-and-release.md` | latest app handoff、Tauri platform、installer、release contract |
 | `docs/agent-principles.md` | 設計・実装のheuristicとhard gateの境界 |
 | `.agents/skills/` | task固有の共有workflow |
 | `.claude/rules/`, `.claude/skills/` | Claude Codeへ正本を接続する薄いadapter |
@@ -18,7 +20,6 @@
 | `docs/product-invariants.md` | 製品、時間、同期、通知、データ保護の変更禁止条件 |
 | `docs/architecture-boundaries.md` | React / command / application / domain / infrastructureの責務 |
 | `docs/engineering/` | 時間、同期、通知、migration、配布の技術contract |
-| `docs/testing/index.md` | test種別、command、fixture、artifact、platform matrix |
 | `docs/release-quality-gates.md` | build、artifact、install、launch、release可否 |
 | `docs/ai-governance/` | UI/UX、証跡、Issue品質、3製品互換性、完了条件 |
 | `docs/security-publication-checklist.md` | 公開source、Issue、PR、fixture、screenshotの安全性 |

@@ -19,8 +19,11 @@ description: "Tauri capabilities、CSP、window/tray、OS権限、keyring、noti
 - `docs/architecture-boundaries.md`
 - `docs/engineering/desktop-platform-and-release.md`
 - `docs/release-quality-gates.md`
+- `docs/testing/index.md` のDay Schedule固有risk lane
 - `SECURITY.md`
 - user-visible 変更なら UI/UX Skill
+
+発動した項目だけをreviewします。menu / capability変更だけを理由に、installer、keyring、notification、OAuth、upgrade / uninstallの全matrixへ広げません。
 
 ## 3. capability / CSP gate
 
@@ -52,16 +55,17 @@ description: "Tauri capabilities、CSP、window/tray、OS権限、keyring、noti
 ## 6. build / installer
 
 - lockfile と toolchain を固定する。
-- clean macOS / Windows runner で debug build を行う。
+- affected OSのbuildを行う。clean macOS / Windows両方のinstaller buildはdistribution変更またはrelease判断で行う。
 - release artifact は source commit / version と対応させる。
 - app identifier、product name、data directory、migration compatibility を安易に変更しない。
 - installer upgrade / uninstall が user DB と backup をどう扱うか明示する。
 - signing / notarization secret を GitHub log / artifact へ出さない。
 - unsigned personal build の OS warning と手順を文書化する。
+- ユーザー向けdesktop変更は、通常UIやnative interactionでも最新検証commitから通常アプリを生成し、checksum、復旧可能なinstall、launch smokeを行う。DMG / installerの生成・mount・bundle metadata・architecture・signing検査はdistribution surfaceへ影響する変更、release判断、明示依頼に限定する。
 
 ## 7. platform matrix
 
-最低限:
+distribution変更またはrelease判断の最低matrixです。通常UI / native interactionでは変更したareaと個人利用handoffだけを選び、未確認platformを明記します。
 
 | Area | macOS | Windows |
 |---|---|---|
@@ -84,12 +88,11 @@ description: "Tauri capabilities、CSP、window/tray、OS権限、keyring、noti
 
 ## 9. required evidence
 
-- capability diff and rationale。
-- production CSP。
-- command expose list。
+- 変更した場合のcapability diff、CSP、command expose listとrationale。
 - affected OS build log。
-- install / launch / permission / keyring / notification / OAuth manual matrix。
-- artifact name / version / checksum policy。
+- ユーザー向け変更のlatest app checksum、復旧可能なinstall、launch smoke。
+- 変更したintegrationのpermission / keyring / notification / OAuth manual evidence。
+- distribution変更またはrelease判断のartifact name / version / checksum、installer manual matrix。
 - unexecuted platform checks and risk。
 
-broad capability、remote code、secret exposure、one-platform-only validation for shared change、unsafe upgrade / uninstall は P0 です。
+broad capability、remote code、secret exposure、distribution / shared platform contractを変更したaffected platformの未検証、unsafe upgrade / uninstall は P0 です。

@@ -38,6 +38,8 @@ node --env-file=.env.local scripts/provision-google-oauth-local.mjs
 node --env-file=.env.local scripts/build-personal-google-oauth.mjs
 ```
 
+個人利用buildは通常identifierの `.app` だけを生成します。DMG / installerはdistribution変更またはrelease validationで別途生成します。
+
 client IDはcompile-time設定です。値を変更した場合はRust側を再ビルドしてください。client secretは実行バイナリへ埋め込まず、provisionerがmacOS Keychain / Windows Credential Managerへ登録します。Googleのtoken endpointは対象Desktop clientでclient secretを要求するため、接続時とtoken更新時にRust adapterだけがOS秘密ストアから読み取ります。frontend、SQLite、設定export、ログ、build artifactには渡しません。
 
 環境変数がない、Desktop client ID形式でない、またはOS秘密ストアの資格情報がビルドと一致しない場合、Google接続は利用できません。設定画面ではローカル予定がそのまま使えることと、安全な再設定方法を表示します。client secretをコマンド引数へ直接書かないでください。

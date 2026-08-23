@@ -5,6 +5,8 @@ title: "[Bug]: "
 labels: bug
 ---
 
+<!-- boundedな内部改善・ガバナンスでは、必須情報を少数sectionへ統合し、非該当章を削除して現在 / 目標workflowを簡潔に記載する。 -->
+
 ## 事象
 
 <!-- 何が起きたか。secret、個人予定、raw DB / logは貼らない。 -->

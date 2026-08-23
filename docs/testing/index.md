@@ -8,7 +8,34 @@
 - retry で flaky test を隠さず、clock、race、wait condition を固定する。
 - 未実行検証を成功扱いしない。
 
-## 2. 一括検証
+## 2. Day Schedule固有のrisk lane
+
+Contract ID: `DSN-RISK-BASED-DELIVERY`
+
+このsectionは、WordPack由来の共通ガバナンスへ重ねるDay Schedule Next固有overlayです。検証量は変更file数ではなく、到達可能な損害、変更した境界、CIで再確認できる範囲から選びます。secret、データ損失、architecture boundary、P0、latest-head CI、未解決reviewのhard gateはlaneにかかわらず維持します。
+
+責務laneは排他的な段階ではなく、変更に該当するものを複数選び、必要条件の和集合を使います。data safety laneへ該当しても、distributionを変更していなければinstaller検査を追加しません。latest app handoffはlane外の横断contractです。
+
+| Lane | 代表例 | push前のlocal verification | CI / manual evidence |
+|---|---|---|---|
+| G: governance / docs | agent rule、Markdown、template、verifier | harness、link、公開安全性、変更fileのformat、`git diff --check` | Quality gate。product appのbuild / installは不要 |
+| U: UI / application | React UI、copy、client-side interaction。Rust・Tauri capability・data contractは不変 | focused unit / a11y、format、lint、typecheck。変更に直接関係するnative observation | frontend full CI。ユーザー向け変更は最新アプリhandoff |
+| N: native interaction / capability | Tauri menu、window、shortcut、capability、plugin、OS差分 | Uに加え、capability diff、affected Tauri buildまたはfocused native smoke、該当OSの操作確認 | macOS arm64 native CI。ユーザー向け変更は最新アプリhandoff |
+| S: data safety | SQLite、migration、sync、Outbox、time、notification、backup / restore | 該当domain Skillのfocused / integration matrix。到達可能なfailure、cancel、restart、rollback、atomicity | affected data contractのCI / manual evidence。distribution検査は非該当 |
+| R: distribution / release | identifier、version、bundle、installer、updater、signing、install lifecycle、release判断 | desktop release Skillのartifact / platform matrix | affected installer検査。release判断は全release gate |
+
+focused local checksが成功し、review可能なcohesive commitになった時点でpushしてCIを開始します。同じfull suiteをlocalとCIで理由なく直列重複させません。latest commitに対する個人利用handoffやmanual observationはCIと並行してよく、repository差分が生じた場合だけ新しいheadで再確認します。次の場合はlocal full suiteへ広げます。
+
+- lane S / R、release判断、複数domainを横断する変更のうち、focused checksだけではriskを切り分けられない場合。
+- CIで実行されない重要contract、またはCI失敗の再現・原因調査。
+- 変更したRust / SQLite / sync / time contractがworkspace全体へ波及する場合。
+- 受け入れ条件、最寄りの `AGENTS.md`、該当Skillが明示する場合。
+
+UI証跡も変更面に比例させます。visual / layout / copyの意味が変わる場合は該当状態のbefore / after screenshotを残します。表示差分を持たないnative interactionは、focused test、accessibility、native observationを主証跡とし、意味のないscreenshotを定型生成しません。state matrixは影響状態だけをPR本文または一つのreportへ記録します。
+
+ユーザー向けdesktop runtimeを変更した場合のlatest app handoffは、選択laneにかかわらず維持します。詳細は [`../engineering/desktop-platform-and-release.md`](../engineering/desktop-platform-and-release.md) を正本とします。通常UI変更で必要なのは、latest verified commitからのアプリ生成、checksum、復旧可能なinstall、launch smokeです。DMG / installerのmount、bundle metadata、architecture、signing / notarization、upgrade / uninstall検査はlane R、release判断、または明示依頼に限定します。
+
+## 3. 必要な場合の一括検証
 
 初回だけ依存を固定 lockfile から導入します。
 
@@ -32,7 +59,9 @@ git diff --check
 
 `npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎます。`pnpm verify:patched-dependencies` は、脆弱な `brace-expansion` 1.x / 2.x を修正版 5.0.8 へ統一するpatchが、利用中の全 `minimatch` majorでCommonJS / ESMのbrace展開互換性を保つことを確認します。
 
-## 3. Frontend unit / accessibility
+この一括command群はlane S / R、release、横断変更、CI failureのlocal再現に使います。lane G / U / Nへ常に全commandを要求しません。
+
+## 4. Frontend unit / accessibility
 
 ```bash
 pnpm test
@@ -43,7 +72,7 @@ pnpm test:a11y
 
 Coverage は補助指標です。重要な異常系、a11y、native IPC を coverage 数値で代替しません。
 
-## 4. Rust domain / integration
+## 5. Rust domain / integration
 
 ```bash
 cargo test --workspace --all-features
@@ -67,7 +96,7 @@ cargo test --workspace --all-features
 
 Google Calendar / Tasks integration test は local TCP mock server を bind します。制限 sandbox で `Operation not permitted` になる場合は、通常の開発環境または CI で同じ command を実行します。実 Google account や録画済み個人 payload は使いません。
 
-## 5. Native E2E
+## 6. Native E2E
 
 通常 build に WebDriver plugin を含めないため、E2E 専用 identifier / capability / feature で build します。
 
@@ -94,7 +123,7 @@ Native E2E はPRごとには起動しません。`Native release validation` wor
 
 `build_installers=true`を指定した場合だけ、E2E成功後にWebDriver pluginを含まない通常identifierのunsigned debug installerを作り、7日間保持します。
 
-## 6. Dependency / source security
+## 7. Dependency / source security
 
 ```bash
 pnpm audit --audit-level moderate
@@ -103,7 +132,7 @@ cargo deny --all-features check advisories licenses sources
 
 Dependency audit workflow は依存ファイル変更PR、月1回、手動実行で上記を確認します。Rust advisoryは`cargo-deny`へ一本化し、毎回の`cargo install cargo-audit`と重複判定を削除します。`deny.toml`のadvisory ignoreは、Tauriのtransitive dependencyに安全なupgradeがない例外だけを理由付きで限定し、Tauri更新時に必ず再評価します。
 
-## 7. Visual / state matrix
+## 8. Visual / state matrix
 
 最低確認状態:
 
@@ -118,11 +147,11 @@ Dependency audit workflow は依存ファイル変更PR、月1回、手動実行
 | Data | export、preview、changed file、backup、restore stage、delete confirmation |
 | Layout | 720px、200% text、light / mild / dark、500 items |
 
-UI PR は対象状態ごとの変更前／変更後 screenshot を添付します。新規 scaffold では変更前画面が存在しないため、その事実と初回 native screenshot を証跡にします。
+visual / layout / copyの意味が変わるUI PRは、対象状態の変更前／変更後screenshotを添付します。表示差分のないinteraction、data contract、内部状態変更では、変更を判定できるtest、accessibility、native observationを優先し、screenshot非該当理由をPRへ短く記録します。新規scaffoldでは変更前画面が存在しない事実と初回native screenshotを証跡にします。
 
 visual baseline は `apps/desktop/tests/visual-baselines/macos-arm64/` に置きます。synthetic fixture だけを使用し、日時・一意suffix等の小さな動的領域は全画面pixel比の許容差へ含めます。寸法変更は許容せず即時失敗します。
 
-## 8. Release performance measurement
+## 9. Release performance measurement
 
 macOS arm64 の release 最適化E2E buildで起動性能を測る場合:
 
@@ -135,7 +164,7 @@ warm profile は未計測の1回で事前起動後に同じsynthetic profileを3
 
 `apps/desktop/test-results/native-performance.json` の500件測定は、非前面WebDriverがmacOSでtimer / rAFを1000msへ抑制するため、同期event dispatchと現在layoutのmain-thread budgetを測ります。実compositorのframe interval、high DPI、multi-monitorは前面実機release smokeで別に観測し、補助測定と混同しません。
 
-## 9. Platform release matrix
+## 10. Platform release matrix
 
 | Check | macOS arm64 | macOS x64 | Windows x64 |
 |---|---:|---:|---:|
@@ -152,6 +181,6 @@ warm profile は未計測の1回で事前起動後に同じsynthetic profileを3
 
 全PRでharness / frontend quality gateは自動実行します。private repositoryの個人利用ではbranch protectionを利用できない場合があるため、merge前にPRの`Quality gate`と、native変更時の`Native smoke (macOS arm64)`を人が確認します。Build successだけでは実機権限とOS lifecycleを検証したことになりません。release判定では手動workflow URL、artifact、実機観測者、日付を記録します。
 
-## 10. Evidence
+## 11. Evidence
 
 Issue #4 の現行 verification と UI/UX 反証レビューは [`docs/ai-governance/reports/issue-4-completion.md`](../ai-governance/reports/issue-4-completion.md) にまとめます。PR には command、result、artifact、manual step、未実行理由、残リスクを記載します。

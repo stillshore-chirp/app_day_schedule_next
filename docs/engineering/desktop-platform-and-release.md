@@ -36,6 +36,20 @@ macOS x64 / Windows、Native E2E、installer生成は `Native release validation
 
 手動workflowのmacOS installerは、通常identifierの `.app` をTauriで生成してrunner tempへ退避した後、E2E版と通常版のCargo中間生成物を解放します。そのうえでGUIやFinderに依存しない `hdiutil` で `/Applications` リンク付きの未署名DMGへまとめ、同じjob内で `hdiutil verify` を通します。失敗診断はtarget外へ保持するため、中間生成物を解放しても調査可能性は維持します。WindowsはTauriのNSIS生成経路を使用します。どちらも個人利用の検証artifactであり、署名・notarization済みの公開配布物ではありません。
 
+### 個人利用のlatest app handoff
+
+Contract ID: `DSN-LATEST-APP-HANDOFF`
+
+ユーザー向けdesktop変更は、通常UI、native interaction、data変更のいずれでも、作業完了時に次を行います。利用者が変更直後から最新アプリを使うためのDay Schedule Next固有hard gateであり、省略しません。
+
+1. local verificationを通したcohesive commitを特定し、通常identifierのアプリをそのexact HEADから生成する。個人用OAuthを使うbuildでは既存の安全なprovisioning経路を使い、秘密値を出力しない。
+2. 生成したアプリまたは実行binaryのchecksum、source commit、対象OS / architectureを記録する。
+3. 起動中の既存アプリを安全に終了し、旧bundleを明示したbackupへ退避してから新しいアプリをinstallする。既存ユーザーデータdirectoryは移動・削除しない。
+4. installed binaryが生成物と一致することを確認し、launch smokeと変更した主要操作を確認する。
+5. CIが同じheadで成功する前はhandoffを最終確定と表現しない。headが変わった場合は新しいlatest verified commitから生成・install・launchをやり直す。
+
+通常UI / native interactionでは `pnpm --dir apps/desktop tauri build --debug --bundles app` による通常identifierの `.app` handoffで足ります。`--no-bundle` buildはinstall可能な `.app` を生成しないため、handoffには使いません。DMG / NSISの生成、read-only mount、bundle metadata、architecture、strict signing / notarization、upgrade / uninstall検査は、installer、bundle、identifier、version、signing、updater、install lifecycleへ影響する変更、release判断、または明示依頼で行います。governance / docsだけの変更はproduct binaryを変えないため、アプリの再生成・再install対象外です。
+
 ## 3. Tauri security
 
 - production CSP は self / IPC / bundled asset に限定
