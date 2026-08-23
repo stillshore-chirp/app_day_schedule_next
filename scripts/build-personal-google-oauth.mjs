@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 
-const result = spawnSync("corepack", ["pnpm", "tauri:build:debug"], {
+const result = spawnSync("corepack", ["pnpm", "tauri:build:app:debug"], {
   cwd: process.cwd(),
   env: { ...process.env, CI: "true" },
   stdio: "inherit",

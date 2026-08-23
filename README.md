@@ -32,6 +32,8 @@ pnpm --dir apps/desktop tauri dev
 
 ## 検証
 
+変更範囲に応じて [`docs/testing/index.md`](docs/testing/index.md) のrisk laneから最小十分な組合せを選びます。次は横断変更・release・CI failure再現で使う一括候補であり、通常変更ですべてをlocal実行する必須listではありません。
+
 ```bash
 npm run verify:bootstrap
 pnpm format:check
@@ -45,6 +47,8 @@ cargo test --workspace --all-features
 pnpm build
 pnpm tauri:build:debug
 ```
+
+ユーザー向け変更の個人利用handoffでは、DMGを伴わない `.app` だけを `pnpm tauri:build:app:debug` で生成します。DMG / installer検査はdistribution変更またはrelease判断で行います。
 
 ネイティブ E2E は、E2E 専用 identifier と capability で build してから実行します。通常 build に WebDriver plugin は含まれません。
 

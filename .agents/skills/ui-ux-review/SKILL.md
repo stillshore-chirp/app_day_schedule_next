@@ -18,7 +18,7 @@ description: "Day Schedule Nextのアプリ本体UI、またはrepositoryが制�
 
 最初に [`docs/ai-governance/02-uiux-review-framework.md`](../../../docs/ai-governance/02-uiux-review-framework.md) で対象面を分類します。
 
-- **アプリ本体UI**: repositoryがlayout、操作、状態、focus、accessibilityを実装する画面。本文書の全手順を適用する。
+- **アプリ本体UI**: repositoryがlayout、操作、状態、focus、accessibilityを実装する画面。本文書から変更に直接関係する手順を適用する。
 - **GitHub共同作業面**: Issue / PR template、repository Markdown、workflow説明など。文言、構造、必須性、link、公開安全性を変更範囲に比例して確認する。
 - **混在**: 両方を分けて確認し、一方の証跡で他方を代用しない。
 
@@ -30,6 +30,7 @@ description: "Day Schedule Nextのアプリ本体UI、またはrepositoryが制�
 - 証跡: `docs/ai-governance/03-evidence-and-completion-gates.md`
 - 変更内容に直接関係する `04`〜`12` の詳細文書
 - time / sync / migration / platformへ影響する場合は該当domain Skillとengineering docs
+- 検証と証跡の選択: `docs/testing/index.md` のDay Schedule固有risk lane
 
 indexや全詳細文書を機械的に読み直さず、変更範囲から必要な正本を選びます。
 
@@ -46,7 +47,7 @@ indexや全詳細文書を機械的に読み直さず、変更範囲から必要
 
 1. **価値**: 予定の把握・設計・実行・回復の何を助けるか説明する。
 2. **初見理解**: 日付、現在地、選択対象、主操作、次の行動、回復方法を判断できるか確認する。
-3. **状態**: 該当するstate matrixを作り、対象外は理由を書く。
+3. **状態**: 影響するstateのstate matrixを作り、重要な隣接stateを対象外にする場合だけ理由を書く。
 4. **操作**: pointer、keyboard、直接入力を確認し、dragだけに依存させない。
 5. **アクセシビリティ**: focus order / restoration、name / role / state、contrast、target size、reduced motion、live regionを確認する。
 6. **視覚階層**: Today、現在、次、主操作を短時間で把握でき、overview / detail / Compactが矛盾しないか確認する。
@@ -69,7 +70,7 @@ indexや全詳細文書を機械的に読み直さず、変更範囲から必要
 
 ## 6. 証跡
 
-アプリ本体UIでは、該当画面・状態の変更前後screenshot、test、native observation、state matrix、各レビュー結果を残します。browser previewやmockだけでnative desktop確認を代替しません。
+アプリ本体UIでは、test、accessibility、該当するnative observationを残します。visual / layout / copyの意味が変わる場合は、影響する画面・状態の変更前後screenshotを追加します。表示差分を持たないnative interactionでは、focused test、accessibility、native observationを主証跡とし、意味のないscreenshotを要求しません。state matrixと各レビュー結果は影響範囲だけをPR本文または一つのreportへまとめます。browser previewやmockだけでnative desktop確認を代替しません。
 
 GitHub共同作業面だけの場合は、差分、Markdown / YAML / frontmatter、入力順、link、公開安全性、未実行項目を証跡とします。GitHubが所有する未変更のlayout、focus、loadingまで検査対象を広げません。repository独自UI、受け入れ条件、明示依頼がある場合はscreenshotを取得します。
 

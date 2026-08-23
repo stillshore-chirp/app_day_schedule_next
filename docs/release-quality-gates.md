@@ -2,6 +2,8 @@
 
 Day Schedule Next を「出荷可能」と呼ぶための最終ゲートです。個人利用でも、データと calendar を扱うため基準を下げません。
 
+通常PRの検証選択と個人利用handoffは [`testing/index.md`](testing/index.md) と [`engineering/desktop-platform-and-release.md`](engineering/desktop-platform-and-release.md) を正本とします。ユーザー向けdesktop変更のlatest app install / launchは維持しますが、それだけを理由に本書のrelease全matrixやinstaller検査を毎回適用しません。
+
 ## RG-01 参照機能包含
 
 - `docs/product-invariants.md` の RF-01..RF-20 の受入シナリオが通る。
@@ -56,7 +58,7 @@ Day Schedule Next を「出荷可能」と呼ぶための最終ゲートです�
 - window state、topmost、tray、shortcut、notification、keyring、OAuth loopback。
 - high DPI / multi-monitor の実機または明示未実行。
 - artifact が commit / version と対応する。
-- ユーザー向けデスクトップ変更では、最新の検証済みコミットからアプリ本体または installer を生成し、artifact checksum、対象OS、install path、launch smoke を記録する。実行できない場合は未実行理由と残リスクを記録する。
+- ユーザー向けデスクトップ変更では、最新の検証済みコミットからアプリ本体を生成し、checksum、対象OS、復旧可能なinstall path、launch smokeを記録する。DMG / installerの構造・署名・upgrade検査はdistribution変更またはrelease判断で行う。実行できない場合は未実行理由と残リスクを記録する。
 
 ## RG-09 Documentation
 

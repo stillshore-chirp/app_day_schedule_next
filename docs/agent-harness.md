@@ -21,7 +21,13 @@
 
 同じ判断基準を複数層へコピーしません。commonは入口、pathは局所差分、Skillは手順、docsは理由と判定基準を担当します。
 
-## 3. 3製品への接続
+## 3. WordPack baselineとDay Schedule固有overlay
+
+WordPack for Englishは共通ガバナンスの上流正本です。再適用は共通hard gate、4層配置、3製品adapterを差分として取り込み、repository全体を一括置換しません。このrepositoryで現在有効な製品固有契約はlocal正本を優先し、[`ai-governance/13-maintenance-policy.md`](ai-governance/13-maintenance-policy.md) の再適用手順で保護します。
+
+Day Schedule固有overlayの中心は、[`testing/index.md`](testing/index.md) のrisk-based delivery、[`engineering/desktop-platform-and-release.md`](engineering/desktop-platform-and-release.md) のlatest app handoff、変更面に比例するUI証跡です。検証重複は抑えますが、ユーザー向け変更の最新アプリinstall / launch、データ・同期・時刻・通知・migration・securityのhard gateは弱めません。
+
+## 4. 3製品への接続
 
 ### Codex
 
@@ -43,7 +49,7 @@
 - `.cursor` directoryの存在自体を禁止しない。
 - Cursor固有ruleだけにhard gateを置かない。
 
-## 4. path topology
+## 5. path topology
 
 ```text
 AGENTS.md
@@ -57,7 +63,7 @@ AGENTS.md
 
 root外の `UserManual.md`、`README.md`、`OPERATIONS.md`、`SECURITY.md` はrootのpath bridgeから関連正本へ接続します。
 
-## 5. task topology
+## 6. task topology
 
 共有Skillの正本:
 
@@ -71,7 +77,7 @@ root外の `UserManual.md`、`README.md`、`OPERATIONS.md`、`SECURITY.md` はro
 
 Skillは発動条件、読む正本、実行順序、成果物、停止条件に集中します。判定項目の長文はproduct invariants、engineering docs、AI governanceへ置きます。
 
-## 6. Hard gateとheuristic
+## 7. Hard gateとheuristic
 
 ### hard gate
 
@@ -96,7 +102,7 @@ Skillは発動条件、読む正本、実行順序、成果物、停止条件に
 
 heuristicを採用しないこと自体をFailにせず、品質・保守性・誤用リスクへの実質的な影響で判断します。
 
-## 7. Instruction budget
+## 8. Instruction budget
 
 machine verifierは次を上限として検査します。
 
@@ -110,7 +116,7 @@ machine verifierは次を上限として検査します。
 
 上限は常時指示量の暴走を防ぐhard gateです。上限内でも意味上の重複、曖昧な命令、広すぎるscopeはreviewで確認します。
 
-## 8. 配置判断
+## 9. 配置判断
 
 1. file存在、format、禁止pattern、sizeなど機械判定できる内容はscript / test / CIへ置く。
 2. 全作業で必要なhard gateだけをrootへ置く。
@@ -121,7 +127,7 @@ machine verifierは次を上限として検査します。
 
 rootへ詳細手順を追加する変更は、他の配置で成立しない理由をIssueとPRへ記録します。
 
-## 9. review収束
+## 10. review収束
 
 - latest meaningful changeに対する必須CIと利用可能なreviewを確認する。
 - 指摘対応でheadが変わった場合だけ再確認する。
@@ -130,7 +136,7 @@ rootへ詳細手順を追加する変更は、他の配置で成立しない理�
 - reviewが提供されない場合は代替自己レビューと未確認範囲を記録する。
 - merge、close、releaseは別の明示指示がある場合だけ行う。
 
-## 10. 機械検証
+## 11. 機械検証
 
 既存のWindows / macOS開発入口を保つため、Node製verifierを正本にします。
 
@@ -154,7 +160,7 @@ npm run verify:bootstrap
 
 自動検査だけで各製品の実際のrule discoveryを完全に保証したとは扱いません。製品仕様変更や発動漏れを確認した場合は、adapter、正本、verifierを同じ変更で更新します。
 
-## 11. 変更時の確認
+## 12. 変更時の確認
 
 - 3製品のいずれかが共通hard gateへ到達できない状態を残さない。
 - adapterだけに新しい品質基準を置かない。

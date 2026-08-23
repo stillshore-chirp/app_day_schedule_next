@@ -15,7 +15,7 @@
 
 ## 2. アプリ本体UIの証跡
 
-変更に該当する範囲で、次を残します。
+変更に該当する範囲で、次から判断に必要なものを残します。全項目を定型的に別成果物へしません。
 
 - 対象ユーザー、目的、支援するtask
 - 変更画面、component、window、state、input、output
@@ -32,7 +32,9 @@
 
 ### 前後screenshot
 
-アプリ本体UIまたはrepository独自UIの変更では、該当画面・状態の変更前後screenshotをPRへ添付します。同じviewport、OS、synthetic fixtureで比較します。
+visual / layout / copyの意味が変わるアプリ本体UIまたはrepository独自UIでは、該当画面・状態の変更前後screenshotをPRへ添付します。同じviewport、OS、synthetic fixtureで比較します。
+
+表示差分を持たないnative interaction、data contract、内部状態変更は、focused test、accessibility tree、native observation、保存結果など、変更を直接判定できる証跡を優先します。意味のないbefore / after screenshotや全state matrixを要求せず、非該当理由をPRへ短く記録します。
 
 取得できない場合は、取得できなかった検証、理由、代替証跡、残るリスク、次に必要な確認を示します。受け入れ条件上必須なら完了扱いにしません。
 
@@ -75,9 +77,9 @@ GitHubが所有する未変更のlayout、keyboard、focus、loadingへアプリ
 - initial comprehensionと主要状態を確認している。
 - accessibility、visual hierarchy、copy、efficiency、trustを確認している。
 - counter-reviewを実施している。
-- 必要な前後screenshotをPRで確認できる。
+- visual / layout / copyへ影響する場合、必要な前後screenshotをPRで確認できる。
 - time / sync / migration / platformへ影響する場合、該当Skillのmatrixを満たす。
-- latest検証commitに対応するartifact / install / launch証跡をrelease gateに従って扱う。
+- ユーザー向けdesktop runtimeを変更した場合、[`docs/engineering/desktop-platform-and-release.md`](../engineering/desktop-platform-and-release.md) のlatest app handoffに従い、checksum、復旧可能なinstall、launch証跡を残す。
 
 ## 6. Pull Requestの完了ゲート
 

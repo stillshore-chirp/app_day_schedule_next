@@ -30,6 +30,55 @@ function rejectText(file, forbidden) {
   if (read(file).includes(forbidden)) fail(`${file}: contains retired instruction ${JSON.stringify(forbidden)}`);
 }
 
+function requireContractBlock(file, contractId, expected) {
+  if (!exists(file)) return;
+  const text = read(file);
+  const occurrences = text.split(contractId).length - 1;
+  if (occurrences !== 1) {
+    fail(
+      `${file}: contract ${contractId} must appear exactly once, found ${occurrences}`,
+    );
+    return;
+  }
+  const marker = text.indexOf(contractId);
+  const nextHeading = text.indexOf("\n## ", marker);
+  const block = text.slice(marker, nextHeading < 0 ? text.length : nextHeading);
+  for (const value of expected) {
+    if (!block.includes(value)) {
+      fail(
+        `${file}: contract ${contractId} must contain ${JSON.stringify(value)}`,
+      );
+    }
+  }
+}
+
+function requirePackageScripts(expected) {
+  if (!exists("package.json")) return;
+  let packageJson;
+  try {
+    packageJson = JSON.parse(read("package.json"));
+  } catch (error) {
+    fail(
+      `package.json: invalid JSON (${error instanceof Error ? error.message : String(error)})`,
+    );
+    return;
+  }
+  for (const [name, fragments] of Object.entries(expected)) {
+    const command = packageJson.scripts?.[name];
+    if (typeof command !== "string") {
+      fail(`package.json: scripts.${name} must be a string`);
+      continue;
+    }
+    for (const fragment of fragments) {
+      if (!command.includes(fragment)) {
+        fail(
+          `package.json: scripts.${name} must contain ${JSON.stringify(fragment)}`,
+        );
+      }
+    }
+  }
+}
+
 function maxSize(file, maxLines, maxBytes) {
   if (!exists(file)) return;
   const text = read(file);
@@ -313,6 +362,96 @@ requireText("docs/ai-governance/13-maintenance-policy.md", ".cursor");
 requireText("docs/ai-governance/13-maintenance-policy.md", "GitHub共同作業面");
 requireText("docs/ai-governance/14-issue-quality-gate.md", "現在と対応後のユーザー体験");
 requireText("docs/ai-governance/15-agent-harness-compatibility.md", "alwaysApply: false");
+
+requireContractBlock("docs/testing/index.md", "DSN-RISK-BASED-DELIVERY", [
+  "| G: governance / docs |",
+  "| U: UI / application |",
+  "| N: native interaction / capability |",
+  "| S: data safety |",
+  "| R: distribution / release |",
+  "複数選び",
+  "focused local checks",
+  "latest-head CI",
+  "同じfull suiteをlocalとCIで理由なく直列重複させません",
+  "latest app handoff",
+  "復旧可能なinstall",
+  "lane R",
+]);
+requireContractBlock(
+  "docs/engineering/desktop-platform-and-release.md",
+  "DSN-LATEST-APP-HANDOFF",
+  [
+    "exact HEAD",
+    "checksum",
+    "backup",
+    "install",
+    "installed binary",
+    "launch smoke",
+    "headが変わった場合",
+    "tauri:build:app:debug",
+    "governance / docsだけの変更",
+  ],
+);
+requireContractBlock(
+  "docs/ai-governance/13-maintenance-policy.md",
+  "DSN-WORDPACK-OVERLAY",
+  [
+    "WordPack for English",
+    "対象revision",
+    "file単位の全置換",
+    "DSN-RISK-BASED-DELIVERY",
+    "DSN-LATEST-APP-HANDOFF",
+    "明示的な再評価なし",
+    "削除・弱化・重厚化",
+  ],
+);
+
+requireText("AGENTS.md", "docs/testing/index.md");
+requireText("AGENTS.md", "docs/engineering/desktop-platform-and-release.md");
+requireText("AGENTS.md", "checksum、復旧可能なinstall、launch smokeを必須");
+requireText(
+  ".agents/skills/ui-ux-review/SKILL.md",
+  "表示差分を持たないnative interaction",
+);
+requireText(
+  ".agents/skills/ui-ux-review/SKILL.md",
+  "意味のないscreenshotを要求しません",
+);
+requireText(
+  ".agents/skills/desktop-release-review/SKILL.md",
+  "DMG / installerの生成・mount",
+);
+requireText("docs/ai-governance/14-issue-quality-gate.md", "必須なのは情報");
+requireText("scripts/build-personal-google-oauth.mjs", "tauri:build:app:debug");
+
+for (const file of [
+  ".github/ISSUE_TEMPLATE/feature.md",
+  ".github/ISSUE_TEMPLATE/bug.md",
+  ".github/ISSUE_TEMPLATE/investigation.md",
+  ".github/ISSUE_TEMPLATE/operations.md",
+]) {
+  requireText(file, "boundedな内部改善・ガバナンス");
+}
+
+for (const [file, retired] of [
+  [".agents/skills/ui-ux-review/SKILL.md", "本文書の全手順を適用する"],
+  [
+    ".agents/skills/desktop-release-review/SKILL.md",
+    "one-platform-only validation for shared change",
+  ],
+  [
+    "docs/testing/index.md",
+    "UI PR は対象状態ごとの変更前／変更後 screenshot を添付します",
+  ],
+]) {
+  rejectText(file, retired);
+}
+
+requirePackageScripts({
+  "verify:harness": ["node scripts/verify-agent-harness.mjs"],
+  "verify:bootstrap": ["verify:harness", "verify:workflows"],
+  "tauri:build:app:debug": ["tauri build --debug --bundles app"],
+});
 
 for (const template of [
   ".github/ISSUE_TEMPLATE/feature.md",

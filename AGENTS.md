@@ -52,7 +52,7 @@ rootから複数領域を編集する場合も、各変更pathの正本を個別
 - P0、必須CI失敗、actionableな未解決review、必須証跡不足を隠す。
 - merge、Issue close、release、production操作、不可逆な削除を、依頼された権限範囲を超えて行う。
 
-ユーザー向けdesktop変更では、該当OSのbuild・native確認と、最新検証commitに対応するartifact / install / launch証跡を [`docs/release-quality-gates.md`](docs/release-quality-gates.md) と desktop release Skillに従って扱います。取得不能な証跡は未実行理由と残リスクを記録します。
+ユーザー向けdesktop変更では、[`docs/testing/index.md`](docs/testing/index.md) のDay Schedule固有risk laneと [`docs/engineering/desktop-platform-and-release.md`](docs/engineering/desktop-platform-and-release.md) の個人利用handoffに従います。最新検証commitからアプリを生成し、checksum、復旧可能なinstall、launch smokeを必須とします。DMG / installerの構造・署名・upgrade検査はdistribution surfaceへ影響する変更またはrelease判断へ限定し、governance / docsだけの変更ではアプリを再生成しません。
 
 ## 5. 設計と実装
 
@@ -67,7 +67,7 @@ DRY、KISS、YAGNI、SRP、SoC、OCP、POLA、file size、coverageは設計heuri
 
 ## 6. 検証
 
-変更範囲に応じた正本は [`docs/testing/index.md`](docs/testing/index.md) です。最低限、次を使い分けます。
+変更範囲に応じた正本は [`docs/testing/index.md`](docs/testing/index.md) です。次は検証候補であり、すべてをlocalで直列実行する共通最低条件ではありません。risk laneに従ってfocused local checksを選び、同じfull gateはlatest-head CIへ委ねます。
 
 ```bash
 npm run verify:bootstrap

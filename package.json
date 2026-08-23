@@ -19,6 +19,7 @@
     "test:a11y": "pnpm --dir apps/desktop test:a11y",
     "test:e2e": "pnpm --dir apps/desktop test:e2e",
     "build": "pnpm --dir apps/desktop build",
+    "tauri:build:app:debug": "pnpm --dir apps/desktop tauri build --debug --bundles app",
     "tauri:build:debug": "pnpm --dir apps/desktop tauri build --debug",
     "verify": "npm run verify:bootstrap && pnpm verify:patched-dependencies && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace --all-features"
   },

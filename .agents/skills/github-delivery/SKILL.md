@@ -21,7 +21,7 @@ repository変更をIssueからPR・CI・reviewまで運ぶ作業で使います�
 
 - 既存Issueを検索し、依頼全体を含むものがあれば利用する。
 - 非軽微な機能、修正、設計、文書、ガバナンス変更に既存Issueがなければ作成する。
-- [`docs/ai-governance/14-issue-quality-gate.md`](../../../docs/ai-governance/14-issue-quality-gate.md) に従い、理由、根拠、現在と目標、範囲、非対象、受け入れ条件、検証、リスクを書く。
+- [`docs/ai-governance/14-issue-quality-gate.md`](../../../docs/ai-governance/14-issue-quality-gate.md) に従い、理由、根拠、現在と目標、範囲、非対象、受け入れ条件、検証、リスクを書く。boundedな内部改善では必須情報を少数sectionへ統合し、非該当template欄や架空のユーザー体験を残さない。
 - typoや同一PR内の局所修正でIssueを省略する場合は、PR本文へ理由を書く。
 - 実装中に範囲や確認済み事実が変わった場合は、Issue本文またはコメントを更新する。
 
@@ -30,6 +30,7 @@ repository変更をIssueからPR・CI・reviewまで運ぶ作業で使います�
 - default branchの最新状態からwork branchを作る。標準名は `agent/<purpose>` とし、既存規約、ユーザー指定、開始時点の契約を尊重する。
 - 真のblockerがない限り、調査、実装、検証、配送まで継続する。
 - 意味のある変更単位でcommitし、messageは変更目的を表す。
+- `docs/testing/index.md` のrisk laneでfocused local checksが成功したcohesive commitはpushしてCIを開始する。同じfull gateをlocalで理由なく直列重複させるためにCI開始を遅らせない。
 - commit前に差分、追加ファイル、secret混入、生成物、無関係な変更を確認する。
 - force push、履歴改変、不可逆操作は明示された権限内だけで行う。
 

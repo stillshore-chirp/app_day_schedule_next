@@ -100,6 +100,22 @@ root、Skill、docs、tool ruleへ同じ長文を複製
 
 tool仕様が変わった場合は、3製品の現行仕様を確認し、adapterとverifierを同じ変更で更新します。
 
+## WordPack正本の再適用とDay Schedule固有overlay
+
+Contract ID: `DSN-WORDPACK-OVERLAY`
+
+WordPack for Englishは共通ガバナンスの上流正本です。再適用時は対象revisionを固定して共通hard gate、rule配置、Skill、adapter、machine verifierを比較し、Day Schedule Nextへ適合する差分だけを取り込みます。file単位の全置換、上流が厳しいという理由だけのlocal gate追加、非該当checklistの復活は行いません。
+
+次はDay Schedule Next固有overlayとして維持します。
+
+- `docs/testing/index.md` の `DSN-RISK-BASED-DELIVERY`: focused local checks後にlatest-head CIを開始し、同じfull gateを理由なく直列重複させない。
+- `docs/engineering/desktop-platform-and-release.md` の `DSN-LATEST-APP-HANDOFF`: ユーザー向けdesktop変更ではlatest verified commitからアプリを生成し、checksum、復旧可能なinstall、launchを必須とする。
+- visual差分を持たないinteractionへ意味のないbefore / after screenshotや全state matrixを要求せず、focused test、accessibility、native observationを使う。
+- DMG / installerの構造、署名、upgrade / uninstall検査をdistribution変更、release判断、明示依頼へ限定する。
+- sync、time、notification、migration、backup、security、data lossのhard gateはrisk laneで緩和しない。
+
+再適用PRでは、上流で変わった共通契約、維持したlocal overlay、採用しなかった重厚化と理由をIssue / PRへ記録します。overlayを変更する場合は、対象contract ID、時間短縮だけに依存しないrisk評価、replacement control、受け入れ条件、verifier変更を同じPRへ含めます。明示的な再評価なしにoverlayを削除・弱化・重厚化しません。
+
 ## 検証
 
 ```bash
