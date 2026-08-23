@@ -5,6 +5,9 @@
   "windows": ["main"],
   "permissions": [
     "core:event:default",
+    "core:menu:allow-new",
+    "core:menu:allow-popup",
+    "core:resources:allow-close",
     "dialog:allow-open",
     "dialog:allow-save",
     "notification:default",

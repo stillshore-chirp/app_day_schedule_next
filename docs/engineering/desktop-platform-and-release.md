@@ -42,6 +42,7 @@ macOS x64 / Windows、Native E2E、installer生成は `Native release validation
 - remote script / CDN / iframe / object を禁止
 - Google HTTP、SQLite、keyring、notification adapter は Rust 側
 - frontend plugin permission は main / compact / analog-clock window ごとの最小 capability
+- Ticketのnative context menuはmain windowだけが構築・popupでき、app menuやwindow menuの設定権限を持たない
 - general shell、general filesystem、raw SQL、arbitrary HTTP permission は不使用
 - external browser は OAuth の検証済み Google authorization URL、またはmain windowのMarkdownプレビューで利用者が明示的に実行したHTTP(S) URLだけを開く
 - Markdownプレビューのopener capabilityはmain windowとHTTP(S) scopeに限定し、WebView内遷移とopenerの暗黙リンク処理を無効にする

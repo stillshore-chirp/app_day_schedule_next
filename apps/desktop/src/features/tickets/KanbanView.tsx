@@ -12,6 +12,7 @@ import {
   nextKeyboardTarget,
   type TicketFilters,
 } from "./ticket-board-model";
+import { showTicketMoveContextMenu } from "./ticket-context-menu";
 import { TicketSchedulePlanner } from "./TicketSchedulePlanner";
 
 interface EditorState {
@@ -109,7 +110,7 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Ticket | null>(null);
   const [deletedDraft, setDeletedDraft] = useState<TicketDraft | null>(null);
-  const [actionError, setActionError] = useState<"failure" | "conflict" | null>(null);
+  const [actionError, setActionError] = useState<"failure" | "conflict" | "menu" | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const confirmRef = useRef<HTMLDivElement>(null);
@@ -290,7 +291,25 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
     }
   }
 
-  async function moveTicket(ticket: Ticket, targetColumnId: string, beforeTicketId: string | null) {
+  const focusTicketCard = useCallback((ticketId: string) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const card = [
+          ...(boardRef.current?.querySelectorAll<HTMLElement>("[data-ticket-id]") ?? []),
+        ].find((candidate) => candidate.dataset.ticketId === ticketId);
+        card?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+        card?.querySelector<HTMLButtonElement>(".ticket-card__open")?.focus();
+      });
+    });
+  }, []);
+
+  async function moveTicket(
+    ticket: Ticket,
+    targetColumnId: string,
+    beforeTicketId: string | null,
+    targetColumnName?: string,
+    focusAfterMove = false,
+  ) {
     setActionError(null);
     try {
       const moved = await client.moveTicket({
@@ -300,10 +319,43 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
         targetColumnId,
         beforeTicketId,
       });
-      setAnnouncement(translate("features.tickets.KanbanView.moved", [moved.title]));
+      setAnnouncement(
+        translate(
+          targetColumnName
+            ? "features.tickets.KanbanView.movedToColumn"
+            : "features.tickets.KanbanView.moved",
+          targetColumnName ? [moved.title, targetColumnName] : [moved.title],
+        ),
+      );
       await refresh();
+      if (focusAfterMove) focusTicketCard(moved.id);
+      return moved;
     } catch (error) {
       setActionError(errorKind(error));
+      return null;
+    }
+  }
+
+  async function openTicketMoveMenu(ticket: Ticket, position?: { x: number; y: number }) {
+    if (!board) return;
+    setActionError(null);
+    try {
+      await showTicketMoveContextMenu({
+        columns: board.columns,
+        currentColumnId: ticket.columnId,
+        enabled: reorderEnabled,
+        labels: {
+          move: translate("features.tickets.KanbanView.contextMove"),
+          currentColumn: (columnName) =>
+            translate("features.tickets.KanbanView.currentColumn", [columnName]),
+        },
+        ...(position ? { position } : {}),
+        onMove: (column) => {
+          void moveTicket(ticket, column.id, null, column.name, true);
+        },
+      });
+    } catch {
+      setActionError("menu");
     }
   }
 
@@ -319,7 +371,8 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
       setAnnouncement(translate("features.tickets.KanbanView.moveBoundary"));
       return;
     }
-    await moveTicket(ticket, target.columnId, target.beforeTicketId);
+    const targetColumnName = board.columns.find((column) => column.id === target.columnId)?.name;
+    await moveTicket(ticket, target.columnId, target.beforeTicketId, targetColumnName, true);
   }
 
   function scrollBoardDuringDrag(clientX: number) {
@@ -555,18 +608,31 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
           title={translate(
             actionError === "conflict"
               ? "features.tickets.KanbanView.conflictTitle"
-              : "features.tickets.KanbanView.saveFailed",
+              : actionError === "menu"
+                ? "features.tickets.KanbanView.menuFailed"
+                : "features.tickets.KanbanView.saveFailed",
           )}
           action={
-            <button className="button" onClick={() => void refresh()}>
-              {translate("features.tickets.KanbanView.reload")}
+            <button
+              className="button"
+              onClick={() => (actionError === "menu" ? setActionError(null) : void refresh())}
+            >
+              {translate(
+                actionError === "menu"
+                  ? "features.tickets.KanbanView.dismiss"
+                  : "features.tickets.KanbanView.reload",
+              )}
             </button>
           }
         >
           {translate(
             actionError === "conflict"
               ? "features.tickets.KanbanView.conflictRecovery"
-              : "features.tickets.KanbanView.failureRecovery",
+              : actionError === "menu"
+                ? reorderEnabled
+                  ? "features.tickets.KanbanView.menuFailureRecovery"
+                  : "features.tickets.KanbanView.menuFailureRecoveryFiltered"
+                : "features.tickets.KanbanView.failureRecovery",
           )}
         </StatusMessage>
       ) : null}
@@ -616,7 +682,10 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                   {columnTickets.length}
                 </span>
               </header>
-              <div className="ticket-column__cards" role="list">
+              <div
+                className="ticket-column__cards"
+                role={columnTickets.length > 0 ? "list" : undefined}
+              >
                 {columnTickets.map((ticket) => (
                   <TicketCard
                     key={ticket.id}
@@ -641,6 +710,7 @@ export function KanbanView({ client, today }: { client: AppClient; today: string
                       dropTicketAtPoint(ticket, clientX, clientY)
                     }
                     onMove={(direction) => void keyboardMove(ticket, direction)}
+                    onOpenMoveMenu={(position) => void openTicketMoveMenu(ticket, position)}
                   />
                 ))}
                 {columnTickets.length === 0 ? (
@@ -982,6 +1052,7 @@ function TicketCard({
   onDragMove,
   onDropAtPoint,
   onMove,
+  onOpenMoveMenu,
 }: {
   ticket: Ticket;
   draggable: boolean;
@@ -992,8 +1063,10 @@ function TicketCard({
   onDragMove: (clientX: number) => void;
   onDropAtPoint: (clientX: number, clientY: number) => void;
   onMove: (direction: "left" | "right" | "up" | "down") => void;
+  onOpenMoveMenu: (position?: { x: number; y: number }) => void;
 }) {
   const moveHintId = `ticket-move-hint-${ticket.id}`;
+  const contextMoveHintId = `ticket-context-move-hint-${ticket.id}`;
   const metadataId = `ticket-metadata-${ticket.id}`;
   const mouseDragRef = useRef<{
     startX: number;
@@ -1026,6 +1099,12 @@ function TicketCard({
       data-ticket-id={ticket.id}
       data-priority={ticket.priority}
       data-dragging={dragging ? "true" : "false"}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.querySelector<HTMLButtonElement>(".ticket-card__open")?.focus();
+        onOpenMoveMenu();
+      }}
     >
       <button
         className="ticket-card__open"
@@ -1038,11 +1117,17 @@ function TicketCard({
           onOpen(event.currentTarget);
         }}
         aria-label={translate("features.tickets.KanbanView.openTicket", [ticket.title])}
-        aria-describedby={`${metadataId}${draggable ? ` ${moveHintId}` : ""}`}
-        aria-keyshortcuts={draggable ? "ArrowLeft ArrowRight ArrowUp ArrowDown" : undefined}
-        title={draggable ? translate("features.tickets.KanbanView.moveHint") : undefined}
+        aria-describedby={`${metadataId} ${draggable ? moveHintId : contextMoveHintId}`}
+        aria-keyshortcuts={
+          draggable ? "ArrowLeft ArrowRight ArrowUp ArrowDown Shift+F10" : "Shift+F10"
+        }
+        title={translate(
+          draggable
+            ? "features.tickets.KanbanView.moveHint"
+            : "features.tickets.KanbanView.contextMoveHint",
+        )}
         onMouseDown={(event) => {
-          if (!draggable || event.button !== 0) return;
+          if (!draggable || event.button !== 0 || event.ctrlKey) return;
           cleanupMouseDragRef.current?.();
           const mouseDrag = {
             startX: event.clientX,
@@ -1093,6 +1178,22 @@ function TicketCard({
           window.addEventListener("blur", handleWindowBlur);
         }}
         onKeyDown={(event) => {
+          if (
+            !event.altKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.repeat &&
+            (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            const bounds = event.currentTarget.getBoundingClientRect();
+            onOpenMoveMenu({
+              x: bounds.left + Math.min(24, bounds.width / 2),
+              y: bounds.top + Math.min(24, bounds.height / 2),
+            });
+            return;
+          }
           if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat)
             return;
           if (!draggable) return;
@@ -1129,6 +1230,11 @@ function TicketCard({
                 .join("、")}`
             : ""}
         </span>
+        {!draggable ? (
+          <span className="sr-only" id={contextMoveHintId}>
+            {translate("features.tickets.KanbanView.contextMoveHint")}
+          </span>
+        ) : null}
         {draggable ? (
           <span className="sr-only" id={moveHintId}>
             {translate("features.tickets.KanbanView.moveHint")}
