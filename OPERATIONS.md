@@ -81,7 +81,7 @@ pnpm build
 pnpm tauri:build:debug
 ```
 
-この一覧は横断変更、data / distribution、release判断、CI failure再現の一括候補です。通常変更は [`docs/testing/index.md`](docs/testing/index.md) のrisk laneでfocused local checksを選び、full suiteはlatest-head CIへ委ねます。ユーザー向け変更の個人利用handoffは`pnpm tauri:build:app:debug`で `.app` を生成し、復旧可能なinstallとlaunch smokeを行います。
+この一覧は横断変更、data / distribution、release判断、CI failure再現の一括候補です。通常変更は [`docs/testing/index.md`](docs/testing/index.md) のrisk laneでfocused local checksを選び、full suiteはlatest-head CIへ委ねます。ユーザー向け変更の個人利用handoffは`pnpm --dir apps/desktop tauri build --debug --bundles app`で `.app` を生成し、復旧可能なinstallとlaunch smokeを行います。
 
 ネイティブ E2E は E2E 専用 build で実行します。失敗時の `apps/desktop/logs` はローカル診断用であり、public artifact へ raw のまま添付しません。
 

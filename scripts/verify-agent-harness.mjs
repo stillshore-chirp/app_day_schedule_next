@@ -388,7 +388,7 @@ requireContractBlock(
     "installed binary",
     "launch smoke",
     "headが変わった場合",
-    "tauri:build:app:debug",
+    "pnpm --dir apps/desktop tauri build --debug --bundles app",
     "governance / docsだけの変更",
   ],
 );
@@ -422,7 +422,10 @@ requireText(
   "DMG / installerの生成・mount",
 );
 requireText("docs/ai-governance/14-issue-quality-gate.md", "必須なのは情報");
-requireText("scripts/build-personal-google-oauth.mjs", "tauri:build:app:debug");
+requireText(
+  "scripts/build-personal-google-oauth.mjs",
+  '["pnpm", "--dir", "apps/desktop", "tauri", "build", "--debug", "--bundles", "app"]',
+);
 
 for (const file of [
   ".github/ISSUE_TEMPLATE/feature.md",
@@ -450,7 +453,6 @@ for (const [file, retired] of [
 requirePackageScripts({
   "verify:harness": ["node scripts/verify-agent-harness.mjs"],
   "verify:bootstrap": ["verify:harness", "verify:workflows"],
-  "tauri:build:app:debug": ["tauri build --debug --bundles app"],
 });
 
 for (const template of [

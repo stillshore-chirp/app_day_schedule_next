@@ -48,7 +48,7 @@ Contract ID: `DSN-LATEST-APP-HANDOFF`
 4. installed binaryが生成物と一致することを確認し、launch smokeと変更した主要操作を確認する。
 5. CIが同じheadで成功する前はhandoffを最終確定と表現しない。headが変わった場合は新しいlatest verified commitから生成・install・launchをやり直す。
 
-通常UI / native interactionでは `pnpm tauri:build:app:debug` による通常identifierの `.app` handoffで足ります。`--no-bundle` buildはinstall可能な `.app` を生成しないため、handoffには使いません。DMG / NSISの生成、read-only mount、bundle metadata、architecture、strict signing / notarization、upgrade / uninstall検査は、installer、bundle、identifier、version、signing、updater、install lifecycleへ影響する変更、release判断、または明示依頼で行います。governance / docsだけの変更はproduct binaryを変えないため、アプリの再生成・再install対象外です。
+通常UI / native interactionでは `pnpm --dir apps/desktop tauri build --debug --bundles app` による通常identifierの `.app` handoffで足ります。`--no-bundle` buildはinstall可能な `.app` を生成しないため、handoffには使いません。DMG / NSISの生成、read-only mount、bundle metadata、architecture、strict signing / notarization、upgrade / uninstall検査は、installer、bundle、identifier、version、signing、updater、install lifecycleへ影響する変更、release判断、または明示依頼で行います。governance / docsだけの変更はproduct binaryを変えないため、アプリの再生成・再install対象外です。
 
 ## 3. Tauri security
 

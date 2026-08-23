@@ -48,7 +48,7 @@ pnpm build
 pnpm tauri:build:debug
 ```
 
-ユーザー向け変更の個人利用handoffでは、DMGを伴わない `.app` だけを `pnpm tauri:build:app:debug` で生成します。DMG / installer検査はdistribution変更またはrelease判断で行います。
+ユーザー向け変更の個人利用handoffでは、DMGを伴わない `.app` だけを `pnpm --dir apps/desktop tauri build --debug --bundles app` で生成します。DMG / installer検査はdistribution変更またはrelease判断で行います。
 
 ネイティブ E2E は、E2E 専用 identifier と capability で build してから実行します。通常 build に WebDriver plugin は含まれません。
 
