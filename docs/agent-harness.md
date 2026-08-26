@@ -127,14 +127,47 @@ machine verifierは次を上限として検査します。
 
 rootへ詳細手順を追加する変更は、他の配置で成立しない理由をIssueとPRへ記録します。
 
-## 10. review収束
+## 10. 包括レビュー収束
 
-- latest meaningful changeに対する必須CIと利用可能なreviewを確認する。
-- 指摘対応でheadが変わった場合だけ再確認する。
-- 変更のないheadへclean reviewを複数回要求しない。
-- 特定review botが存在しない環境を未完了にしない。
-- reviewが提供されない場合は代替自己レビューと未確認範囲を記録する。
-- merge、close、releaseは別の明示指示がある場合だけ行う。
+Contract ID: `DSN-COMPREHENSIVE-REVIEW-ROUNDS`
+
+「包括レビューラウンド」は、同一のverified snapshotと同一のrisk lane集合を対象に、変更全体を再評価する監査です。verified snapshotは対象commitに、review判断へ影響する生成物、設定、実行証拠を対応付けた単位とします。使用したagent、review機能、実行環境が異なっても、対象snapshotとrisk lane集合が同じなら同じ種類の包括レビューとして数えます。
+
+初回包括レビューはlatest meaningful changeを含む配送候補HEADを対象にします。
+
+包括レビューは次の順序と回数で収束させます。
+
+1. 配送候補HEADに対する初回包括レビューを1回実行する。
+2. 指摘修正後は変更pathのfocused testを先に実行する。
+3. 必要な場合だけ、修正後の再レビューを1回実行する。
+4. 3回目以降の包括レビューは原則実行しない。
+
+3回目以降の確認は、次のいずれかを具体的な証拠で確認した場合に限ります。
+
+- 未解決のP0またはP1がある。
+- セキュリティ、秘密情報、データ整合性、破壊的操作に関わる未解決事項がある。
+- 前回レビュー後に新しい変更pathまたはrisk laneが追加された。
+- 前回レビューの対象漏れ、証拠不足、一次証拠との矛盾が具体的に確認された。
+- 受け入れ条件またはhard gateを満たさない新しい証拠が得られた。
+
+3回目以降を行う場合も、変更全体の監査をそのまま反復しません。失効した証拠、対象risk lane、変更path、確認する具体的な問いを限定し、additional review justificationとともにrisk lane台帳へ記録します。
+
+P2以下の指摘だけが残る場合も、回数だけで機械的に無視しません。受け入れ条件、verifierの正しさ、利用者に影響する不具合へ直結する指摘は同じPRで解消します。それ以外は影響、non-blockingと判断した根拠、必要なfollow-upを記録し、同一snapshotへの包括レビュー周回を終了します。
+
+review threadへの回答、修正pathだけのfocused確認、既知の指摘に対する回帰testは包括レビューラウンドへ数えません。ただし、これらの名目で変更全体を再監査した場合は包括レビューとして数え、回数制限を迂回しません。reviewが提供されない場合は代替自己レビューと未確認範囲を記録し、特定review機能の不在だけを未完了理由にしません。merge、close、releaseは別の明示指示がある場合だけ行います。
+
+同一snapshotへのclean reviewを増やす目的で包括レビューを反復しません。
+
+検証とreviewは次の順序を原則とします。
+
+1. 実装中は変更pathに対応するfocused testを実行する。
+2. 配送候補HEADで初回包括レビューを実行する。
+3. 指摘修正後は変更pathのfocused testを実行する。
+4. 必要な場合だけ2回目の包括レビューを実行する。
+5. review収束後に配送対象の最終HEADを確定する。
+6. 最終HEADで必要なfull gateを原則1回実行する。
+
+成功済みのreviewまたはfull gateを再実行する時は、対象変更、生成物変更、環境変更、証拠期限切れなど、前回証拠が失効した具体的な理由をrisk lane台帳へ記録します。
 
 ## 11. 機械検証
 
@@ -169,7 +202,7 @@ npm run verify:bootstrap
 - Node製bootstrapを維持し、Windows開発へUnix shell依存を追加しない。
 - UI、runtime、DB、sync、notification、releaseへ影響しないharness変更は、GitHub共同作業面の証跡として評価する。
 
-## 12. Subagent orchestration
+## 13. Subagent orchestration
 
 サブエージェントは専門riskを独立して並列化するために使い、同じ証拠を読む担当を増やすために使いません。メインエージェントは委任前に、次を満たす重複しないlaneを定義します。
 
@@ -177,24 +210,23 @@ npm run verify:bootstrap
 - 対象HEAD、対象path、確認する具体的な問い。
 - 既存報告やメインエージェント自身の一次証拠確認では不足する理由。
 
-この3点を定義できない委任は行いません。包括監査を複数agentへ同時委任せず、同一HEAD・同一risk laneの独立監査は原則1回とします。再監査を認めるのは、対象コードが変わった、新しい実行証拠が得られた、前回監査に明確な不足がある、または未解決の証拠矛盾がある場合です。修正後に変更pathを対象再検証することと、未変更HEADへ同じ監査を繰り返すことを区別します。
+この3点を定義できない委任は行いません。同じ包括レビューラウンドを複数agentへ同時委任せず、同一HEAD・同一risk laneの独立監査は原則1回とします。担当laneまたは修正pathのfocused再監査を認めるのは、対象コードが変わった、新しい実行証拠が得られた、前回監査に明確な不足がある、または未解決の証拠矛盾がある場合です。変更全体の包括レビューには包括レビュー収束の回数と例外条件を適用し、修正後に変更pathを対象再検証することと、未変更HEADへ同じ監査を繰り返すことを区別します。
 
 監査結果が矛盾した場合は追加agentの多数決を取りません。メインエージェントがsource code、test設定、実際のcommand結果、commit hashなどの一次証拠を確認して解決します。
 
-委任時はfull-history forkを既定にしません。必要なHEAD、path、acceptance、既知の指摘だけを短く渡します。報告は変更path、P0 / P1、実行結果、未実行項目と残るriskを中心に簡潔にします。
+委任時は全履歴の共有を既定にせず、必要なHEAD、path、acceptance、既知の指摘だけを短く渡します。報告は変更path、P0 / P1、実行結果、未実行項目と残るriskを中心に簡潔にします。
 
-検証は次の段階を守ります。
-
-1. 開発中は変更によって影響を受けるfocused testを先に実行する。
-2. 配送対象の最終HEADが確定した時点でfrontend / Rust / nativeなど必要なfull gateを原則1回実行する。
-3. 成功済み検証を再実行する時は、対象変更、binary変更、実行条件変更、証拠期限切れなど、証拠が失効した理由を記録する。
+検証と包括レビューの順序、再実行時の証拠失効記録は、包括レビュー収束のsectionに従います。
 
 メインエージェントは次のrisk lane台帳を保ち、担当scopeと結果を統合して重複を止めます。
 
 | Field | Meaning |
 |---|---|
-| risk lane | 重複しない確認責務 |
+| review round | 包括レビューの通算回数。ラウンド外のfocused確認はnot countedと明記 |
 | owner | agentまたはメインエージェント |
-| verified HEAD | 報告と証拠が対応するcommit |
+| verified snapshot | 報告と証拠が対応するcommit、生成物、設定、実行証拠 |
+| reviewed risk lanes | 包括レビューまたはfocused確認の対象lane集合 |
+| changed paths | 対象pathと、前回snapshotから追加・変更されたpath |
 | status | pending / active / passed / finding / blocked |
 | invalidation condition | 再検証が必要になる対象変更または新証拠 |
+| additional review justification | 追加レビューの例外条件、失効した証拠、限定した具体的な問い |
