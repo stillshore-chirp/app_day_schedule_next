@@ -3114,11 +3114,19 @@ describe("Day Schedule Next native smoke", () => {
       timeout: 3_000,
       timeoutMsg: "analog clock settings did not disable always-on-top",
     });
+    await topmost.waitForEnabled({
+      timeout: 3_000,
+      timeoutMsg: "analog clock always-on-top disable did not finish saving",
+    });
     expect(await pinButton.getAttribute("aria-pressed")).toBe("false");
     await topmostLabel.click();
     await browser.waitUntil(() => topmost.isSelected(), {
       timeout: 3_000,
       timeoutMsg: "analog clock always-on-top setting was not enabled",
+    });
+    await topmost.waitForEnabled({
+      timeout: 3_000,
+      timeoutMsg: "analog clock always-on-top enable did not finish saving",
     });
     const persistedTopmost = (await browser.tauri.execute(({ core }) =>
       core.invoke("bootstrap_get"),
