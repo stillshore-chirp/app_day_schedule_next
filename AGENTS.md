@@ -12,6 +12,8 @@
 
 boundedな依頼は、真のblockerがない限り調査、実装、検証、配送まで同じ作業で完遂します。read-only調査へIssue・branch・PRの定型報告は要求しません。
 
+サブエージェントは独立したrisk laneへ積極的に使います。委任前にrisk lane、対象HEAD、対象path、具体的な問い、既存証拠だけでは不足する理由を定め、メインエージェントが台帳と結果を統合します。同一HEAD・同一risk laneの重複監査や複数の包括監査は避け、修正中はfocused test、配送対象の最終HEADではfull gateを原則1回実行します。再監査・再実行は証拠が失効した理由を示し、詳細は [`docs/agent-harness.md`](docs/agent-harness.md) のsubagent orchestrationに従います。
+
 ## 2. path bridge
 
 | 対象 | 追加で読む正本 |
