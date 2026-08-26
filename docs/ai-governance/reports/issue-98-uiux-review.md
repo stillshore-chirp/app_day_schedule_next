@@ -30,7 +30,7 @@ P0 / P1の残存判定は、native release validationと関連artifactの実在�
 
 - component: 設定optionとpreview、保存・失敗・再試行、root appearance、Main / Compact / analog event反映、Day Overview / Timeline geometry、axeを検証する対象とする。
 - persistence: Rust serdeの旧設定100%補完、許可倍率validation、SQLite close / reopen、`textScalePercent`のない旧v1 export Replace importを検証する対象とする。実行結果は対象commitと併記する。
-- native: macOS arm64のreal Tauri / WKWebViewで、native smoke specの20 testsと、別process restart specのpersist / restore各1 test、合計3 spec / 22 testsがPassした。Windows x64、macOS x64、assistive technology、installerは未実行である。
+- native: macOS arm64のreal Tauri / WKWebViewで、native smoke 20、notification history 1、short schedule 2の合計3 specs / 23 testsと、別process restartのpersist / restore各1 testがPassした。Windows x64、macOS x64、assistive technology、installerは未実行である。
 - screenshot: E2E専用identifierとsynthetic dataだけを使い、公開安全性を確認した画像を[`docs/evidence/issue-98/`](../../evidence/issue-98/README.md)へ登録した。
 
 主要な視覚証跡:
