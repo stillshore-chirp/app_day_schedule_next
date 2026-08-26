@@ -1,5 +1,5 @@
 import { appLocale, translate } from "../../shared/i18n/messages";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import {
   isPermissionGranted,
@@ -293,6 +293,44 @@ function focusEventLabel(event: FocusHistoryReport["entries"][number]["event"]):
   }[event];
 }
 
+const settingsFields = [
+  "theme",
+  "textScalePercent",
+  "locale",
+  "snapMinutes",
+  "closeBehavior",
+  "notificationGraceMinutes",
+  "notificationMaxReplay",
+  "focusWorkMinutes",
+  "focusBreakMinutes",
+  "scheduleNotificationsEnabled",
+  "osNotificationsEnabled",
+  "soundNotificationsEnabled",
+  "focusLongBreakMinutes",
+  "focusLongBreakEvery",
+  "focusAutoStart",
+  "focusNotificationsEnabled",
+  "lastTemplateId",
+] as const satisfies ReadonlyArray<keyof Settings>;
+
+function settingsEqual(left: Settings, right: Settings): boolean {
+  return settingsFields.every((field) => left[field] === right[field]);
+}
+
+function mergeSettingsKeepingChanges(
+  baseline: Settings,
+  current: Settings,
+  incoming: Settings,
+): Settings {
+  const merged = { ...current };
+  for (const field of settingsFields) {
+    if (current[field] === baseline[field]) {
+      Object.assign(merged, { [field]: incoming[field] });
+    }
+  }
+  return merged;
+}
+
 export function SettingsView({
   client,
   bootstrap,
@@ -305,6 +343,15 @@ export function SettingsView({
   onTextScalePreview?: (value: Settings["textScalePercent"] | null) => void;
 }) {
   const [settings, setSettings] = useState<Settings>(bootstrap.settings);
+  const settingsRef = useRef(settings);
+  const bootstrapSettingsRef = useRef(bootstrap.settings);
+  const setLocalSettings = useCallback((next: Settings | ((current: Settings) => Settings)) => {
+    setSettings((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      settingsRef.current = resolved;
+      return resolved;
+    });
+  }, []);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState(false);
   const [resetState, setResetState] = useState<"loaded" | "failed" | null>(null);
@@ -328,6 +375,14 @@ export function SettingsView({
     },
     [onTextScalePreview],
   );
+  useEffect(() => {
+    const previousBootstrapSettings = bootstrapSettingsRef.current;
+    if (settingsEqual(previousBootstrapSettings, bootstrap.settings)) return;
+    bootstrapSettingsRef.current = bootstrap.settings;
+    setLocalSettings((current) =>
+      mergeSettingsKeepingChanges(previousBootstrapSettings, current, bootstrap.settings),
+    );
+  }, [bootstrap.settings, setLocalSettings]);
 
   const askNotificationPermission = async () => {
     try {
@@ -345,15 +400,21 @@ export function SettingsView({
     });
   };
   const save = async () => {
+    const snapshot = structuredClone(settingsRef.current);
     setBusy(true);
     setSaved(false);
     setSaveError(false);
     try {
-      const savedSettings = await client.updateSettings(settings);
-      setSettings(savedSettings);
-      setSaved(true);
+      const savedSettings = await client.updateSettings(snapshot);
+      const currentTextScalePercent = settingsRef.current.textScalePercent;
+      const changedDuringSave = !settingsEqual(settingsRef.current, snapshot);
+      setLocalSettings((current) => mergeSettingsKeepingChanges(snapshot, current, savedSettings));
+      setSaved(!changedDuringSave);
       setResetState(null);
       onSettingsSaved(savedSettings);
+      if (changedDuringSave && currentTextScalePercent !== savedSettings.textScalePercent) {
+        onTextScalePreview(currentTextScalePercent);
+      }
     } catch {
       setSaveError(true);
     } finally {
@@ -367,7 +428,7 @@ export function SettingsView({
     setResetState(null);
     try {
       const defaults = await client.defaultSettings();
-      setSettings(defaults);
+      setLocalSettings(defaults);
       onTextScalePreview(defaults.textScalePercent);
       setResetState("loaded");
     } catch {
@@ -405,7 +466,10 @@ export function SettingsView({
             <select
               value={settings.theme}
               onChange={(event) =>
-                setSettings({ ...settings, theme: event.target.value as Settings["theme"] })
+                setLocalSettings((current) => ({
+                  ...current,
+                  theme: event.target.value as Settings["theme"],
+                }))
               }
             >
               <option value="system">{translate("features.views.OperationalViews.045")}</option>
@@ -420,7 +484,7 @@ export function SettingsView({
               value={settings.textScalePercent}
               onChange={(event) => {
                 const textScalePercent = Number(event.target.value) as Settings["textScalePercent"];
-                setSettings({ ...settings, textScalePercent });
+                setLocalSettings((current) => ({ ...current, textScalePercent }));
                 onTextScalePreview(textScalePercent);
               }}
             >
@@ -437,10 +501,10 @@ export function SettingsView({
             <select
               value={settings.snapMinutes}
               onChange={(event) =>
-                setSettings({
-                  ...settings,
+                setLocalSettings((current) => ({
+                  ...current,
                   snapMinutes: Number(event.target.value) as Settings["snapMinutes"],
-                })
+                }))
               }
             >
               {[1, 5, 10, 15, 30].map((value) => (
@@ -460,7 +524,9 @@ export function SettingsView({
               type="radio"
               name="close"
               checked={settings.closeBehavior === "tray"}
-              onChange={() => setSettings({ ...settings, closeBehavior: "tray" })}
+              onChange={() =>
+                setLocalSettings((current) => ({ ...current, closeBehavior: "tray" }))
+              }
             />{" "}
             {translate("features.views.OperationalViews.052")}
           </label>
@@ -469,7 +535,9 @@ export function SettingsView({
               type="radio"
               name="close"
               checked={settings.closeBehavior === "quit"}
-              onChange={() => setSettings({ ...settings, closeBehavior: "quit" })}
+              onChange={() =>
+                setLocalSettings((current) => ({ ...current, closeBehavior: "quit" }))
+              }
             />{" "}
             {translate("features.views.OperationalViews.053")}
           </label>
@@ -533,7 +601,10 @@ export function SettingsView({
               type="checkbox"
               checked={settings.scheduleNotificationsEnabled}
               onChange={(event) =>
-                setSettings({ ...settings, scheduleNotificationsEnabled: event.target.checked })
+                setLocalSettings((current) => ({
+                  ...current,
+                  scheduleNotificationsEnabled: event.target.checked,
+                }))
               }
             />{" "}
             {translate("features.views.OperationalViews.064")}
@@ -543,7 +614,10 @@ export function SettingsView({
               type="checkbox"
               checked={settings.osNotificationsEnabled}
               onChange={(event) =>
-                setSettings({ ...settings, osNotificationsEnabled: event.target.checked })
+                setLocalSettings((current) => ({
+                  ...current,
+                  osNotificationsEnabled: event.target.checked,
+                }))
               }
             />{" "}
             {translate("features.views.OperationalViews.065")}
@@ -553,7 +627,10 @@ export function SettingsView({
               type="checkbox"
               checked={settings.soundNotificationsEnabled}
               onChange={(event) =>
-                setSettings({ ...settings, soundNotificationsEnabled: event.target.checked })
+                setLocalSettings((current) => ({
+                  ...current,
+                  soundNotificationsEnabled: event.target.checked,
+                }))
               }
             />{" "}
             {translate("features.views.OperationalViews.066")}
@@ -566,7 +643,10 @@ export function SettingsView({
               max={120}
               value={settings.notificationGraceMinutes}
               onChange={(event) =>
-                setSettings({ ...settings, notificationGraceMinutes: Number(event.target.value) })
+                setLocalSettings((current) => ({
+                  ...current,
+                  notificationGraceMinutes: Number(event.target.value),
+                }))
               }
             />
           </label>
@@ -578,7 +658,10 @@ export function SettingsView({
               max={20}
               value={settings.notificationMaxReplay}
               onChange={(event) =>
-                setSettings({ ...settings, notificationMaxReplay: Number(event.target.value) })
+                setLocalSettings((current) => ({
+                  ...current,
+                  notificationMaxReplay: Number(event.target.value),
+                }))
               }
             />
           </label>
@@ -593,7 +676,10 @@ export function SettingsView({
               max={180}
               value={settings.focusWorkMinutes}
               onChange={(event) =>
-                setSettings({ ...settings, focusWorkMinutes: Number(event.target.value) })
+                setLocalSettings((current) => ({
+                  ...current,
+                  focusWorkMinutes: Number(event.target.value),
+                }))
               }
             />
           </label>
@@ -605,7 +691,10 @@ export function SettingsView({
               max={180}
               value={settings.focusBreakMinutes}
               onChange={(event) =>
-                setSettings({ ...settings, focusBreakMinutes: Number(event.target.value) })
+                setLocalSettings((current) => ({
+                  ...current,
+                  focusBreakMinutes: Number(event.target.value),
+                }))
               }
             />
           </label>
@@ -617,7 +706,10 @@ export function SettingsView({
               max={180}
               value={settings.focusLongBreakMinutes}
               onChange={(event) =>
-                setSettings({ ...settings, focusLongBreakMinutes: Number(event.target.value) })
+                setLocalSettings((current) => ({
+                  ...current,
+                  focusLongBreakMinutes: Number(event.target.value),
+                }))
               }
             />
           </label>
@@ -629,7 +721,10 @@ export function SettingsView({
               max={12}
               value={settings.focusLongBreakEvery}
               onChange={(event) =>
-                setSettings({ ...settings, focusLongBreakEvery: Number(event.target.value) })
+                setLocalSettings((current) => ({
+                  ...current,
+                  focusLongBreakEvery: Number(event.target.value),
+                }))
               }
             />
           </label>
@@ -638,7 +733,10 @@ export function SettingsView({
               type="checkbox"
               checked={settings.focusAutoStart}
               onChange={(event) =>
-                setSettings({ ...settings, focusAutoStart: event.target.checked })
+                setLocalSettings((current) => ({
+                  ...current,
+                  focusAutoStart: event.target.checked,
+                }))
               }
             />{" "}
             {translate("features.views.OperationalViews.073")}
@@ -648,7 +746,10 @@ export function SettingsView({
               type="checkbox"
               checked={settings.focusNotificationsEnabled}
               onChange={(event) =>
-                setSettings({ ...settings, focusNotificationsEnabled: event.target.checked })
+                setLocalSettings((current) => ({
+                  ...current,
+                  focusNotificationsEnabled: event.target.checked,
+                }))
               }
             />{" "}
             {translate("features.views.OperationalViews.074")}
