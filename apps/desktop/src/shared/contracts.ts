@@ -117,6 +117,16 @@ export const scheduleDraftSchema = z
 
 export const settingsSchema = z.object({
   theme: z.enum(["system", "light", "mild", "dark"]),
+  textScalePercent: z
+    .union([
+      z.literal(100),
+      z.literal(125),
+      z.literal(150),
+      z.literal(175),
+      z.literal(200),
+      z.literal(250),
+    ])
+    .default(100),
   locale: z.enum(["ja", "en"]),
   snapMinutes: z.union([z.literal(1), z.literal(5), z.literal(10), z.literal(15), z.literal(30)]),
   closeBehavior: z.enum(["tray", "quit"]),

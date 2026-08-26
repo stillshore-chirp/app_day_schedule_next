@@ -403,6 +403,8 @@ impl ScheduleQuery {
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
     pub theme: Theme,
+    #[serde(default = "default_text_scale_percent")]
+    pub text_scale_percent: u16,
     pub locale: Locale,
     pub snap_minutes: u8,
     pub close_behavior: CloseBehavior,
@@ -454,6 +456,7 @@ pub enum CloseBehavior {
 impl Settings {
     pub fn validate(&self) -> AppResult<()> {
         if !matches!(self.snap_minutes, 1 | 5 | 10 | 15 | 30)
+            || !matches!(self.text_scale_percent, 100 | 125 | 150 | 175 | 200 | 250)
             || self.notification_grace_minutes > 120
             || self.notification_max_replay > 20
             || !(1..=180).contains(&self.focus_work_minutes)
@@ -474,6 +477,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: Theme::System,
+            text_scale_percent: 100,
             locale: Locale::Ja,
             snap_minutes: 5,
             close_behavior: CloseBehavior::Tray,
@@ -495,6 +499,10 @@ impl Default for Settings {
 
 const fn default_true() -> bool {
     true
+}
+
+const fn default_text_scale_percent() -> u16 {
+    100
 }
 
 const fn default_long_break_minutes() -> u16 {
@@ -578,5 +586,29 @@ mod tests {
             serde_json::from_str::<Theme>("\"mild\"").unwrap(),
             Theme::Mild
         );
+    }
+
+    #[test]
+    fn old_settings_default_to_100_percent_text_scale() {
+        let mut value = serde_json::to_value(Settings::default()).unwrap();
+        value.as_object_mut().unwrap().remove("textScalePercent");
+
+        let restored: Settings = serde_json::from_value(value).unwrap();
+
+        assert_eq!(restored.text_scale_percent, 100);
+        assert!(restored.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_an_unsupported_text_scale() {
+        let settings = Settings {
+            text_scale_percent: 225,
+            ..Settings::default()
+        };
+
+        assert!(matches!(
+            settings.validate(),
+            Err(AppError::Validation { .. })
+        ));
     }
 }

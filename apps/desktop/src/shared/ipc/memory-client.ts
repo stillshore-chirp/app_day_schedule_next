@@ -97,6 +97,7 @@ const defaultTicketBoard: TicketBoard = {
 
 const defaultSettings: Settings = {
   theme: "system",
+  textScalePercent: 100,
   locale: "ja",
   snapMinutes: 5,
   closeBehavior: "tray",
@@ -1367,6 +1368,7 @@ export class MemoryAppClient implements AppClient {
     this.stopwatchAnchor = null;
     this.settings = {
       theme: "system",
+      textScalePercent: 100,
       locale: "ja",
       snapMinutes: 5,
       closeBehavior: "tray",

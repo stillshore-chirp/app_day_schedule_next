@@ -3107,6 +3107,22 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn text_scale_setting_survives_database_reopen() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("restart-settings.sqlite3");
+        let database = Database::open(&path).await.unwrap();
+        let mut settings = database.settings().await.unwrap();
+        settings.text_scale_percent = 250;
+        database.save_settings(&settings).await.unwrap();
+        database.pool.close().await;
+        drop(database);
+
+        let reopened = Database::open(&path).await.unwrap();
+
+        assert_eq!(reopened.settings().await.unwrap().text_scale_percent, 250);
+    }
+
+    #[tokio::test]
     async fn deleting_all_user_data_is_atomic_and_restores_safe_defaults() {
         let database = Database::open_memory().await.unwrap();
         connect_default_calendar(&database).await;

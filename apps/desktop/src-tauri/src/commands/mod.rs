@@ -1,8 +1,8 @@
-use std::{future::Future, path::PathBuf};
+use std::{fmt::Display, future::Future, path::PathBuf};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
@@ -31,6 +31,27 @@ use crate::{
 };
 
 type CommandResult<T> = Result<T, UserSafeError>;
+
+const SETTINGS_UPDATED_EVENT: &str = "settings-updated";
+
+fn emit_settings_updated<R: Runtime>(app: &AppHandle<R>, settings: &Settings) {
+    let _ = app.emit(SETTINGS_UPDATED_EVENT, settings);
+}
+
+async fn emit_settings_updated_after_commit<R, F, E>(app: &AppHandle<R>, settings: F)
+where
+    R: Runtime,
+    F: Future<Output = Result<Settings, E>>,
+    E: Display,
+{
+    match settings.await {
+        Ok(settings) => emit_settings_updated(app, &settings),
+        Err(error) => tracing::warn!(
+            error = %error,
+            "settings update event was skipped after a committed data operation"
+        ),
+    }
+}
 
 #[tauri::command]
 pub fn performance_mark_ui_ready(service: State<'_, AppService>) -> u64 {
@@ -716,10 +737,16 @@ pub async fn history_redo(service: State<'_, AppService>) -> CommandResult<Chang
 
 #[tauri::command]
 pub async fn settings_update(
+    app: AppHandle,
     service: State<'_, AppService>,
     settings: Settings,
 ) -> CommandResult<Settings> {
-    service.save_settings(settings).await.map_err(Into::into)
+    let saved = service
+        .save_settings(settings)
+        .await
+        .map_err(UserSafeError::from)?;
+    emit_settings_updated(&app, &saved);
+    Ok(saved)
 }
 
 #[tauri::command]
@@ -951,13 +978,16 @@ pub async fn data_export(
 
 #[tauri::command]
 pub async fn data_delete_all(
+    app: AppHandle,
     service: State<'_, AppService>,
     confirmation: String,
 ) -> CommandResult<u64> {
-    service
+    let deleted = service
         .delete_all_user_data(&confirmation)
         .await
-        .map_err(Into::into)
+        .map_err(UserSafeError::from)?;
+    emit_settings_updated_after_commit(&app, service.settings()).await;
+    Ok(deleted)
 }
 
 #[tauri::command]
@@ -971,14 +1001,17 @@ pub fn data_import_preview(
 
 #[tauri::command]
 pub async fn data_import_commit(
+    app: AppHandle,
     service: State<'_, AppService>,
     request: ImportCommitRequest,
 ) -> CommandResult<ImportResult> {
     let path = checked_path(request.path)?;
-    service
+    let result = service
         .import_data(&path, &request.fingerprint, request.mode)
         .await
-        .map_err(Into::into)
+        .map_err(UserSafeError::from)?;
+    emit_settings_updated_after_commit(&app, service.settings()).await;
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1625,5 +1658,63 @@ mod analog_clock_window_tests {
             })
         ));
         assert_eq!(native_values.borrow().as_slice(), &[true, false]);
+    }
+}
+
+#[cfg(test)]
+mod settings_event_tests {
+    use std::sync::{Arc, Mutex};
+
+    use tauri::Listener;
+
+    use super::{
+        SETTINGS_UPDATED_EVENT, Settings, emit_settings_updated, emit_settings_updated_after_commit,
+    };
+
+    #[test]
+    fn emits_the_current_settings_payload() {
+        let app = tauri::test::mock_app();
+        let payloads = Arc::new(Mutex::new(Vec::new()));
+        let observed_payloads = Arc::clone(&payloads);
+        let listener = app.listen(SETTINGS_UPDATED_EVENT, move |event| {
+            observed_payloads
+                .lock()
+                .expect("event payload lock")
+                .push(event.payload().to_owned());
+        });
+
+        let settings = Settings {
+            text_scale_percent: 250,
+            ..Settings::default()
+        };
+        emit_settings_updated(app.handle(), &settings);
+        app.unlisten(listener);
+
+        let payloads = payloads.lock().expect("event payload lock");
+        assert_eq!(payloads.len(), 1);
+        let emitted: Settings = serde_json::from_str(&payloads[0]).expect("settings payload");
+        assert_eq!(emitted, settings);
+    }
+
+    #[tokio::test]
+    async fn ignores_a_settings_read_failure_after_the_data_operation_commits() {
+        let app = tauri::test::mock_app();
+        let payloads = Arc::new(Mutex::new(Vec::new()));
+        let observed_payloads = Arc::clone(&payloads);
+        let listener = app.listen(SETTINGS_UPDATED_EVENT, move |event| {
+            observed_payloads
+                .lock()
+                .expect("event payload lock")
+                .push(event.payload().to_owned());
+        });
+
+        emit_settings_updated_after_commit(
+            app.handle(),
+            std::future::ready(Err::<Settings, _>("database unavailable")),
+        )
+        .await;
+        app.unlisten(listener);
+
+        assert!(payloads.lock().expect("event payload lock").is_empty());
     }
 }

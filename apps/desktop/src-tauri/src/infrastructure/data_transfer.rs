@@ -1002,6 +1002,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn version_one_export_without_text_scale_defaults_to_100_percent_on_import() {
+        let source = Database::open_memory().await.unwrap();
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("legacy-settings-export.json");
+        source.export_json(&path, "Asia/Tokyo").await.unwrap();
+        let mut root: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let object = root.as_object_mut().unwrap();
+        object.insert("formatVersion".into(), Value::from(1));
+        object.remove("timers");
+        object.remove("timerSets");
+        object
+            .get_mut("settings")
+            .and_then(Value::as_object_mut)
+            .unwrap()
+            .remove("textScalePercent");
+        fs::write(&path, serde_json::to_vec_pretty(&root).unwrap()).unwrap();
+
+        let preview = Database::preview_import(&path).unwrap();
+        let target = Database::open_memory().await.unwrap();
+        let mut target_settings = target.settings().await.unwrap();
+        target_settings.text_scale_percent = 250;
+        target.save_settings(&target_settings).await.unwrap();
+
+        target
+            .import_json(&path, &preview.fingerprint, ImportMode::Replace)
+            .await
+            .unwrap();
+
+        assert_eq!(target.settings().await.unwrap().text_scale_percent, 100);
+    }
+
+    #[tokio::test]
     async fn cancelled_export_does_not_publish_a_target_or_partial_file() {
         let source = Database::open_memory().await.unwrap();
         source.create_schedule(draft()).await.unwrap();
