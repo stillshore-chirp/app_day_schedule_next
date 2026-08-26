@@ -20,7 +20,7 @@
 - app内DOM tooltipはroot倍率へ従う。Tauri native tray / Ticket右クリックmenu、HTMLの`title`属性による標準補足表示などOS/WebView描画部分は、OS/WebViewの表示・accessibility倍率へ委ねる。
 - 反証対象は100%、全6倍率、720px幅、250%、長い日本語、重複予定、各main destination、別window即時反映、process再起動、旧exportです。
 
-macOS arm64では、製品実装commit `c9521c2` / `07ee62d` / `d561be2` / `1b30233`に対するreal Tauri / WKWebViewのnative E2Eを2026-08-26に実行しました。6倍率のpreview、250%保存後の同一process reload、同じ一時SQLite data directoryを使う別process restart、開いているCompact / analog clockへのevent反映、720 × 720のToday、client area 280 × 280のanalog clock、各main destinationの横overflowとscroll到達性がPassしています。Now Dockの次アラーム文字列は、通常幅と720px幅で文字矩形が要素・Dock内に収まり、縦横overflowがないことも実測しています。E2E harnessと公開証跡は後続のtest / release commitへ収録します。
+macOS arm64では、製品実装commit `c9521c2` / `07ee62d` / `d561be2` / `1b30233` / `8d99a8b`に対するreal Tauri / WKWebViewのnative E2Eを2026-08-26に実行しました。6倍率のpreview、250%保存後の同一process reload、同じ一時SQLite data directoryを使う別process restart、開いているCompact / analog clockへのevent反映、720 × 720のToday、client area 280 × 280のanalog clock、各main destinationの横overflowとscroll到達性がPassしています。Now Dockの次アラーム、Timeline時刻軸、Compactの長い現在・次予定名は、文字矩形が要素・表示領域内に収まり、縦横overflowがないことも実測しています。E2E harnessと公開証跡は後続のtest / release commitへ収録します。
 
 P0 / P1の残存判定は、native release validationと関連artifactの実在・内容・source commit対応が揃うまで未確定です。Windows x64とmacOS x64のCI native実行、実Windows high DPI / WebView2、VoiceOver / NVDA、installer install / launchは本レポートでは未確認です。OS実機未確認の状態を確認済みとは扱いません。
 
