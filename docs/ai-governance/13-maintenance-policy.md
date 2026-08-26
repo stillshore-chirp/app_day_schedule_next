@@ -81,7 +81,7 @@ root、Skill、docs、tool ruleへ同じ長文を複製
 ## Review収束
 
 - latest meaningful changeに対するCIと利用可能なreviewを確認する。
-- 指摘対応でheadが変わった場合だけ再確認する。
+- 包括reviewとfull gateの再確認は `docs/agent-harness.md` の包括レビュー収束に従い、証拠の失効理由がない同一snapshotへ反復しない。
 - 変更のないheadへclean reviewを複数回要求しない。
 - 特定review botやclient名を3製品共通条件にしない。
 - review未提供時は代替自己reviewと未確認範囲を記録する。
@@ -91,7 +91,15 @@ root、Skill、docs、tool ruleへ同じ長文を複製
 
 委任、再監査、検証段階、risk lane台帳の正本は [`docs/agent-harness.md`](../agent-harness.md) のSubagent orchestrationとします。root `AGENTS.md`は全agentが到達する短い入口だけを持ち、nested rule、Skill、adapterへ同じ運用本文を複製しません。
 
-運用を変更する時は、積極利用と重複防止の両方を保ちます。新しい専門riskを独立laneへ委任できることを維持しつつ、同一HEADの重複監査、根拠のない再実行、過剰なfork文脈を増やさないことをreviewします。
+運用を変更する時は、積極利用と重複防止の両方を保ちます。新しい専門riskを独立laneへ委任できることを維持しつつ、同一HEADの重複監査、根拠のない再実行、過剰な共有文脈を増やさないことをreviewします。
+
+## 包括レビュー契約の配置
+
+Contract ID: `DSN-REVIEW-ROUND-CANONICAL-PLACEMENT`
+
+包括レビューラウンドの定義、回数、例外、P2以下の扱い、検証順序、risk lane台帳は、[`docs/agent-harness.md`](../agent-harness.md) の `DSN-COMPREHENSIVE-REVIEW-ROUNDS` をtool非依存の唯一の詳細正本とします。root `AGENTS.md`には全agentが到達する短い入口だけを置き、nested `AGENTS.md`、adapter、Skillへ契約本文や数え方を複製しません。
+
+agent runtime、review機能、実行環境に固有の起動方法は共有正本とmachine verifierへ追加しません。adapterがroutingを必要とする場合も正本への薄い参照に限定し、共通契約の変更は詳細正本、root入口、verifierを同じ変更で整合させます。
 
 ## Issueと対象面
 
