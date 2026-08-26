@@ -341,10 +341,6 @@ describe("Day Schedule Next native smoke", () => {
       }
       startSelect.focus();
       const startTriggerFocused = document.activeElement === startSelect;
-      const startTriggerOutlineWidth = Number.parseFloat(
-        getComputedStyle(startTrigger).outlineWidth,
-      );
-      startSelect.blur();
       return {
         actionsAboveDock: dockRect ? actionsRect.bottom <= dockRect.top + 1 : true,
         actionsHeight: actionsRect.height,
@@ -357,7 +353,6 @@ describe("Day Schedule Next native smoke", () => {
         selectOpacity: [startSelect, endSelect].map((control) => getComputedStyle(control).opacity),
         startSelectValue: startSelect.value,
         startTriggerFocused,
-        startTriggerOutlineWidth,
         triggerSizes: [startTrigger, endTrigger].map((trigger) => {
           const rect = trigger.getBoundingClientRect();
           return { height: rect.height, width: rect.width };
@@ -373,7 +368,18 @@ describe("Day Schedule Next native smoke", () => {
     ).toBe(true);
     expect(zoomGeometry.selectOpacity).toEqual(["0", "0"]);
     expect(zoomGeometry.startTriggerFocused).toBe(true);
-    expect(zoomGeometry.startTriggerOutlineWidth).toBeGreaterThanOrEqual(3);
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() => {
+          const select = document.querySelector<HTMLSelectElement>(
+            'select[aria-label="開始時刻の候補"]',
+          );
+          const trigger = select?.parentElement;
+          return trigger ? Number.parseFloat(getComputedStyle(trigger).outlineWidth) >= 3 : false;
+        }),
+      { timeoutMsg: "schedule time trigger did not expose its native focus outline" },
+    );
+    await startTimeInput.click();
     expect(
       zoomGeometry.triggerSizes.every(({ height, width }) => height >= 44 && width >= 44),
     ).toBe(true);
@@ -2684,7 +2690,23 @@ describe("Day Schedule Next native smoke", () => {
       timeoutMsg: "compact window was not created",
     });
     await browser.tauri.switchWindow("compact");
-    await setExactLogicalViewportSize(420, 640);
+    const compactRunsOnWindows = await browser.execute(() =>
+      navigator.userAgent.includes("Windows"),
+    );
+    if (compactRunsOnWindows) {
+      await browser.setWindowSize(420, 640);
+      await browser.waitUntil(
+        async () =>
+          browser.execute(
+            () =>
+              document.documentElement.clientWidth >= 400 &&
+              document.documentElement.clientHeight >= 600,
+          ),
+        { timeoutMsg: "compact Windows client area did not remain usable at 420x640 outer size" },
+      );
+    } else {
+      await setExactLogicalViewportSize(420, 640);
+    }
     await $(".compact-header h1").waitForDisplayed();
     const compactScheduleRendered = await browser.executeAsync(
       (expectedTitle: string, done: (rendered: boolean) => void) => {
@@ -2950,6 +2972,10 @@ describe("Day Schedule Next native smoke", () => {
     await browser.waitUntil(async () => (await pinButton.getAttribute("aria-pressed")) === "true", {
       timeout: 3_000,
       timeoutMsg: "analog clock pin did not enable always-on-top",
+    });
+    await pinButton.waitForEnabled({
+      timeout: 3_000,
+      timeoutMsg: "analog clock pin preference did not finish saving",
     });
     await browser.execute(() => {
       (document.activeElement as HTMLElement | null)?.blur();
