@@ -1121,11 +1121,42 @@ describe("Day Schedule Next native smoke", () => {
         dock.querySelector<HTMLElement>(".now-dock__next"),
         dock.querySelector<HTMLElement>(".now-dock__focus"),
       ].filter((item): item is HTMLElement => item !== null);
-      if (nextDockItems.length === 0) throw new Error("250% Today dock items were not rendered");
+      const alarmText = dock.querySelector<HTMLElement>(".now-dock__alarm");
+      if (nextDockItems.length === 0 || !alarmText) {
+        throw new Error("250% Today dock items were not rendered");
+      }
       dock.scrollTop = dock.scrollHeight;
       const dockRect = dock.getBoundingClientRect();
       const maxDockScroll = Math.max(0, dock.scrollHeight - dock.clientHeight);
+      const alarmRect = alarmText.getBoundingClientRect();
+      const alarmRange = document.createRange();
+      alarmRange.selectNodeContents(alarmText);
+      const alarmTextRects = Array.from(alarmRange.getClientRects());
+      if (alarmTextRects.length === 0) throw new Error("250% Today alarm text was empty");
       return {
+        alarmContentInsideElement: alarmTextRects.every(
+          (rect) =>
+            rect.left >= alarmRect.left - 1 &&
+            rect.right <= alarmRect.right + 1 &&
+            rect.top >= alarmRect.top - 1 &&
+            rect.bottom <= alarmRect.bottom + 1,
+        ),
+        alarmContentInsideDock: alarmTextRects.every(
+          (rect) =>
+            rect.left >= dockRect.left - 1 &&
+            rect.right <= dockRect.right + 1 &&
+            rect.top >= dockRect.top - 1 &&
+            rect.bottom <= dockRect.bottom + 1,
+        ),
+        alarmInsideDock:
+          alarmRect.left >= dockRect.left - 1 &&
+          alarmRect.right <= dockRect.right + 1 &&
+          alarmRect.top >= dockRect.top - 1 &&
+          alarmRect.bottom <= dockRect.bottom + 1,
+        alarmHorizontalOverflow: alarmText.scrollWidth - alarmText.clientWidth,
+        alarmInsideViewport:
+          alarmRect.top >= 0 && alarmRect.bottom <= viewportHeight + 1 && alarmRect.height > 0,
+        alarmVerticalOverflow: alarmText.scrollHeight - alarmText.clientHeight,
         controlsReachable: controls.every(isReachable),
         dockAtBottom: Math.abs(dock.scrollTop - maxDockScroll) <= 1,
         dockEndItemsReachable: nextDockItems.every((item) => {
@@ -1148,6 +1179,12 @@ describe("Day Schedule Next native smoke", () => {
     });
     expect(todayGeometry.controlsReachable).toBe(true);
     expect(todayGeometry.primaryActionsReachable).toBe(true);
+    expect(todayGeometry.alarmContentInsideElement).toBe(true);
+    expect(todayGeometry.alarmContentInsideDock).toBe(true);
+    expect(todayGeometry.alarmInsideDock).toBe(true);
+    expect(todayGeometry.alarmInsideViewport).toBe(true);
+    expect(todayGeometry.alarmHorizontalOverflow).toBeLessThanOrEqual(1);
+    expect(todayGeometry.alarmVerticalOverflow).toBeLessThanOrEqual(1);
     expect(todayGeometry.dockScrollable ? todayGeometry.dockAtBottom : true).toBe(true);
     expect(todayGeometry.dockEndItemsReachable).toBe(true);
     expect(todayGeometry.shellOverflow).toBeLessThanOrEqual(1);
@@ -1161,7 +1198,8 @@ describe("Day Schedule Next native smoke", () => {
       const history = document.querySelector<HTMLElement>(".history-actions");
       const dock = document.querySelector<HTMLElement>(".now-dock");
       const readableList = document.querySelector<HTMLElement>(".timeline-readable-list");
-      if (!shell || !workspace || !history || !dock || !readableList) {
+      const alarmText = dock?.querySelector<HTMLElement>(".now-dock__alarm");
+      if (!shell || !workspace || !history || !dock || !readableList || !alarmText) {
         throw new Error("720px / 250% Today layout was incomplete");
       }
       const viewportWidth = document.documentElement.clientWidth;
@@ -1181,6 +1219,12 @@ describe("Day Schedule Next native smoke", () => {
       dock.scrollTop = dock.scrollHeight;
       const workspaceMaxScroll = Math.max(0, workspace.scrollHeight - workspace.clientHeight);
       const dockMaxScroll = Math.max(0, dock.scrollHeight - dock.clientHeight);
+      const dockRect = dock.getBoundingClientRect();
+      const alarmRect = alarmText.getBoundingClientRect();
+      const alarmRange = document.createRange();
+      alarmRange.selectNodeContents(alarmText);
+      const alarmTextRects = Array.from(alarmRange.getClientRects());
+      if (alarmTextRects.length === 0) throw new Error("720px / 250% Today alarm text was empty");
       const readableButtons = Array.from(
         readableList.querySelectorAll<HTMLButtonElement>("button"),
       );
@@ -1190,6 +1234,22 @@ describe("Day Schedule Next native smoke", () => {
         ),
       );
       return {
+        alarmContentInsideElement: alarmTextRects.every(
+          (rect) =>
+            rect.left >= alarmRect.left - 1 &&
+            rect.right <= alarmRect.right + 1 &&
+            rect.top >= alarmRect.top - 1 &&
+            rect.bottom <= alarmRect.bottom + 1,
+        ),
+        alarmContentInsideDock: alarmTextRects.every(
+          (rect) =>
+            rect.left >= dockRect.left - 1 &&
+            rect.right <= dockRect.right + 1 &&
+            rect.top >= dockRect.top - 1 &&
+            rect.bottom <= dockRect.bottom + 1,
+        ),
+        alarmHorizontalOverflow: alarmText.scrollWidth - alarmText.clientWidth,
+        alarmVerticalOverflow: alarmText.scrollHeight - alarmText.clientHeight,
         dockAtBottom: Math.abs(dock.scrollTop - dockMaxScroll) <= 1,
         dockInsideViewport: isInsideViewport(dock),
         historyButtonsInsideViewport: Array.from(
@@ -1208,6 +1268,10 @@ describe("Day Schedule Next native smoke", () => {
       };
     });
     expect(narrowTextGeometry.shellOverflow).toBeLessThanOrEqual(1);
+    expect(narrowTextGeometry.alarmContentInsideElement).toBe(true);
+    expect(narrowTextGeometry.alarmContentInsideDock).toBe(true);
+    expect(narrowTextGeometry.alarmHorizontalOverflow).toBeLessThanOrEqual(1);
+    expect(narrowTextGeometry.alarmVerticalOverflow).toBeLessThanOrEqual(1);
     expect(narrowTextGeometry.workspaceHeight).toBeGreaterThan(0);
     expect(narrowTextGeometry.workspaceAtBottom).toBe(true);
     expect(narrowTextGeometry.dockAtBottom).toBe(true);

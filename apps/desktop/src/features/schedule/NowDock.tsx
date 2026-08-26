@@ -109,7 +109,7 @@ export function NowDock({ schedules, focus, alarms }: NowDockProps) {
             ? `${next.title} ${formatTime(next.startUtc)}`
             : translate("features.schedule.NowDock.012")}
         </strong>
-        <small>
+        <small className="now-dock__alarm">
           {translate("features.schedule.NowDock.013")}{" "}
           {nextAlarm
             ? `${nextAlarm.label}・${remainingLabel(nextAlarm.at, now)}`

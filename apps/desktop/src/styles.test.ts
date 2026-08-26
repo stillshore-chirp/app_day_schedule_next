@@ -184,6 +184,23 @@ describe("mild theme contrast", () => {
     );
   });
 
+  it("wraps high-scale Now Dock alarm text with an auto-growing block", () => {
+    const highScaleNowDockStyles = stylesheet.slice(
+      stylesheet.indexOf(':root[data-text-scale-level="high"] .now-dock'),
+      stylesheet.indexOf(':root[data-text-scale-level="high"] .history-actions'),
+    );
+
+    expect(highScaleNowDockStyles).toContain("flex-direction: column;");
+    expect(highScaleNowDockStyles).toContain("flex-wrap: nowrap;");
+    expect(highScaleNowDockStyles).toContain("min-height: 0;");
+    expect(highScaleNowDockStyles).toContain(".now-dock__next > small");
+    expect(highScaleNowDockStyles).toContain("display: block;");
+    expect(highScaleNowDockStyles).toContain("height: auto;");
+    expect(highScaleNowDockStyles).toContain("max-height: none;");
+    expect(highScaleNowDockStyles).toContain("overflow-wrap: anywhere;");
+    expect(highScaleNowDockStyles).toContain("white-space: normal;");
+  });
+
   it("keeps selectors compatible with Safari 13", () => {
     expect(stylesheet).not.toContain(`:${"is"}(`);
     expect(stylesheet).toContain(':root[data-text-scale-level="high"]');

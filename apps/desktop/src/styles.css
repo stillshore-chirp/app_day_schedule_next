@@ -4331,6 +4331,37 @@ tbody tr:focus {
   white-space: normal;
 }
 
+:root[data-text-scale-level="high"] .now-dock__next,
+:root[data-text-scale-level="extra"] .now-dock__next {
+  align-items: stretch;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  min-height: 0;
+}
+
+:root[data-text-scale-level="high"] .now-dock__next > span,
+:root[data-text-scale-level="high"] .now-dock__next > strong,
+:root[data-text-scale-level="high"] .now-dock__next > small,
+:root[data-text-scale-level="extra"] .now-dock__next > span,
+:root[data-text-scale-level="extra"] .now-dock__next > strong,
+:root[data-text-scale-level="extra"] .now-dock__next > small {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+:root[data-text-scale-level="high"] .now-dock__next > small,
+:root[data-text-scale-level="extra"] .now-dock__next > small {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.35;
+}
+
 :root[data-text-scale-level="high"] .history-actions,
 :root[data-text-scale-level="extra"] .history-actions {
   position: relative;
