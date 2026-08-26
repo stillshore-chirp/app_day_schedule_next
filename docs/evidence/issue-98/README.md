@@ -1,12 +1,12 @@
 # Issue #98 native visual evidence
 
-2026-08-26に、製品実装commit `c9521c2` / `07ee62d`をmacOS arm64のreal Tauri / WKWebViewで、E2E専用identifierとsynthetic dataを使って起動し取得した画像です。個人予定、実アカウント、token、raw logは含みません。画像は文字表示倍率の視認性と操作到達性を補助的に確認するもので、Windows high DPI、macOS x64、VoiceOver / NVDA、installer install / launchの証跡を兼ねません。画像checksumは[`SHA256SUMS`](SHA256SUMS)に固定しています。
+2026-08-26に、製品実装commit `c9521c2` / `07ee62d` / `d561be2` / `1b30233`をmacOS arm64のreal Tauri / WKWebViewで、E2E専用identifierとsynthetic dataを使って起動し取得した画像です。個人予定、実アカウント、token、raw logは含みません。画像は文字表示倍率の視認性と操作到達性を補助的に確認するもので、Windows high DPI、macOS x64、VoiceOver / NVDA、installer install / launchの証跡を兼ねません。画像checksumは[`SHA256SUMS`](SHA256SUMS)に固定しています。
 
 | File | State |
 | --- | --- |
 | `native-settings-text-100.png` | Settings 100% baseline |
 | `native-settings-text-250.png` | Settings 250%、保存操作までscroll到達 |
-| `native-today-text-250.png` | Today 250% |
+| `native-today-text-250.png` | Today 250%、Now Dockの次予定・次アラーム全文を表示 |
 | `native-today-text-250-narrow.png` | Today 720 × 720 / 250%、下端操作までscroll到達 |
 | `native-today-readable-list-text-250.png` | Today 720 × 720 / 250%、時間barを補う完全な予定名一覧 |
 | `native-compact-text-250.png` | Compact 250% |

@@ -20,7 +20,7 @@
 - app内DOM tooltipはroot倍率へ従う。Tauri native tray / Ticket右クリックmenu、HTMLの`title`属性による標準補足表示などOS/WebView描画部分は、OS/WebViewの表示・accessibility倍率へ委ねる。
 - 反証対象は100%、全6倍率、720px幅、250%、長い日本語、重複予定、各main destination、別window即時反映、process再起動、旧exportです。
 
-macOS arm64では、製品実装commit `c9521c2` / `07ee62d`に対するreal Tauri / WKWebViewのnative E2Eを2026-08-26に実行しました。6倍率のpreview、250%保存後の同一process reload、同じ一時SQLite data directoryを使う別process restart、開いているCompact / analog clockへのevent反映、720 × 720のToday、client area 280 × 280のanalog clock、各main destinationの横overflowとscroll到達性がPassしています。E2E harnessと公開証跡は後続のtest / release commitへ収録します。
+macOS arm64では、製品実装commit `c9521c2` / `07ee62d` / `d561be2` / `1b30233`に対するreal Tauri / WKWebViewのnative E2Eを2026-08-26に実行しました。6倍率のpreview、250%保存後の同一process reload、同じ一時SQLite data directoryを使う別process restart、開いているCompact / analog clockへのevent反映、720 × 720のToday、client area 280 × 280のanalog clock、各main destinationの横overflowとscroll到達性がPassしています。Now Dockの次アラーム文字列は、通常幅と720px幅で文字矩形が要素・Dock内に収まり、縦横overflowがないことも実測しています。E2E harnessと公開証跡は後続のtest / release commitへ収録します。
 
 P0 / P1の残存判定は、native release validationと関連artifactの実在・内容・source commit対応が揃うまで未確定です。Windows x64とmacOS x64のCI native実行、実Windows high DPI / WebView2、VoiceOver / NVDA、installer install / launchは本レポートでは未確認です。OS実機未確認の状態を確認済みとは扱いません。
 
@@ -30,7 +30,7 @@ P0 / P1の残存判定は、native release validationと関連artifactの実在�
 
 - component: 設定optionとpreview、保存・失敗・再試行、root appearance、Main / Compact / analog event反映、Day Overview / Timeline geometry、axeを検証する対象とする。
 - persistence: Rust serdeの旧設定100%補完、許可倍率validation、SQLite close / reopen、`textScalePercent`のない旧v1 export Replace importを検証する対象とする。実行結果は対象commitと併記する。
-- native: macOS arm64のreal Tauri / WKWebViewで、3 spec / 23 testsと、別process restartのpersist / restore各1 testがPassした。Windows x64、macOS x64、assistive technology、installerは未実行である。
+- native: macOS arm64のreal Tauri / WKWebViewで、native smoke 20、notification history 1、short schedule 2の3 spec / 23 testsと、別process restartのpersist / restore各1 testがPassした。Windows x64、macOS x64、assistive technology、installerは未実行である。
 - screenshot: E2E専用identifierとsynthetic dataだけを使い、公開安全性を確認した画像を[`docs/evidence/issue-98/`](../../evidence/issue-98/README.md)へ登録した。
 
 主要な視覚証跡:
