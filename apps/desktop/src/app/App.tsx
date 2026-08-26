@@ -14,6 +14,9 @@ import { TimersView } from "../features/timers/TimersView";
 import { StopwatchView } from "../features/stopwatch/StopwatchView";
 import { KanbanView } from "../features/tickets/KanbanView";
 import { AnalogClockLauncher } from "../features/analog-clock/AnalogClockLauncher";
+import { applyAppAppearance } from "../shared/appearance";
+import type { Settings } from "../shared/contracts";
+import { Tooltip } from "../shared/ui/Tooltip";
 import { useUiStore, type AppView } from "./ui-store";
 import { NotificationRuntime } from "./NotificationRuntime";
 import { SyncRuntime } from "./SyncRuntime";
@@ -45,11 +48,24 @@ export function App({
   const [sidebarExpanded, setSidebarExpanded] = useState(
     () => localStorage.getItem(sidebarExpandedStorageKey) === "true",
   );
+  const [previewTextScalePercent, setPreviewTextScalePercent] = useState<
+    Settings["textScalePercent"] | null
+  >(null);
+  const previewTextScalePercentRef = useRef<Settings["textScalePercent"] | null>(null);
   const bootstrapQuery = useQuery({ queryKey: ["bootstrap"], queryFn: () => client.bootstrap() });
   const readyReported = useRef(false);
   const refreshBootstrap = useCallback(() => {
     void bootstrapQuery.refetch();
   }, [bootstrapQuery.refetch]);
+  const finishSettingsSave = useCallback(
+    (settings: Settings) => {
+      previewTextScalePercentRef.current = null;
+      setPreviewTextScalePercent(null);
+      applyAppAppearance(settings);
+      void bootstrapQuery.refetch();
+    },
+    [bootstrapQuery.refetch],
+  );
   const {
     activeView,
     selectedDate,
@@ -88,9 +104,13 @@ export function App({
   }, [openCreate, selectedDate, setActiveView, setSelectedDate]);
 
   useLayoutEffect(() => {
-    const theme = bootstrapQuery.data?.settings.theme ?? "system";
-    document.documentElement.dataset.theme = theme;
-  }, [bootstrapQuery.data?.settings.theme]);
+    previewTextScalePercentRef.current = previewTextScalePercent;
+    const settings = bootstrapQuery.data?.settings;
+    applyAppAppearance({
+      theme: settings?.theme ?? "system",
+      textScalePercent: previewTextScalePercent ?? settings?.textScalePercent ?? 100,
+    });
+  }, [bootstrapQuery.data?.settings, previewTextScalePercent]);
 
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
@@ -114,6 +134,15 @@ export function App({
       });
     void register("tray-action");
     void register("compact-action");
+    void listen<Settings>("settings-updated", ({ payload }) => {
+      if (previewTextScalePercentRef.current === null) applyAppAppearance(payload);
+      void bootstrapQuery.refetch().catch(() => undefined);
+    })
+      .then((unlisten) => {
+        if (active) stops.push(unlisten);
+        else unlisten();
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
       stops.forEach((stop) => stop());
@@ -247,56 +276,58 @@ export function App({
       </header>
       <aside className="sidebar" aria-label={translate("app.App.015")}>
         <div className="sidebar__header">
-          <button
-            className="icon-button sidebar-toggle"
-            type="button"
-            aria-controls="primary-navigation"
-            aria-expanded={sidebarExpanded}
-            aria-label={translate(sidebarExpanded ? "app.App.019" : "app.App.018")}
-            title={translate(sidebarExpanded ? "app.App.019" : "app.App.018")}
-            onClick={() => {
-              setSidebarExpanded((expanded) => {
-                const nextExpanded = !expanded;
-                localStorage.setItem(sidebarExpandedStorageKey, String(nextExpanded));
-                return nextExpanded;
-              });
-            }}
-          >
-            <span aria-hidden="true">{sidebarExpanded ? "‹" : "›"}</span>
-          </button>
+          <Tooltip label={translate(sidebarExpanded ? "app.App.019" : "app.App.018")}>
+            <button
+              className="icon-button sidebar-toggle"
+              type="button"
+              aria-controls="primary-navigation"
+              aria-expanded={sidebarExpanded}
+              aria-label={translate(sidebarExpanded ? "app.App.019" : "app.App.018")}
+              onClick={() => {
+                setSidebarExpanded((expanded) => {
+                  const nextExpanded = !expanded;
+                  localStorage.setItem(sidebarExpandedStorageKey, String(nextExpanded));
+                  return nextExpanded;
+                });
+              }}
+            >
+              <span aria-hidden="true">{sidebarExpanded ? "‹" : "›"}</span>
+            </button>
+          </Tooltip>
         </div>
         <nav id="primary-navigation">
           {navItems.map((item) => (
-            <button
-              key={item.view}
-              type="button"
-              aria-current={activeView === item.view ? "page" : undefined}
-              aria-label={item.label}
-              title={sidebarExpanded ? undefined : item.label}
-              onClick={() => setActiveView(item.view)}
-            >
-              <span className="sidebar__icon" aria-hidden="true">
-                {item.symbol}
-              </span>
-              <span className="sidebar__label">{item.label}</span>
-              {item.view === "diagnostics" && bootstrap.sync.conflictCount > 0 ? (
-                <strong className="count-badge">{bootstrap.sync.conflictCount}</strong>
-              ) : null}
-            </button>
+            <Tooltip key={item.view} label={sidebarExpanded ? "" : item.label}>
+              <button
+                type="button"
+                aria-current={activeView === item.view ? "page" : undefined}
+                aria-label={item.label}
+                onClick={() => setActiveView(item.view)}
+              >
+                <span className="sidebar__icon" aria-hidden="true">
+                  {item.symbol}
+                </span>
+                <span className="sidebar__label">{item.label}</span>
+                {item.view === "diagnostics" && bootstrap.sync.conflictCount > 0 ? (
+                  <strong className="count-badge">{bootstrap.sync.conflictCount}</strong>
+                ) : null}
+              </button>
+            </Tooltip>
           ))}
         </nav>
-        <button
-          className="compact-button"
-          type="button"
-          aria-label={translate("actions.openCompact")}
-          title={sidebarExpanded ? undefined : translate("actions.openCompact")}
-          onClick={() => void client.openCompactWindow()}
-        >
-          <span className="compact-button__icon" aria-hidden="true">
-            ▱
-          </span>
-          <span className="sidebar__label">{translate("actions.openCompact")}</span>
-        </button>
+        <Tooltip label={sidebarExpanded ? "" : translate("actions.openCompact")}>
+          <button
+            className="compact-button"
+            type="button"
+            aria-label={translate("actions.openCompact")}
+            onClick={() => void client.openCompactWindow()}
+          >
+            <span className="compact-button__icon" aria-hidden="true">
+              ▱
+            </span>
+            <span className="sidebar__label">{translate("actions.openCompact")}</span>
+          </button>
+        </Tooltip>
       </aside>
       <div className="app-content">
         {activeView === "today" ? <TodayView client={client} bootstrap={bootstrap} /> : null}
@@ -307,7 +338,12 @@ export function App({
         {activeView === "timers" ? <TimersView client={client} /> : null}
         {activeView === "stopwatch" ? <StopwatchView client={client} /> : null}
         {activeView === "settings" ? (
-          <SettingsView client={client} bootstrap={bootstrap} onSettingsSaved={refreshBootstrap} />
+          <SettingsView
+            client={client}
+            bootstrap={bootstrap}
+            onSettingsSaved={finishSettingsSave}
+            onTextScalePreview={setPreviewTextScalePercent}
+          />
         ) : null}
         {activeView === "diagnostics" ? <DiagnosticsView client={client} /> : null}
         {activeView === "templates" ? (

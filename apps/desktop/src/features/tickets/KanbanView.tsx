@@ -5,6 +5,7 @@ import { appLocale, translate } from "../../shared/i18n/messages";
 import { AppClientError, type AppClient } from "../../shared/ipc/client";
 import { MarkdownDescriptionField } from "../../shared/ui/MarkdownDescriptionField";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
+import { Tooltip } from "../../shared/ui/Tooltip";
 import {
   canFreelyReorder,
   filterAndSortTickets,
@@ -1092,6 +1093,12 @@ function TicketCard({
     [],
   );
 
+  const moveHint = translate(
+    draggable
+      ? "features.tickets.KanbanView.moveHint"
+      : "features.tickets.KanbanView.contextMoveHint",
+  );
+
   return (
     <article
       className="ticket-card"
@@ -1106,141 +1113,140 @@ function TicketCard({
         onOpenMoveMenu();
       }}
     >
-      <button
-        className="ticket-card__open"
-        onClick={(event) => {
-          if (suppressClickRef.current) {
-            suppressClickRef.current = false;
-            event.preventDefault();
-            return;
-          }
-          onOpen(event.currentTarget);
-        }}
-        aria-label={translate("features.tickets.KanbanView.openTicket", [ticket.title])}
-        aria-describedby={`${metadataId} ${draggable ? moveHintId : contextMoveHintId}`}
-        aria-keyshortcuts={
-          draggable ? "ArrowLeft ArrowRight ArrowUp ArrowDown Shift+F10" : "Shift+F10"
-        }
-        title={translate(
-          draggable
-            ? "features.tickets.KanbanView.moveHint"
-            : "features.tickets.KanbanView.contextMoveHint",
-        )}
-        onMouseDown={(event) => {
-          if (!draggable || event.button !== 0 || event.ctrlKey) return;
-          cleanupMouseDragRef.current?.();
-          const mouseDrag = {
-            startX: event.clientX,
-            startY: event.clientY,
-            active: false,
-          };
-          mouseDragRef.current = mouseDrag;
-          const cleanupMouseDrag = () => {
-            window.removeEventListener("mousemove", handleMouseMove);
-            window.removeEventListener("mouseup", handleMouseUp);
-            window.removeEventListener("blur", handleWindowBlur);
-            mouseDragRef.current = null;
-            cleanupMouseDragRef.current = null;
-          };
-          const handleMouseMove = (moveEvent: MouseEvent) => {
-            if (!mouseDrag.active) {
-              const distance = Math.hypot(
-                moveEvent.clientX - mouseDrag.startX,
-                moveEvent.clientY - mouseDrag.startY,
-              );
-              if (distance < 6) return;
-              mouseDrag.active = true;
-              onDragStart();
-            }
-            moveEvent.preventDefault();
-            onDragMove(moveEvent.clientX);
-          };
-          const handleMouseUp = (upEvent: MouseEvent) => {
-            const wasActive = mouseDrag.active;
-            cleanupMouseDrag();
-            if (!wasActive) return;
-            upEvent.preventDefault();
-            suppressClickRef.current = true;
-            suppressClickTimerRef.current = window.setTimeout(() => {
+      <Tooltip label={moveHint}>
+        <button
+          className="ticket-card__open"
+          onClick={(event) => {
+            if (suppressClickRef.current) {
               suppressClickRef.current = false;
-              suppressClickTimerRef.current = null;
-            }, 0);
-            onDropAtPoint(upEvent.clientX, upEvent.clientY);
-          };
-          const handleWindowBlur = () => {
-            const wasActive = mouseDrag.active;
-            cleanupMouseDrag();
-            if (wasActive) onDragEnd();
-          };
-          cleanupMouseDragRef.current = cleanupMouseDrag;
-          window.addEventListener("mousemove", handleMouseMove);
-          window.addEventListener("mouseup", handleMouseUp);
-          window.addEventListener("blur", handleWindowBlur);
-        }}
-        onKeyDown={(event) => {
-          if (
-            !event.altKey &&
-            !event.ctrlKey &&
-            !event.metaKey &&
-            !event.repeat &&
-            (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
-          ) {
+              event.preventDefault();
+              return;
+            }
+            onOpen(event.currentTarget);
+          }}
+          aria-label={translate("features.tickets.KanbanView.openTicket", [ticket.title])}
+          aria-describedby={`${metadataId} ${draggable ? moveHintId : contextMoveHintId}`}
+          aria-keyshortcuts={
+            draggable ? "ArrowLeft ArrowRight ArrowUp ArrowDown Shift+F10" : "Shift+F10"
+          }
+          onMouseDown={(event) => {
+            if (!draggable || event.button !== 0 || event.ctrlKey) return;
+            cleanupMouseDragRef.current?.();
+            const mouseDrag = {
+              startX: event.clientX,
+              startY: event.clientY,
+              active: false,
+            };
+            mouseDragRef.current = mouseDrag;
+            const cleanupMouseDrag = () => {
+              window.removeEventListener("mousemove", handleMouseMove);
+              window.removeEventListener("mouseup", handleMouseUp);
+              window.removeEventListener("blur", handleWindowBlur);
+              mouseDragRef.current = null;
+              cleanupMouseDragRef.current = null;
+            };
+            const handleMouseMove = (moveEvent: MouseEvent) => {
+              if (!mouseDrag.active) {
+                const distance = Math.hypot(
+                  moveEvent.clientX - mouseDrag.startX,
+                  moveEvent.clientY - mouseDrag.startY,
+                );
+                if (distance < 6) return;
+                mouseDrag.active = true;
+                onDragStart();
+              }
+              moveEvent.preventDefault();
+              onDragMove(moveEvent.clientX);
+            };
+            const handleMouseUp = (upEvent: MouseEvent) => {
+              const wasActive = mouseDrag.active;
+              cleanupMouseDrag();
+              if (!wasActive) return;
+              upEvent.preventDefault();
+              suppressClickRef.current = true;
+              suppressClickTimerRef.current = window.setTimeout(() => {
+                suppressClickRef.current = false;
+                suppressClickTimerRef.current = null;
+              }, 0);
+              onDropAtPoint(upEvent.clientX, upEvent.clientY);
+            };
+            const handleWindowBlur = () => {
+              const wasActive = mouseDrag.active;
+              cleanupMouseDrag();
+              if (wasActive) onDragEnd();
+            };
+            cleanupMouseDragRef.current = cleanupMouseDrag;
+            window.addEventListener("mousemove", handleMouseMove);
+            window.addEventListener("mouseup", handleMouseUp);
+            window.addEventListener("blur", handleWindowBlur);
+          }}
+          onKeyDown={(event) => {
+            if (
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.metaKey &&
+              !event.repeat &&
+              (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              const bounds = event.currentTarget.getBoundingClientRect();
+              onOpenMoveMenu({
+                x: bounds.left + Math.min(24, bounds.width / 2),
+                y: bounds.top + Math.min(24, bounds.height / 2),
+              });
+              return;
+            }
+            if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat)
+              return;
+            if (!draggable) return;
+            const direction = {
+              ArrowLeft: "left",
+              ArrowRight: "right",
+              ArrowUp: "up",
+              ArrowDown: "down",
+            }[event.key] as "left" | "right" | "up" | "down" | undefined;
+            if (!direction) return;
             event.preventDefault();
             event.stopPropagation();
-            const bounds = event.currentTarget.getBoundingClientRect();
-            onOpenMoveMenu({
-              x: bounds.left + Math.min(24, bounds.width / 2),
-              y: bounds.top + Math.min(24, bounds.height / 2),
-            });
-            return;
-          }
-          if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat)
-            return;
-          if (!draggable) return;
-          const direction = {
-            ArrowLeft: "left",
-            ArrowRight: "right",
-            ArrowUp: "up",
-            ArrowDown: "down",
-          }[event.key] as "left" | "right" | "up" | "down" | undefined;
-          if (!direction) return;
-          event.preventDefault();
-          event.stopPropagation();
-          onMove(direction);
-        }}
-      >
-        <strong>{ticket.title}</strong>
-        <span className="ticket-card__meta">
-          <span className="ticket-card__priority">
+            onMove(direction);
+          }}
+        >
+          <strong>{ticket.title}</strong>
+          <span className="ticket-card__meta">
+            <span className="ticket-card__priority">
+              {translate("features.tickets.KanbanView.priorityValue", [
+                priorityLabel(ticket.priority),
+              ])}
+            </span>
+            {ticket.tags.map((tag) => (
+              <span className="ticket-card__tag" key={tag.id}>
+                {tag.name}
+              </span>
+            ))}
+          </span>
+          <span className="sr-only" id={metadataId}>
             {translate("features.tickets.KanbanView.priorityValue", [
               priorityLabel(ticket.priority),
             ])}
+            {ticket.tags.length > 0
+              ? ` ${ticket.tags
+                  .map((tag) => translate("features.tickets.KanbanView.tagValue", [tag.name]))
+                  .join("、")}`
+              : ""}
           </span>
-          {ticket.tags.map((tag) => (
-            <span className="ticket-card__tag" key={tag.id}>
-              {tag.name}
+          {!draggable ? (
+            <span className="sr-only" id={contextMoveHintId}>
+              {moveHint}
             </span>
-          ))}
-        </span>
-        <span className="sr-only" id={metadataId}>
-          {translate("features.tickets.KanbanView.priorityValue", [priorityLabel(ticket.priority)])}
-          {ticket.tags.length > 0
-            ? ` ${ticket.tags
-                .map((tag) => translate("features.tickets.KanbanView.tagValue", [tag.name]))
-                .join("、")}`
-            : ""}
-        </span>
-        {!draggable ? (
-          <span className="sr-only" id={contextMoveHintId}>
-            {translate("features.tickets.KanbanView.contextMoveHint")}
-          </span>
-        ) : null}
-        {draggable ? (
-          <span className="sr-only" id={moveHintId}>
-            {translate("features.tickets.KanbanView.moveHint")}
-          </span>
-        ) : null}
-      </button>
+          ) : null}
+          {draggable ? (
+            <span className="sr-only" id={moveHintId}>
+              {moveHint}
+            </span>
+          ) : null}
+        </button>
+      </Tooltip>
     </article>
   );
 }

@@ -1,16 +1,29 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DayTemplate, Schedule } from "../shared/contracts";
+import type { DayTemplate, Schedule, Settings } from "../shared/contracts";
 import { MemoryAppClient } from "../shared/ipc/memory-client";
 import { App } from "./App";
 import { useUiStore } from "./ui-store";
+
+const listenMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@tauri-apps/api/event", () => ({ listen: listenMock }));
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
   delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset.textScale;
+  delete document.documentElement.dataset.textScaleLevel;
+  delete document.documentElement.dataset.windowKind;
+  delete document.documentElement.dataset.window;
+  document.documentElement.style.removeProperty("--app-font-scale-percent");
+  document.documentElement.style.removeProperty("--app-font-scale-factor");
+  document.documentElement.style.removeProperty("font-size");
+  delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  listenMock.mockReset();
   useUiStore.setState({ activeView: "today" });
 });
 
@@ -63,7 +76,12 @@ describe("App time-tool navigation", () => {
     const toggle = await screen.findByRole("button", { name: "サイドバーを展開" });
     expect(container.querySelector(".app-shell")).toHaveAttribute("data-sidebar", "collapsed");
     const sidebar = screen.getByLabelText("主要画面");
-    expect(within(sidebar).getByRole("button", { name: "今日" })).toHaveAttribute("title", "今日");
+    const todayNavigation = within(sidebar).getByRole("button", { name: "今日" });
+    expect(todayNavigation).not.toHaveAttribute("title");
+    await user.hover(todayNavigation);
+    expect(await screen.findByRole("tooltip", { name: "今日" })).toBeVisible();
+    await user.unhover(todayNavigation);
+    expect(screen.queryByRole("tooltip", { name: "今日" })).not.toBeInTheDocument();
 
     await user.click(toggle);
 
@@ -193,6 +211,106 @@ describe("App time-tool navigation", () => {
 
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe("mild"));
     expect((await client.bootstrap()).settings.theme).toBe("mild");
+  });
+
+  it("previews, persists, and restores the selected text display scale", async () => {
+    const user = userEvent.setup();
+    const client = new MemoryAppClient();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = render(
+      <QueryClientProvider client={queryClient}>
+        <App client={client} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "設定" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "文字表示倍率" }), "250");
+
+    expect(document.documentElement.dataset.textScale).toBe("250");
+    expect(document.documentElement.dataset.textScaleLevel).toBe("extra");
+    expect(document.documentElement.style.getPropertyValue("--app-font-scale-percent")).toBe(
+      "250%",
+    );
+    expect(document.documentElement.style.getPropertyValue("--app-font-1")).toBe("40px");
+    expect((await client.bootstrap()).settings.textScalePercent).toBe(100);
+
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+    await waitFor(async () =>
+      expect((await client.bootstrap()).settings.textScalePercent).toBe(250),
+    );
+
+    first.unmount();
+    const restoredQueryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={restoredQueryClient}>
+        <App client={client} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(document.documentElement.dataset.textScale).toBe("250"));
+  });
+
+  it("accepts a later native settings update after the local preview has been saved", async () => {
+    type SettingsEvent = { event: string; id: number; payload: Settings };
+    const listeners = new Map<string, (event: SettingsEvent) => void>();
+    listenMock.mockImplementation((eventName: string, listener: (event: SettingsEvent) => void) => {
+      listeners.set(eventName, listener);
+      return Promise.resolve(vi.fn());
+    });
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+
+    const user = userEvent.setup();
+    const client = new MemoryAppClient();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App client={client} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "詳細タイムライン" });
+    await waitFor(() => expect(listeners.get("settings-updated")).toBeTypeOf("function"));
+    await user.click(screen.getByRole("button", { name: "設定" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "文字表示倍率" }), "250");
+    expect(document.documentElement.dataset.textScale).toBe("250");
+
+    const externalPreviewConflict = {
+      ...(await client.bootstrap()).settings,
+      textScalePercent: 100 as const,
+    };
+    act(() => {
+      listeners.get("settings-updated")?.({
+        event: "settings-updated",
+        id: 1,
+        payload: externalPreviewConflict,
+      });
+    });
+    expect(document.documentElement.dataset.textScale).toBe("250");
+
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+    await waitFor(async () =>
+      expect((await client.bootstrap()).settings.textScalePercent).toBe(250),
+    );
+
+    const externalSettings = {
+      ...(await client.bootstrap()).settings,
+      textScalePercent: 100 as const,
+    };
+    await client.updateSettings(externalSettings);
+    act(() => {
+      listeners.get("settings-updated")?.({
+        event: "settings-updated",
+        id: 1,
+        payload: externalSettings,
+      });
+    });
+
+    await waitFor(() => expect(document.documentElement.dataset.textScale).toBe("100"));
   });
 
   it("keeps template editing in the sidebar destination instead of Today", async () => {

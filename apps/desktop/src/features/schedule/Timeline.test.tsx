@@ -32,6 +32,128 @@ const schedule: Schedule = {
 };
 
 describe("Timeline interactions", () => {
+  it("expands timeline time geometry enough to contain 250% text", () => {
+    const { container } = render(
+      <Timeline
+        schedules={[schedule]}
+        selectedDate={new Date("2026-07-20T00:00:00.000Z")}
+        selectedId={null}
+        snapMinutes={5}
+        onSelect={vi.fn()}
+        onCreate={vi.fn()}
+        onCreateRange={vi.fn()}
+        onAdjust={vi.fn().mockResolvedValue(undefined)}
+        referenceMinute={0}
+        textScalePercent={250}
+      />,
+    );
+
+    expect(container.querySelector<HTMLElement>(".timeline-canvas")?.style.height).toBe("4320px");
+    const readableItem = screen.getByRole("button", { name: /キーボード調整/ });
+    expect(readableItem.closest(".timeline-readable-list")).not.toBeNull();
+    expect(readableItem).toHaveTextContent("キーボード調整");
+    const timelineEvent = container.querySelector<HTMLButtonElement>(".timeline-event");
+    expect(timelineEvent?.style.height).toBe("180px");
+    expect(timelineEvent).toHaveAttribute("aria-hidden", "true");
+    expect(timelineEvent).toHaveAttribute("data-text-mode", "summary");
+    expect(timelineEvent).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("keeps long short-event names readable without overflowing their scaled time bars", () => {
+    const title = "Quick-1787750482669 の長い短時間予定";
+    const { container } = render(
+      <Timeline
+        schedules={[
+          {
+            ...schedule,
+            title,
+            endUtc: "2026-07-20T00:15:00.000Z",
+          },
+        ]}
+        selectedDate={new Date("2026-07-20T00:00:00.000Z")}
+        selectedId={null}
+        snapMinutes={5}
+        onSelect={vi.fn()}
+        onCreate={vi.fn()}
+        onCreateRange={vi.fn()}
+        onAdjust={vi.fn().mockResolvedValue(undefined)}
+        referenceMinute={0}
+        textScalePercent={250}
+      />,
+    );
+
+    const readableItem = screen.getByRole("button", { name: new RegExp(title) });
+    expect(readableItem).toHaveTextContent(title);
+    const timelineEvent = container.querySelector<HTMLButtonElement>(".timeline-event");
+    expect(timelineEvent).toHaveAttribute("data-density", "compact");
+    expect(timelineEvent).toHaveAttribute("data-text-mode", "summary");
+    expect(timelineEvent?.querySelector(".timeline-event-title")).toHaveTextContent(title);
+  });
+
+  it("keeps the current-time line aligned with the scaled timeline", () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-07-20T12:34:00.000Z");
+    vi.setSystemTime(now);
+    try {
+      const { container } = render(
+        <Timeline
+          schedules={[]}
+          selectedDate={new Date(now.getFullYear(), now.getMonth(), now.getDate())}
+          selectedId={null}
+          snapMinutes={5}
+          onSelect={vi.fn()}
+          onCreate={vi.fn()}
+          onCreateRange={vi.fn()}
+          onAdjust={vi.fn().mockResolvedValue(undefined)}
+          referenceMinute={0}
+          textScalePercent={250}
+        />,
+      );
+
+      const line = container.querySelector<HTMLElement>(".current-time-line");
+      expect(line).not.toBeNull();
+      const expectedTop =
+        ((now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60) / 60) * 180;
+      expect(Number.parseFloat(line?.style.top ?? "NaN")).toBe(expectedTop);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("scales the minimum height of a short drag preview with the timeline", () => {
+    const { container } = render(
+      <Timeline
+        schedules={[]}
+        selectedDate={new Date(2026, 6, 20)}
+        selectedId={null}
+        snapMinutes={5}
+        onSelect={vi.fn()}
+        onCreate={vi.fn()}
+        onCreateRange={vi.fn()}
+        onAdjust={vi.fn().mockResolvedValue(undefined)}
+        referenceMinute={0}
+        textScalePercent={250}
+      />,
+    );
+    const canvas = container.querySelector<HTMLElement>(".timeline-canvas");
+    expect(canvas).not.toBeNull();
+    vi.spyOn(canvas!, "getBoundingClientRect").mockReturnValue({
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: 4320,
+      width: 800,
+      height: 4320,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.pointerDown(canvas!, { button: 0, clientY: 0, pointerId: 1 });
+    const preview = container.querySelector<HTMLElement>(".timeline-drag-preview");
+    expect(preview?.style.height).toBe("70px");
+  });
+
   it("uses a single-row layout for a 30-minute schedule without losing its full name", () => {
     render(
       <Timeline
@@ -50,6 +172,7 @@ describe("Timeline interactions", () => {
         onCreateRange={vi.fn()}
         onAdjust={vi.fn().mockResolvedValue(undefined)}
         referenceMinute={0}
+        textScalePercent={100}
       />,
     );
 
@@ -74,6 +197,7 @@ describe("Timeline interactions", () => {
         onCreateRange={vi.fn()}
         onAdjust={adjust}
         referenceMinute={480}
+        textScalePercent={100}
       />,
     );
     fireEvent.keyDown(screen.getByRole("button", { name: /キーボード調整/ }), {
@@ -97,6 +221,7 @@ describe("Timeline interactions", () => {
         onCreateRange={createRange}
         onAdjust={vi.fn().mockResolvedValue(undefined)}
         referenceMinute={480}
+        textScalePercent={100}
       />,
     );
     const canvas = container.querySelector<HTMLElement>(".timeline-canvas");
@@ -151,6 +276,7 @@ describe("Timeline interactions", () => {
           onCreateRange={vi.fn()}
           onAdjust={vi.fn().mockResolvedValue(undefined)}
           referenceMinute={480}
+          textScalePercent={100}
         />,
       );
       await waitFor(() => {

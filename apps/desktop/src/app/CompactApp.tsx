@@ -1,11 +1,13 @@
 import { appLocale, translate } from "../shared/i18n/messages";
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { FocusState, Schedule } from "../shared/contracts";
+import { listen } from "@tauri-apps/api/event";
+import type { FocusState, Schedule, Settings } from "../shared/contracts";
 import type { AppClient } from "../shared/ipc/client";
 import { dayRange, formatTime } from "../shared/time";
 import { StatusMessage } from "../shared/ui/StatusMessage";
 import { isCurrent, nextSchedule } from "../features/schedule/timeline-layout";
+import { applyAppAppearance } from "../shared/appearance";
 
 export function CompactApp({ client }: { client: AppClient }) {
   const queryClient = useQueryClient();
@@ -24,6 +26,25 @@ export function CompactApp({ client }: { client: AppClient }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let active = true;
+    let stop: (() => void) | undefined;
+    void listen<Settings>("settings-updated", ({ payload }) => {
+      applyAppAppearance(payload);
+      void bootstrap.refetch().catch(() => undefined);
+    })
+      .then((unlisten) => {
+        if (active) stop = unlisten;
+        else unlisten();
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, [bootstrap.refetch]);
+
   const items = schedules.data?.items ?? [];
   const current = useMemo(() => items.filter((schedule) => isCurrent(schedule, now)), [items, now]);
   const next = useMemo(() => nextSchedule(items, now), [items, now]);
@@ -40,9 +61,11 @@ export function CompactApp({ client }: { client: AppClient }) {
   };
 
   useLayoutEffect(() => {
-    const theme = bootstrap.data?.settings.theme ?? "system";
-    document.documentElement.dataset.theme = theme;
-  }, [bootstrap.data?.settings.theme]);
+    applyAppAppearance({
+      theme: bootstrap.data?.settings.theme ?? "system",
+      textScalePercent: bootstrap.data?.settings.textScalePercent ?? 100,
+    });
+  }, [bootstrap.data?.settings]);
 
   if (bootstrap.isLoading || schedules.isLoading) {
     return (

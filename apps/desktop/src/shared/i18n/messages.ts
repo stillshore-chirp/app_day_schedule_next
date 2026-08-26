@@ -27,10 +27,15 @@ export const jaMessages = {
     "アナログ時計を開けませんでした。メイン画面を表示したまま、もう一度お試しください。",
   "settings.actions.resetDefaults": "既定値へ戻す",
   "settings.theme.mild": "マイルド",
+  "settings.textScale.label": "文字表示倍率",
+  "settings.textScale.help":
+    "選択するとすぐに文字へ反映されます。次回起動にも使うには設定を保存してください。",
+  "settings.states.saveFailed": "設定を保存できませんでした。",
   "settings.states.defaultsLoaded": "既定値を入力しました。内容を確認して保存してください。",
   "settings.states.defaultsFailed": "既定値を読み込めませんでした。現在の入力は保持されています。",
+  "settings.help.saveFailed": "入力内容は保持されています。もう一度保存してください。",
   "settings.help.resetDefaults":
-    "テーマ、操作、通知、Focus、ウィンドウ動作を初期値へ戻します。Google接続と予定データは変更しません。",
+    "テーマ、文字表示倍率、操作、通知、Focus、ウィンドウ動作を初期値へ戻します。Google接続と予定データは変更しません。",
   "states.localOnly": "この端末だけ",
   "states.pending": "Google への同期待ち",
   "states.syncing": "Google と同期中",
@@ -310,6 +315,7 @@ export const jaMessages = {
   "features.schedule.Timeline.016": "同期: ",
   "features.schedule.Timeline.017": "新しい予定",
   "features.schedule.Timeline.018": "Escで取消",
+  "features.schedule.Timeline.019": "高倍率表示の予定一覧",
   "features.schedule.TodayView.001":
     "この端末に変更を保存しました。Google 接続時は同期待ちになります。",
   "features.schedule.TodayView.002": "この端末に予定を保存しました。",

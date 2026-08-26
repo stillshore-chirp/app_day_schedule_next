@@ -20,6 +20,7 @@ interface TimelineProps {
   onCreateRange: (startUtc: string, endUtc: string) => void;
   onAdjust: (schedule: Schedule, startUtc: string, endUtc: string) => Promise<void>;
   referenceMinute: number;
+  textScalePercent: number;
 }
 
 type DragKind = "create" | "move" | "resize-start" | "resize-end";
@@ -52,6 +53,7 @@ export function Timeline({
   onCreateRange,
   onAdjust,
   referenceMinute,
+  textScalePercent,
 }: TimelineProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -61,6 +63,8 @@ export function Timeline({
   const [drag, setDrag] = useState<DragState | null>(null);
   const [saving, setSaving] = useState(false);
   const [visibleRange, setVisibleRange] = useState({ startMinute: 0, endMinute: 1440 });
+  const textScaleFactor = Math.max(1, textScalePercent / 100);
+  const effectiveHourHeight = hourHeight * textScaleFactor;
   const items = useMemo(
     () => assignTimelineLanes(schedules, selectedDate),
     [schedules, selectedDate],
@@ -75,6 +79,7 @@ export function Timeline({
   );
   const isToday = selectedDate.toDateString() === now.toDateString();
   const nowMinute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+  const usesReadableList = textScalePercent >= 175;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000);
@@ -87,7 +92,7 @@ export function Timeline({
     const storageKey = `day-schedule-next.timeline.scroll.${localDateKey(selectedDate)}`;
     const stored = Number(sessionStorage.getItem(storageKey));
     viewportRef.current.scrollTop =
-      Number.isFinite(stored) && stored > 0 ? stored : targetHour * hourHeight;
+      Number.isFinite(stored) && stored > 0 ? stored : targetHour * effectiveHourHeight;
     const viewport = viewportRef.current;
     let persistFrame: number | null = null;
     const scheduleScrollPersistence = () => {
@@ -102,11 +107,11 @@ export function Timeline({
       if (viewport.clientHeight <= 0) return;
       const startMinute = Math.max(
         0,
-        (viewport.scrollTop / hourHeight) * 60 - TIMELINE_OVERSCAN_MINUTES,
+        (viewport.scrollTop / effectiveHourHeight) * 60 - TIMELINE_OVERSCAN_MINUTES,
       );
       const endMinute = Math.min(
         1440,
-        ((viewport.scrollTop + viewport.clientHeight) / hourHeight) * 60 +
+        ((viewport.scrollTop + viewport.clientHeight) / effectiveHourHeight) * 60 +
           TIMELINE_OVERSCAN_MINUTES,
       );
       setVisibleRange((current) =>
@@ -123,13 +128,16 @@ export function Timeline({
       if (persistFrame !== null) window.cancelAnimationFrame(persistFrame);
       sessionStorage.setItem(storageKey, String(viewport.scrollTop));
     };
-  }, [hourHeight, isToday, selectedDate]);
+  }, [effectiveHourHeight, isToday, selectedDate]);
 
   useEffect(() => {
     if (viewportRef.current) {
-      viewportRef.current.scrollTop = Math.max(0, (referenceMinute / 60) * hourHeight - hourHeight);
+      viewportRef.current.scrollTop = Math.max(
+        0,
+        (referenceMinute / 60) * effectiveHourHeight - effectiveHourHeight,
+      );
     }
-  }, [hourHeight, referenceMinute]);
+  }, [effectiveHourHeight, referenceMinute]);
 
   useEffect(() => {
     if (!drag) return;
@@ -147,7 +155,7 @@ export function Timeline({
     const canvas = canvasRef.current;
     if (!canvas) return 0;
     const bounds = canvas.getBoundingClientRect();
-    const raw = ((event.clientY - bounds.top) / hourHeight) * 60;
+    const raw = ((event.clientY - bounds.top) / effectiveHourHeight) * 60;
     return Math.max(0, Math.min(1440, Math.round(raw / snapMinutes) * snapMinutes));
   };
 
@@ -281,7 +289,9 @@ export function Timeline({
     localStorage.setItem("day-schedule-next.timeline.zoom", String(next));
   };
 
-  const preview = drag ? previewPosition(drag, selectedDate, hourHeight) : null;
+  const preview = drag
+    ? previewPosition(drag, selectedDate, effectiveHourHeight, 28 * textScaleFactor)
+    : null;
 
   return (
     <section className="timeline-panel" aria-labelledby="timeline-title">
@@ -323,6 +333,39 @@ export function Timeline({
           {translate("features.schedule.Timeline.007")}
         </p>
       ) : null}
+      {usesReadableList && visibleItems.length > 0 ? (
+        <ul
+          className="timeline-readable-list"
+          aria-label={translate("features.schedule.Timeline.019")}
+        >
+          {visibleItems.map((item) => (
+            <li key={`readable-${item.schedule.id}-${item.schedule.startUtc}`}>
+              <button
+                type="button"
+                aria-label={translate("features.schedule.Timeline.009", [
+                  item.schedule.title,
+                  formatTime(item.schedule.startUtc),
+                  formatTime(item.schedule.endUtc),
+                  item.schedule.syncStatus,
+                ])}
+                aria-pressed={selectedId === item.schedule.id}
+                onClick={() => onSelect(item.schedule)}
+                onKeyDown={(event) => void keyboardAdjust(event, item.schedule)}
+              >
+                <span
+                  className="timeline-readable-list__swatch"
+                  style={{ backgroundColor: item.schedule.color }}
+                  aria-hidden="true"
+                />
+                <time>
+                  {formatTime(item.schedule.startUtc)}–{formatTime(item.schedule.endUtc)}
+                </time>
+                <strong>{item.schedule.title}</strong>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div
         className="timeline-viewport"
         ref={viewportRef}
@@ -333,24 +376,27 @@ export function Timeline({
         <div
           className="timeline-canvas"
           ref={canvasRef}
-          style={{ height: 24 * hourHeight }}
+          style={{ height: 24 * effectiveHourHeight }}
           onPointerDown={beginCreate}
           onPointerMove={updateDrag}
           onPointerUp={() => void finishDrag()}
           onPointerCancel={() => setDrag(null)}
         >
           {Array.from({ length: 25 }, (_, hour) => (
-            <div className="timeline-hour" key={hour} style={{ top: hour * hourHeight }}>
+            <div className="timeline-hour" key={hour} style={{ top: hour * effectiveHourHeight }}>
               <span>{String(hour).padStart(2, "0")}:00</span>
             </div>
           ))}
           {visibleItems.map((item) => {
-            const top = (item.startMinute / 60) * hourHeight;
-            const height = Math.max(28, ((item.endMinute - item.startMinute) / 60) * hourHeight);
+            const top = (item.startMinute / 60) * effectiveHourHeight;
+            const height = Math.max(
+              28 * textScaleFactor,
+              ((item.endMinute - item.startMinute) / 60) * effectiveHourHeight,
+            );
             const width = `calc(${100 / item.laneCount}% - 8px)`;
             const left = `calc(${(item.lane * 100) / item.laneCount}% + 4px)`;
             const current = isToday && isCurrent(item.schedule, now);
-            const density = height < (current ? 84 : 56) ? "compact" : "regular";
+            const density = height < (current ? 84 : 56) * textScaleFactor ? "compact" : "regular";
             const detailsId = `timeline-details-${item.schedule.id}`;
             return (
               <button
@@ -365,8 +411,11 @@ export function Timeline({
                 ])}
                 aria-describedby={detailsId}
                 aria-pressed={selectedId === item.schedule.id}
+                aria-hidden={usesReadableList || undefined}
+                tabIndex={usesReadableList ? -1 : undefined}
                 data-current={current || undefined}
                 data-density={density}
+                data-text-mode={usesReadableList ? "summary" : undefined}
                 data-sync={item.schedule.syncStatus}
                 data-priority={item.schedule.priority}
                 style={{ top, height, width, left, backgroundColor: item.schedule.color }}
@@ -445,7 +494,7 @@ export function Timeline({
           {isToday ? (
             <div
               className="current-time-line"
-              style={{ top: (nowMinute / 60) * hourHeight }}
+              style={{ top: (nowMinute / 60) * effectiveHourHeight }}
               aria-hidden="true"
             >
               <span>{formatTime(now.toISOString())}</span>
@@ -467,14 +516,19 @@ function localDateKey(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-function previewPosition(drag: DragState, selectedDate: Date, hourHeight: number) {
+function previewPosition(
+  drag: DragState,
+  selectedDate: Date,
+  hourHeight: number,
+  minHeight: number,
+) {
   const dayStart = dateAtMinute(selectedDate, 0).getTime();
   const startMinute = (Date.parse(drag.startUtc) - dayStart) / 60_000;
   const endMinute = (Date.parse(drag.endUtc) - dayStart) / 60_000;
   return {
     top: (Math.max(0, startMinute) / 60) * hourHeight,
     height: Math.max(
-      28,
+      minHeight,
       ((Math.min(1440, endMinute) - Math.max(0, startMinute)) / 60) * hourHeight,
     ),
     durationMinutes: Math.max(

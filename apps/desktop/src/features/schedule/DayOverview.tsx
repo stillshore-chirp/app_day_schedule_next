@@ -1,6 +1,7 @@
 import { translate } from "../../shared/i18n/messages";
 import type { DayTemplate, Schedule } from "../../shared/contracts";
 import { formatTime } from "../../shared/time";
+import { Tooltip } from "../../shared/ui/Tooltip";
 import { layoutSchedulesForDay, minuteToPercent } from "./overview-layout";
 import { layoutTemplateBlocks } from "./template-overview-layout";
 
@@ -22,6 +23,7 @@ interface DayOverviewProps {
   onRetryTemplate: () => void;
   referenceMinute: number;
   onReferenceChange: (minute: number) => void;
+  textScalePercent: number;
 }
 
 function minuteToTime(minute: number): string {
@@ -29,22 +31,25 @@ function minuteToTime(minute: number): string {
   return `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 }
 
-function laneHeight(levelCount: number): number {
+function laneHeight(levelCount: number, textScaleFactor: number): number {
   const visibleLevelCount = Math.min(Math.max(1, levelCount), MAX_VISIBLE_LEVELS);
-  if (visibleLevelCount === 1) return OVERVIEW_SINGLE_LEVEL_HEIGHT;
+  if (visibleLevelCount === 1) return OVERVIEW_SINGLE_LEVEL_HEIGHT * textScaleFactor;
   return (
-    OVERVIEW_MULTI_LEVEL_PADDING * 2 +
-    visibleLevelCount * OVERVIEW_BLOCK_HEIGHT +
+    OVERVIEW_MULTI_LEVEL_PADDING * 2 * textScaleFactor +
+    visibleLevelCount * OVERVIEW_BLOCK_HEIGHT * textScaleFactor +
     (visibleLevelCount - 1) * OVERVIEW_BLOCK_GAP
   );
 }
 
-function blockTop(level: number, levelCount: number): number {
+function blockTop(level: number, levelCount: number, textScaleFactor: number): number {
   const visibleLevelCount = Math.min(Math.max(1, levelCount), MAX_VISIBLE_LEVELS);
   if (visibleLevelCount === 1) {
-    return (OVERVIEW_SINGLE_LEVEL_HEIGHT - OVERVIEW_BLOCK_HEIGHT) / 2;
+    return ((OVERVIEW_SINGLE_LEVEL_HEIGHT - OVERVIEW_BLOCK_HEIGHT) / 2) * textScaleFactor;
   }
-  return OVERVIEW_MULTI_LEVEL_PADDING + level * (OVERVIEW_BLOCK_HEIGHT + OVERVIEW_BLOCK_GAP);
+  return (
+    OVERVIEW_MULTI_LEVEL_PADDING * textScaleFactor +
+    level * (OVERVIEW_BLOCK_HEIGHT * textScaleFactor + OVERVIEW_BLOCK_GAP)
+  );
 }
 
 export function DayOverview({
@@ -59,6 +64,7 @@ export function DayOverview({
   onRetryTemplate,
   referenceMinute,
   onReferenceChange,
+  textScalePercent,
 }: DayOverviewProps) {
   const now = new Date();
   const isToday = selectedDate.toDateString() === now.toDateString();
@@ -73,8 +79,13 @@ export function DayOverview({
   const hiddenTemplateCount = templateItems.filter(
     (item) => item.level >= MAX_VISIBLE_LEVELS,
   ).length;
-  const scheduleLaneHeight = laneHeight(scheduleLevelCount);
-  const templateLaneHeight = laneHeight(templateLevelCount);
+  const textScaleFactor = Math.max(1, textScalePercent / 100);
+  const highTextScale = textScalePercent >= 175;
+  const hideTemplateTrackFromAssistiveTech =
+    highTextScale && templateState === "ready" && templateItems.length > 0;
+  const overviewBlockHeight = OVERVIEW_BLOCK_HEIGHT * textScaleFactor;
+  const scheduleLaneHeight = laneHeight(scheduleLevelCount, textScaleFactor);
+  const templateLaneHeight = laneHeight(templateLevelCount, textScaleFactor);
 
   return (
     <section className="overview" aria-labelledby="overview-title">
@@ -120,31 +131,34 @@ export function DayOverview({
                   formatTime(schedule.endUtc),
                 ]);
                 return (
-                  <button
-                    className="overview-event"
-                    key={key}
-                    type="button"
-                    aria-label={accessibleLabel}
-                    aria-pressed={selectedId === schedule.id}
-                    title={accessibleLabel}
-                    data-overview-index={index + 1}
-                    data-sync={schedule.syncStatus}
-                    style={{
-                      left: `${minuteToPercent(startMinute)}%`,
-                      width: `${Math.max(0.8, minuteToPercent(endMinute) - minuteToPercent(startMinute))}%`,
-                      top: blockTop(level, levelCount),
-                      height: OVERVIEW_BLOCK_HEIGHT,
-                      zIndex: levelCount - level,
-                      backgroundColor: schedule.color,
-                    }}
-                    onClick={() => onSelect(schedule)}
-                  >
-                    <span className="overview-event__content" aria-hidden="true">
-                      <span className="overview-event__index">{index + 1}</span>
-                      <span className="overview-event__start">{minuteToTime(startMinute)}</span>
-                      <b className="overview-event__title">{schedule.title}</b>
-                    </span>
-                  </button>
+                  <Tooltip key={key} label={accessibleLabel}>
+                    <button
+                      className="overview-event"
+                      type="button"
+                      aria-label={highTextScale ? undefined : accessibleLabel}
+                      aria-hidden={highTextScale || undefined}
+                      aria-pressed={highTextScale ? undefined : selectedId === schedule.id}
+                      disabled={highTextScale}
+                      tabIndex={highTextScale ? -1 : undefined}
+                      data-overview-index={index + 1}
+                      data-sync={schedule.syncStatus}
+                      style={{
+                        left: `${minuteToPercent(startMinute)}%`,
+                        width: `${Math.max(0.8, minuteToPercent(endMinute) - minuteToPercent(startMinute))}%`,
+                        top: blockTop(level, levelCount, textScaleFactor),
+                        height: overviewBlockHeight,
+                        zIndex: levelCount - level,
+                        backgroundColor: schedule.color,
+                      }}
+                      onClick={() => onSelect(schedule)}
+                    >
+                      <span className="overview-event__content" aria-hidden="true">
+                        <span className="overview-event__index">{index + 1}</span>
+                        <span className="overview-event__start">{minuteToTime(startMinute)}</span>
+                        <b className="overview-event__title">{schedule.title}</b>
+                      </span>
+                    </button>
+                  </Tooltip>
                 );
               })}
             {scheduleState === "loading" ? (
@@ -169,6 +183,22 @@ export function DayOverview({
               <i className="overview-now" style={{ left: `${nowPercent}%` }} aria-hidden="true" />
             ) : null}
           </div>
+          {highTextScale ? (
+            <ol
+              className="overview-readable-list"
+              aria-label={translate("features.schedule.DayOverview.010")}
+            >
+              {scheduleItems.map(({ schedule, startMinute, endMinute, key }, index) => (
+                <li key={`readable-${key}`}>
+                  <button type="button" onClick={() => onSelect(schedule)}>
+                    <span>{index + 1}</span>
+                    <time>{`${minuteToTime(startMinute)}–${minuteToTime(endMinute)}`}</time>
+                    <strong>{schedule.title}</strong>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : null}
         </section>
 
         <section className="overview-lane" aria-labelledby="template-lane-title">
@@ -184,7 +214,12 @@ export function DayOverview({
           </div>
           <div
             className="overview-lane__track overview-lane__track--template"
-            role={templateState === "ready" && templateItems.length > 0 ? "list" : undefined}
+            role={
+              !highTextScale && templateState === "ready" && templateItems.length > 0
+                ? "list"
+                : undefined
+            }
+            aria-hidden={hideTemplateTrackFromAssistiveTech || undefined}
             aria-label={translate("features.schedule.DayOverview.017")}
             style={{ height: templateLaneHeight, minHeight: templateLaneHeight }}
           >
@@ -224,36 +259,36 @@ export function DayOverview({
                         ? translate("features.schedule.DayOverview.023", [block.title, timeRange])
                         : translate("features.schedule.DayOverview.024", [block.title, timeRange]);
                       return (
-                        <div
-                          className="overview-template-block"
-                          key={key}
-                          role="listitem"
-                          aria-label={accessibleLabel}
-                          title={accessibleLabel}
-                          data-overview-index={index + 1}
-                          data-continues-next-day={continuesNextDay ? "true" : undefined}
-                          style={{
-                            left: `${minuteToPercent(startMinute)}%`,
-                            width: `${Math.max(0.8, minuteToPercent(endMinute) - minuteToPercent(startMinute))}%`,
-                            top: blockTop(level, levelCount),
-                            height: OVERVIEW_BLOCK_HEIGHT,
-                            zIndex: levelCount - level,
-                            backgroundColor: block.color,
-                          }}
-                        >
-                          <span className="overview-template-block__content" aria-hidden="true">
-                            <span className="overview-template-block__index">{index + 1}</span>
-                            <span className="overview-template-block__start">
-                              {minuteToTime(startMinute)}
+                        <Tooltip key={key} label={accessibleLabel}>
+                          <div
+                            className="overview-template-block"
+                            role={highTextScale ? undefined : "listitem"}
+                            aria-label={highTextScale ? undefined : accessibleLabel}
+                            data-overview-index={index + 1}
+                            data-continues-next-day={continuesNextDay ? "true" : undefined}
+                            style={{
+                              left: `${minuteToPercent(startMinute)}%`,
+                              width: `${Math.max(0.8, minuteToPercent(endMinute) - minuteToPercent(startMinute))}%`,
+                              top: blockTop(level, levelCount, textScaleFactor),
+                              height: overviewBlockHeight,
+                              zIndex: levelCount - level,
+                              backgroundColor: block.color,
+                            }}
+                          >
+                            <span className="overview-template-block__content" aria-hidden="true">
+                              <span className="overview-template-block__index">{index + 1}</span>
+                              <span className="overview-template-block__start">
+                                {minuteToTime(startMinute)}
+                              </span>
+                              <b className="overview-template-block__title">{block.title}</b>
                             </span>
-                            <b className="overview-template-block__title">{block.title}</b>
-                          </span>
-                          {continuesNextDay ? (
-                            <strong className="overview-template-continuation" aria-hidden="true">
-                              {translate("features.schedule.DayOverview.025")}
-                            </strong>
-                          ) : null}
-                        </div>
+                            {continuesNextDay ? (
+                              <strong className="overview-template-continuation" aria-hidden="true">
+                                {translate("features.schedule.DayOverview.025")}
+                              </strong>
+                            ) : null}
+                          </div>
+                        </Tooltip>
                       );
                     },
                   )
@@ -267,6 +302,22 @@ export function DayOverview({
               <i className="overview-now" style={{ left: `${nowPercent}%` }} aria-hidden="true" />
             ) : null}
           </div>
+          {highTextScale && templateState === "ready" && templateItems.length > 0 ? (
+            <ol
+              className="overview-readable-list"
+              aria-label={translate("features.schedule.DayOverview.017")}
+            >
+              {templateItems.map(({ block, startMinute, endMinute, key }, index) => (
+                <li key={`readable-${key}`}>
+                  <span>
+                    <b>{index + 1}</b>
+                    <time>{`${minuteToTime(startMinute)}–${minuteToTime(endMinute)}`}</time>
+                    <strong>{block.title}</strong>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
         </section>
       </div>
 

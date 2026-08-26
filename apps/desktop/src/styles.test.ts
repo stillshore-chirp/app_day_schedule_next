@@ -101,4 +101,93 @@ describe("mild theme contrast", () => {
     expect(overviewStyles).not.toContain("display: none;");
     expect(overviewStyles).toContain("@container (max-width: 140px)");
   });
+
+  it("wraps high-scale overview lane headings inside their label column", () => {
+    const highScaleOverviewStyles = stylesheet.slice(
+      stylesheet.indexOf(':root[data-text-scale-level="high"] .overview'),
+      stylesheet.indexOf(':root[data-text-scale-level="high"] .overview-tick'),
+    );
+
+    expect(highScaleOverviewStyles).toContain("--overview-lane-label-width: min(220px, 30vw);");
+    expect(highScaleOverviewStyles).toContain("height: 1.5rem;");
+    expect(highScaleOverviewStyles).toContain("margin-bottom: 0.5rem;");
+    expect(highScaleOverviewStyles).toContain(".overview-lane__heading h3");
+    expect(highScaleOverviewStyles).toContain("white-space: normal;");
+  });
+
+  it("keeps high-scale analog digital time below the corner controls without truncation", () => {
+    const highScaleAnalogDigitalStyles = stylesheet.match(
+      /:root\[data-text-scale-level="high"\][\s\S]*?\.analog-clock-digital\s*,[\s\S]*?\.analog-clock-digital\s*\{([\s\S]*?)\n\}/,
+    )?.[1];
+
+    expect(highScaleAnalogDigitalStyles).toBeDefined();
+    expect(highScaleAnalogDigitalStyles).toContain("position: static;");
+    expect(highScaleAnalogDigitalStyles).toContain("grid-row: 3;");
+    expect(highScaleAnalogDigitalStyles).toContain("margin: 0 12px 12px;");
+    expect(highScaleAnalogDigitalStyles).toContain("max-width: none;");
+    expect(highScaleAnalogDigitalStyles).toContain("overflow: visible;");
+    expect(highScaleAnalogDigitalStyles).toContain("text-overflow: clip;");
+    expect(highScaleAnalogDigitalStyles).toContain("white-space: nowrap;");
+  });
+
+  it("lets the analog clock grid and face shrink to the secondary viewport", () => {
+    expect(stylesheet).toContain("html,\nbody,\n#root {\n  min-width: 0;\n  min-height: 0;");
+    expect(stylesheet).toContain(
+      ':root[data-window-kind="main"] body,\n:root[data-window-kind="main"] #root {\n  min-width: 720px;\n  min-height: 600px;',
+    );
+    const shellStyles = stylesheet.match(/\.analog-clock-shell\s*\{([\s\S]*?)\n\}/)?.[1];
+    const stageStyles = stylesheet.match(/\.analog-clock-stage\s*\{([\s\S]*?)\n\}/)?.[1];
+    const faceStyles = stylesheet.match(/\.analog-clock-face--full\s*\{([\s\S]*?)\n\}/)?.[1];
+
+    expect(shellStyles).toBeDefined();
+    expect(shellStyles).toContain("width: 100%;");
+    expect(shellStyles).toContain("min-width: 0;");
+    expect(shellStyles).toContain("min-height: 0;");
+    expect(stageStyles).toBeDefined();
+    expect(stageStyles).toContain("width: 100%;");
+    expect(stageStyles).toContain("height: 100%;");
+    expect(stageStyles).toContain("min-width: 0;");
+    expect(stageStyles).toContain("min-height: 0;");
+    expect(faceStyles).toBeDefined();
+    expect(faceStyles).toContain("max-width: 100%;");
+    expect(faceStyles).toContain("max-height: 100%;");
+    expect(stylesheet).toContain(
+      ".analog-clock-face__numbers,\n.analog-clock-face__numbers text {",
+    );
+  });
+
+  it("keeps app tooltips in a scale-aware body layer", () => {
+    const tooltipStyles = stylesheet.slice(
+      stylesheet.indexOf(".app-tooltip {"),
+      stylesheet.indexOf(".app-shell {"),
+    );
+    expect(tooltipStyles).toContain("position: fixed;");
+    expect(tooltipStyles).toContain("max-width: min(24rem, calc(100vw - 1rem));");
+    expect(tooltipStyles).toContain("font-size: var(--app-font-0-8125, 0.8125rem);");
+    expect(tooltipStyles).toContain("overflow-wrap: anywhere;");
+    expect(tooltipStyles).toContain("pointer-events: none;");
+  });
+
+  it("routes readable font sizes through the shared typography tokens", () => {
+    expect(stylesheet).toContain(
+      ".app-shell,\n.compact-shell,\n.analog-clock-shell,\n.boot-screen {\n  font-size: var(--app-font-1, 1rem);",
+    );
+    expect(stylesheet).not.toMatch(/font-size:\s*[0-9.]+rem\s*;/);
+  });
+
+  it("lets high-scale compact content shrink and wrap inside the narrow window", () => {
+    expect(stylesheet).toContain(
+      ':root[data-text-scale-level="high"] .compact-shell > *,\n:root[data-text-scale-level="extra"] .compact-shell > * {\n  min-width: 0;',
+    );
+    expect(stylesheet).toContain(
+      ':root[data-text-scale-level="extra"] .compact-actions .button {\n  max-width: 100%;',
+    );
+  });
+
+  it("keeps selectors compatible with Safari 13", () => {
+    expect(stylesheet).not.toContain(`:${"is"}(`);
+    expect(stylesheet).toContain(':root[data-text-scale-level="high"]');
+    expect(stylesheet).toContain(':root[data-text-scale-level="extra"]');
+    expect(stylesheet).toContain(':root[data-window-kind="main"]');
+  });
 });

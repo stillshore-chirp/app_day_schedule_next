@@ -297,13 +297,16 @@ export function SettingsView({
   client,
   bootstrap,
   onSettingsSaved,
+  onTextScalePreview = () => undefined,
 }: {
   client: AppClient;
   bootstrap: Bootstrap;
-  onSettingsSaved: () => void;
+  onSettingsSaved: (settings: Settings) => void;
+  onTextScalePreview?: (value: Settings["textScalePercent"] | null) => void;
 }) {
   const [settings, setSettings] = useState<Settings>(bootstrap.settings);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [resetState, setResetState] = useState<"loaded" | "failed" | null>(null);
   const [busy, setBusy] = useState(false);
   const [windowPreferences, setWindowPreferences] = useState(bootstrap.windowPreferences);
@@ -319,6 +322,12 @@ export function SettingsView({
       .then((granted) => setNotificationPermission(granted ? "granted" : "unknown"))
       .catch(() => setNotificationPermission("unavailable"));
   }, []);
+  useEffect(
+    () => () => {
+      onTextScalePreview(null);
+    },
+    [onTextScalePreview],
+  );
 
   const askNotificationPermission = async () => {
     try {
@@ -337,12 +346,16 @@ export function SettingsView({
   };
   const save = async () => {
     setBusy(true);
+    setSaved(false);
+    setSaveError(false);
     try {
       const savedSettings = await client.updateSettings(settings);
       setSettings(savedSettings);
       setSaved(true);
       setResetState(null);
-      onSettingsSaved();
+      onSettingsSaved(savedSettings);
+    } catch {
+      setSaveError(true);
     } finally {
       setBusy(false);
     }
@@ -350,10 +363,12 @@ export function SettingsView({
   const resetDefaults = async () => {
     setBusy(true);
     setSaved(false);
+    setSaveError(false);
     setResetState(null);
     try {
       const defaults = await client.defaultSettings();
       setSettings(defaults);
+      onTextScalePreview(defaults.textScalePercent);
       setResetState("loaded");
     } catch {
       setResetState("failed");
@@ -370,6 +385,11 @@ export function SettingsView({
       />
       {saved ? (
         <StatusMessage tone="success" title={translate("features.views.OperationalViews.042")} />
+      ) : null}
+      {saveError ? (
+        <StatusMessage tone="danger" title={translate("settings.states.saveFailed")}>
+          {translate("settings.help.saveFailed")}
+        </StatusMessage>
       ) : null}
       {resetState === "loaded" ? (
         <StatusMessage tone="success" title={translate("settings.states.defaultsLoaded")} />
@@ -394,6 +414,24 @@ export function SettingsView({
               <option value="dark">{translate("features.views.OperationalViews.047")}</option>
             </select>
           </label>
+          <label>
+            {translate("settings.textScale.label")}
+            <select
+              value={settings.textScalePercent}
+              onChange={(event) => {
+                const textScalePercent = Number(event.target.value) as Settings["textScalePercent"];
+                setSettings({ ...settings, textScalePercent });
+                onTextScalePreview(textScalePercent);
+              }}
+            >
+              {[100, 125, 150, 175, 200, 250].map((value) => (
+                <option key={value} value={value}>
+                  {value}%
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="field-help">{translate("settings.textScale.help")}</p>
           <label>
             {translate("features.views.OperationalViews.048")}
             <select

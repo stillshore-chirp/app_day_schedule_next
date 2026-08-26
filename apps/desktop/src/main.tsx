@@ -25,7 +25,13 @@ async function startApp() {
   const root = document.getElementById("root");
   if (root) {
     const windowName = new URLSearchParams(window.location.search).get("window");
-    if (windowName === "analog-clock") document.documentElement.dataset.window = windowName;
+    const isSecondaryWindow = windowName === "compact" || windowName === "analog-clock";
+    document.documentElement.dataset.windowKind = isSecondaryWindow ? "secondary" : "main";
+    if (isSecondaryWindow) {
+      document.documentElement.dataset.window = windowName;
+    } else {
+      delete document.documentElement.dataset.window;
+    }
     createRoot(root).render(
       <StrictMode>
         <QueryClientProvider client={queryClient}>

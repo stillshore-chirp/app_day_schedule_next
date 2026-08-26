@@ -13,6 +13,7 @@ import type { AppClient } from "../../shared/ipc/client";
 import { formatDuration, localDateTimeInput } from "../../shared/time";
 import { MarkdownDescriptionField } from "../../shared/ui/MarkdownDescriptionField";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
+import { Tooltip } from "../../shared/ui/Tooltip";
 import { ScheduleTicketLink } from "./ScheduleTicketLink";
 import {
   addLocalMinutes,
@@ -1124,29 +1125,30 @@ function TimeInput({
           onChange={(event) => onChange(event.target.value)}
         />
         <span className="time-input__choice-trigger" data-disabled={disabled ? "true" : "false"}>
-          <select
-            className="time-input__choices"
-            aria-label={choiceLabel}
-            aria-invalid={invalid}
-            aria-describedby={describedBy}
-            title={choiceLabel}
-            value={value}
-            disabled={disabled}
-            onChange={(event) => {
-              if (event.target.value) {
-                onChange(event.target.value);
-              }
-            }}
-          >
-            <option value="" disabled>
-              {translate("features.schedule.ScheduleEditor.103")}
-            </option>
-            {options.map((option) => (
-              <option key={option} value={option}>
-                {option}
+          <Tooltip label={choiceLabel}>
+            <select
+              className="time-input__choices"
+              aria-label={choiceLabel}
+              aria-invalid={invalid}
+              aria-describedby={describedBy}
+              value={value}
+              disabled={disabled}
+              onChange={(event) => {
+                if (event.target.value) {
+                  onChange(event.target.value);
+                }
+              }}
+            >
+              <option value="" disabled>
+                {translate("features.schedule.ScheduleEditor.103")}
               </option>
-            ))}
-          </select>
+              {options.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </Tooltip>
           <span className="time-input__choice-icon" aria-hidden="true" />
         </span>
       </span>

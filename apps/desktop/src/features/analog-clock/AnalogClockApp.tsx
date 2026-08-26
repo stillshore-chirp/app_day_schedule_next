@@ -1,7 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
 import type { AppClient } from "../../shared/ipc/client";
+import type { Settings } from "../../shared/contracts";
+import { applyAppAppearance } from "../../shared/appearance";
 import { appLocale, translate } from "../../shared/i18n/messages";
+import { Tooltip } from "../../shared/ui/Tooltip";
 import { AnalogClockFace } from "./AnalogClockFace";
 import {
   analogClockFaceSize,
@@ -16,6 +20,14 @@ import { useWallClock } from "./use-wall-clock";
 const themeStorageKey = "day-schedule-next.analog-clock-theme";
 const scaleStorageKey = "day-schedule-next.analog-clock-scale";
 const volumeStorageKey = "day-schedule-next.analog-clock-volume";
+
+function unlistenSafely(unlisten: () => void): void {
+  try {
+    void Promise.resolve(unlisten()).catch(() => undefined);
+  } catch {
+    // Native listener cleanup is best effort and must not escape as an unhandled error.
+  }
+}
 
 function storedTheme(): AnalogClockThemeMode {
   const value = localStorage.getItem(themeStorageKey);
@@ -73,8 +85,11 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
   }).format(now);
 
   useLayoutEffect(() => {
-    document.documentElement.dataset.theme = resolvedTheme;
-  }, [resolvedTheme]);
+    applyAppAppearance({
+      theme: resolvedTheme,
+      textScalePercent: bootstrap.data?.settings.textScalePercent ?? 100,
+    });
+  }, [bootstrap.data?.settings.textScalePercent, resolvedTheme]);
 
   useLayoutEffect(() => {
     const stage = clockStage.current;
@@ -114,6 +129,27 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
       setAlwaysOnTop(bootstrap.data.windowPreferences.analogClockAlwaysOnTop);
     }
   }, [bootstrap.data]);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let active = true;
+    let stop: (() => void) | undefined;
+    void listen<Settings>("settings-updated", ({ payload }) => {
+      applyAppAppearance({ ...payload, theme: resolvedTheme });
+      void bootstrap.refetch().catch(() => undefined);
+    })
+      .then((unlisten) => {
+        if (active) stop = unlisten;
+        else unlistenSafely(unlisten);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      const unlisten = stop;
+      stop = undefined;
+      if (unlisten) unlistenSafely(unlisten);
+    };
+  }, [bootstrap.refetch, resolvedTheme]);
 
   useEffect(() => {
     return () => soundPlayer.close();
@@ -208,6 +244,17 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
     }
   };
 
+  const pinLabel = translate(
+    bootstrap.isLoading
+      ? "app.AnalogClock.027"
+      : bootstrap.isError
+        ? "app.AnalogClock.028"
+        : alwaysOnTop
+          ? "app.AnalogClock.026"
+          : "app.AnalogClock.025",
+  );
+  const settingsLabel = translate("app.AnalogClock.023");
+
   return (
     <main className="analog-clock-shell" data-clock-scale={scale}>
       <h1 className="sr-only">{translate("app.AnalogClock.001")}</h1>
@@ -230,53 +277,39 @@ export function AnalogClockApp({ client }: { client: AppClient }) {
         </span>
       </time>
 
-      <button
-        className="analog-clock-corner-control analog-clock-pin-trigger"
-        type="button"
-        aria-label={translate(
-          bootstrap.isLoading
-            ? "app.AnalogClock.027"
-            : bootstrap.isError
-              ? "app.AnalogClock.028"
-              : alwaysOnTop
-                ? "app.AnalogClock.026"
-                : "app.AnalogClock.025",
-        )}
-        aria-pressed={alwaysOnTop}
-        title={translate(
-          bootstrap.isLoading
-            ? "app.AnalogClock.027"
-            : bootstrap.isError
-              ? "app.AnalogClock.028"
-              : alwaysOnTop
-                ? "app.AnalogClock.026"
-                : "app.AnalogClock.025",
-        )}
-        disabled={bootstrap.isLoading || bootstrap.isError || alwaysOnTopPending}
-        onClick={() => void toggleAlwaysOnTop(!alwaysOnTop)}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M9 3h6l-.8 5 3.3 3.3v1.2H13v7l-1 1-1-1v-7H6.5v-1.2L9.8 8 9 3Z" />
-        </svg>
-      </button>
+      <Tooltip label={pinLabel}>
+        <button
+          className="analog-clock-corner-control analog-clock-pin-trigger"
+          type="button"
+          aria-label={pinLabel}
+          aria-pressed={alwaysOnTop}
+          disabled={bootstrap.isLoading || bootstrap.isError || alwaysOnTopPending}
+          onClick={() => void toggleAlwaysOnTop(!alwaysOnTop)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 3h6l-.8 5 3.3 3.3v1.2H13v7l-1 1-1-1v-7H6.5v-1.2L9.8 8 9 3Z" />
+          </svg>
+        </button>
+      </Tooltip>
 
-      <button
-        ref={settingsButton}
-        className="analog-clock-corner-control analog-clock-settings-trigger"
-        type="button"
-        aria-label={translate("app.AnalogClock.023")}
-        aria-controls="analog-clock-settings"
-        aria-expanded={settingsOpen}
-        title={translate("app.AnalogClock.023")}
-        onClick={() => setSettingsOpen(true)}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 7h10M18 7h2M4 12h2M10 12h10M4 17h8M16 17h4" />
-          <circle cx="16" cy="7" r="2" />
-          <circle cx="8" cy="12" r="2" />
-          <circle cx="14" cy="17" r="2" />
-        </svg>
-      </button>
+      <Tooltip label={settingsLabel}>
+        <button
+          ref={settingsButton}
+          className="analog-clock-corner-control analog-clock-settings-trigger"
+          type="button"
+          aria-label={settingsLabel}
+          aria-controls="analog-clock-settings"
+          aria-expanded={settingsOpen}
+          onClick={() => setSettingsOpen(true)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h10M18 7h2M4 12h2M10 12h10M4 17h8M16 17h4" />
+            <circle cx="16" cy="7" r="2" />
+            <circle cx="8" cy="12" r="2" />
+            <circle cx="14" cy="17" r="2" />
+          </svg>
+        </button>
+      </Tooltip>
 
       {alwaysOnTopError && !settingsOpen ? (
         <p className="analog-clock-pin-error" role="alert">
