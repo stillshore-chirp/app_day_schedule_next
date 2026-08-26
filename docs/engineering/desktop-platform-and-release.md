@@ -32,7 +32,7 @@ node --env-file=.env.local scripts/build-personal-google-oauth.mjs
 
 PR CI は全PRでharness / frontendを実行し、`apps/desktop`、Rust workspace、lockfile等に変更がある場合だけ、個人利用の主対象である`macos-15`でformat、clippy、all-feature test、通常identifierのno-bundle buildを実行します。open PRへのpushと`pull_request`の二重起動、毎回のinstaller artifact生成は行いません。
 
-macOS x64 / Windows、Native E2E、installer生成は `Native release validation` の手動入力へ移します。通常は`macos-arm64`だけを選択し、release判断時は`platform=all`、`build_installers=true`で3 platformを検証します。Native E2Eは専用identifier `com.stillshorechirp.dayschedulenext.e2e` とfeatureを使い、通常bundleにWebDriver pluginを含めません。失敗診断とinstaller artifactは7日で失効します。
+macOS x64 / Windows、Native E2E、installer生成は `Native release validation` の手動入力へ移します。通常は`macos-arm64`だけを選択し、release判断時は`platform=all`、`build_installers=true`で3 platformを検証します。Native E2Eは専用identifier `com.stillshorechirp.dayschedulenext.e2e` とfeatureを使い、通常bundleにWebDriver pluginを含めません。失敗時はsynthetic flowのPNGとvisual diff PNGだけをallowlistで保存し、raw logや環境診断をartifactへ含めません。失敗画像とinstaller artifactは7日で失効します。
 
 手動workflowのmacOS installerは、通常identifierの `.app` をTauriで生成してrunner tempへ退避した後、E2E版と通常版のCargo中間生成物を解放します。そのうえでGUIやFinderに依存しない `hdiutil` で `/Applications` リンク付きの未署名DMGへまとめ、同じjob内で `hdiutil verify` を通します。失敗診断はtarget外へ保持するため、中間生成物を解放しても調査可能性は維持します。WindowsはTauriのNSIS生成経路を使用します。どちらも個人利用の検証artifactであり、署名・notarization済みの公開配布物ではありません。
 
@@ -41,7 +41,7 @@ macOS x64 / Windows、Native E2E、installer生成は `Native release validation
 - production CSP は self / IPC / bundled asset に限定
 - remote script / CDN / iframe / object を禁止
 - Google HTTP、SQLite、keyring、notification adapter は Rust 側
-- frontend plugin permission は main / compact / analog-clock window ごとの最小 capability
+- frontend plugin permission は main / compact / analog-clock window ごとの最小 capability。analog-clockは保存済みappearanceを即時反映するeventのlisten / unlistenだけを許可し、emit、menu、filesystem、network権限を持たない
 - Ticketのnative context menuはmain windowだけが構築・popupでき、app menuやwindow menuの設定権限を持たない
 - general shell、general filesystem、raw SQL、arbitrary HTTP permission は不使用
 - external browser は OAuth の検証済み Google authorization URL、またはmain windowのMarkdownプレビューで利用者が明示的に実行したHTTP(S) URLだけを開く
@@ -92,7 +92,7 @@ window state は logical label で保存し、main / Compact / analog-clock の 
 2. dependency audit、public text scan、CSP / capability review を通す。
 3. latest commit のPR quality / macOS arm64 native smokeを確認し、`Native release validation`を`platform=all`、`build_installers=true`で実行してmacOS arm64 / x64、Windows x64のnative E2Eとinstallerを確認する。
 4. 対象 OS で clean install、launch、single instance、tray、Compact、notification、credential store、OAuth loopback、backup / restore、upgrade / uninstall を観測する。
-5. 200% text、OS scaling、multi-monitor はリスクに応じて観測し、未実行を明示する。
+5. main / Compact / analog clockの100%・200%・250% text、OS scaling、high DPI、multi-monitorをリスクに応じて観測し、未実行を明示する。
 6. artifact 名、SHA、version、source commit、観測者、日付を release note に残す。
 
 Build successだけでは release manual check の代替になりません。未実行の OS check が残る場合は release candidate として扱い、「即出荷可能」と表現しません。

@@ -179,6 +179,30 @@ requireText(
 );
 requireText(
   e2e,
+  "apps/desktop/test-results/native-settings-text-100.png",
+  e2ePath,
+  "failure artifacts must use the synthetic PNG allowlist",
+);
+forbidText(
+  e2e,
+  "apps/desktop/test-results/*.png",
+  e2ePath,
+  "failure artifacts must enumerate approved screenshots instead of using a broad glob",
+);
+forbidText(
+  e2e,
+  "apps/desktop/logs/",
+  e2ePath,
+  "raw application logs must not be uploaded",
+);
+forbidText(
+  e2e,
+  "apps/desktop/wdio-logs/",
+  e2ePath,
+  "raw WebDriver logs must not be uploaded",
+);
+requireText(
+  e2e,
   "retention-days: 7",
   e2ePath,
   "artifacts must use short retention",

@@ -7,6 +7,7 @@
       "capabilities": [
         "main",
         "compact",
+        "analog-clock",
         {
           "identifier": "e2e",
           "description": "Test-only WebdriverIO permissions, activated only by this isolated E2E configuration.",

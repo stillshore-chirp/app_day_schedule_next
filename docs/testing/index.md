@@ -81,7 +81,7 @@ pnpm test:e2e
 - real Tauri app 起動と real IPC bootstrap
 - compile-timeのsynthetic Desktop client IDによるOAuth JSON不要の接続状態
 - UI 作成 → Rust command → SQLite 永続化 → 再起動／検索
-- 設定保存 → 再起動、pointer drag作成、分類の一括変更 → SQLite再検索
+- 設定画面で文字表示倍率6段階（100% / 125% / 150% / 175% / 200% / 250%）をpreviewし、250%保存後の同一process reload・別process restart復元、開いているCompact / analogへのevent反映を確認してから、pointer drag作成、分類の一括変更 → SQLite再検索
 - 720 × 720 の最小幅ナビゲーション
 - テンプレート、24時間／詳細編集、Quick Block、自由アラーム、Focus 履歴
 - Today、List、Week、Template、Focus、Compact、Data / Conflict の synthetic native screenshot
@@ -90,7 +90,7 @@ pnpm test:e2e
 
 `VITE_WDIO=true` のE2E buildでは、通知履歴specとアプリの5秒foreground pollが同じdeliveryを競合してclaimしないよう、Reactの自動notification runtimeだけを停止します。通知履歴specが単独で実IPC pollを行い、delivery key・結果記録・再読込後の表示を確認します。Rustの候補抽出、重複抑止、DST、grace / replayは固定clockのintegration test、OS permission / deliveryはrelease manual matrixを正本とします。
 
-Native E2E はPRごとには起動しません。`Native release validation` workflowで`macos-arm64`、`macos-x64`、`windows-x64`、`all`から対象を選びます。通常の個人利用確認はmacOS arm64、release判断は`all`です。失敗時だけscreenshotとマスク対象を確認したlogを7日間artifactにします。macOS arm64では続けて`scripts/compare-visual-snapshots.swift`を実行し、Today、Week、Template、Compact、Conflictをchannel差32・不一致pixel 4%の許容差で比較します。超過時は赤い差分PNGを確認し、意図した変更だけbaseline更新としてレビューします。
+Native E2E はPRごとには起動しません。`Native release validation` workflowで`macos-arm64`、`macos-x64`、`windows-x64`、`all`から対象を選びます。通常の個人利用確認はmacOS arm64、release判断は`all`です。失敗時はsynthetic native flowが生成したPNGとvisual diff PNGだけをallowlistで7日間artifactにし、raw log、JSON、DB、環境診断はuploadしません。公開用証跡へ転用する前にsecret・個人データの不在を確認します。macOS arm64では続けて`scripts/compare-visual-snapshots.swift`を実行し、Today、Week、Template、Compact、Conflictをchannel差32・不一致pixel 4%の許容差で比較します。超過時は赤い差分PNGを確認し、意図した変更だけbaseline更新としてレビューします。
 
 `build_installers=true`を指定した場合だけ、E2E成功後にWebDriver pluginを含まない通常identifierのunsigned debug installerを作り、7日間保持します。
 
@@ -116,7 +116,7 @@ Dependency audit workflow は依存ファイル変更PR、月1回、手動実行
 | Notification | unknown、granted、denied、sound-only、ledger result |
 | Focus | idle、working、paused、break、waiting next、history |
 | Data | export、preview、changed file、backup、restore stage、delete confirmation |
-| Layout | 720px、200% text、light / mild / dark、500 items |
+| Layout | 720px、100% / 200% / 250% text、main / Compact / analog clock、light / mild / dark、500 items |
 
 UI PR は対象状態ごとの変更前／変更後 screenshot を添付します。新規 scaffold では変更前画面が存在しないため、その事実と初回 native screenshot を証跡にします。
 
