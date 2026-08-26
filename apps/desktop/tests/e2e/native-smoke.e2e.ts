@@ -4,6 +4,8 @@ import { writeFile } from "node:fs/promises";
 
 describe("Day Schedule Next native smoke", () => {
   const title = `E2E予定-${Date.now()}`;
+  const textScaleValues = [100, 125, 150, 175, 200, 250] as const;
+  type TextScalePercent = (typeof textScaleValues)[number];
 
   const setLogicalWindowSize = async (width: number, height: number) => {
     await browser.setWindowSize(width, height);
@@ -146,6 +148,67 @@ describe("Day Schedule Next native smoke", () => {
     expect(applied).toEqual({ documentTheme: theme, persistedTheme: theme });
   };
 
+  const persistTextScale = async (textScalePercent: TextScalePercent) => {
+    await browser.tauri.execute(async ({ core }, nextScale) => {
+      const bootstrap = (await core.invoke("bootstrap_get")) as {
+        settings: Record<string, unknown>;
+      };
+      await core.invoke("settings_update", {
+        settings: { ...bootstrap.settings, textScalePercent: nextScale },
+      });
+    }, textScalePercent);
+    await browser.waitUntil(
+      async () => {
+        const appearance = await browser.execute(() => ({
+          fontToken: Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue("--app-font-1"),
+          ),
+          textScale: document.documentElement.dataset.textScale,
+        }));
+        return (
+          appearance.textScale === String(textScalePercent) &&
+          Math.abs(appearance.fontToken - 16 * (textScalePercent / 100)) <= 0.5
+        );
+      },
+      { timeoutMsg: `text scale ${textScalePercent}% was not applied to the active window` },
+    );
+  };
+
+  const selectTextScale = async (textScalePercent: TextScalePercent) => {
+    const scale = $('//label[contains(., "文字表示倍率")]/select');
+    await scale.waitForDisplayed();
+    // The embedded WKWebView driver can update a native select's displayed
+    // option without dispatching the input/change pair React needs. Exercise
+    // the real control through its platform setter and explicit DOM events.
+    await browser.execute((value) => {
+      const select = Array.from(document.querySelectorAll<HTMLSelectElement>("select")).find(
+        (candidate) => candidate.closest("label")?.textContent?.includes("文字表示倍率"),
+      );
+      if (!select) throw new Error("text scale select was not found");
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(
+        select,
+        value,
+      );
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    }, String(textScalePercent));
+    await expect(scale).toHaveValue(String(textScalePercent));
+    await browser.waitUntil(
+      async () => {
+        const appearance = await browser.execute(() => ({
+          fontToken: Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue("--app-font-1"),
+          ),
+          textScale: document.documentElement.dataset.textScale,
+        }));
+        return (
+          appearance.textScale === String(textScalePercent) &&
+          Math.abs(appearance.fontToken - 16 * (textScalePercent / 100)) <= 0.5
+        );
+      },
+      { timeoutMsg: `${textScalePercent}% text scale was not reflected from the settings select` },
+    );
+  };
+
   const chooseScheduleTime = async (label: string, value: string) => {
     await browser.execute(
       ({ label, value }) => {
@@ -230,7 +293,9 @@ describe("Day Schedule Next native smoke", () => {
     });
     expect(primaryGeometry.actionsVisible).toBe(true);
     expect(primaryGeometry.horizontalOverflow).toBeLessThanOrEqual(1);
-    await setExactLogicalViewportSize(1180, 820);
+    // Hosted macOS runners clamp the window to the available desktop height.
+    // This capture needs the normal wide layout, not an exact 820px viewport.
+    await setLogicalWindowSize(1180, 820);
     await browser.execute(() => {
       const body = document.querySelector<HTMLElement>(".inspector__form-body");
       if (!body) throw new Error("schedule editor body was not found");
@@ -238,19 +303,7 @@ describe("Day Schedule Next native smoke", () => {
     });
     await browser.saveScreenshot("./test-results/native-schedule-editor-primary.png");
 
-    await browser.execute(async () => {
-      document.documentElement.style.fontSize = "200%";
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-    });
-    await browser.waitUntil(
-      async () =>
-        browser.execute(
-          () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) >= 32,
-        ),
-      { timeout: 2_000 },
-    );
+    await persistTextScale(200);
     const zoomGeometry = await browser.execute(() => {
       const inspector = document.querySelector<HTMLElement>(".inspector");
       const actions = document.querySelector<HTMLElement>(".inspector__actions");
@@ -278,7 +331,9 @@ describe("Day Schedule Next native smoke", () => {
       const inspectorRect = inspector.getBoundingClientRect();
       const actionsRect = actions.getBoundingClientRect();
       const dockRect = dock?.getBoundingClientRect();
-      const rootFontSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      const baseFontToken = Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--app-font-1"),
+      );
       const startTrigger = startSelect.parentElement;
       const endTrigger = endSelect.parentElement;
       if (!startTrigger || !endTrigger) {
@@ -286,10 +341,6 @@ describe("Day Schedule Next native smoke", () => {
       }
       startSelect.focus();
       const startTriggerFocused = document.activeElement === startSelect;
-      const startTriggerOutlineWidth = Number.parseFloat(
-        getComputedStyle(startTrigger).outlineWidth,
-      );
-      startSelect.blur();
       return {
         actionsAboveDock: dockRect ? actionsRect.bottom <= dockRect.top + 1 : true,
         actionsHeight: actionsRect.height,
@@ -298,11 +349,10 @@ describe("Day Schedule Next native smoke", () => {
         inputWidths: [startInput, endInput].map((control) => control.getBoundingClientRect().width),
         endSelectValue: endSelect.value,
         horizontalOverflow: body.scrollWidth - body.clientWidth,
-        minimumReadableWidth: rootFontSize * 5,
+        minimumReadableWidth: baseFontToken * 5,
         selectOpacity: [startSelect, endSelect].map((control) => getComputedStyle(control).opacity),
         startSelectValue: startSelect.value,
         startTriggerFocused,
-        startTriggerOutlineWidth,
         triggerSizes: [startTrigger, endTrigger].map((trigger) => {
           const rect = trigger.getBoundingClientRect();
           return { height: rect.height, width: rect.width };
@@ -318,19 +368,25 @@ describe("Day Schedule Next native smoke", () => {
     ).toBe(true);
     expect(zoomGeometry.selectOpacity).toEqual(["0", "0"]);
     expect(zoomGeometry.startTriggerFocused).toBe(true);
-    expect(zoomGeometry.startTriggerOutlineWidth).toBeGreaterThanOrEqual(3);
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() => {
+          const select = document.querySelector<HTMLSelectElement>(
+            'select[aria-label="開始時刻の候補"]',
+          );
+          const trigger = select?.parentElement;
+          return trigger ? Number.parseFloat(getComputedStyle(trigger).outlineWidth) >= 3 : false;
+        }),
+      { timeoutMsg: "schedule time trigger did not expose its native focus outline" },
+    );
+    await startTimeInput.click();
     expect(
       zoomGeometry.triggerSizes.every(({ height, width }) => height >= 44 && width >= 44),
     ).toBe(true);
     expect(zoomGeometry.startSelectValue).toBe("10:15");
     expect(zoomGeometry.endSelectValue).toBe("10:30");
     await browser.saveScreenshot("./test-results/native-schedule-editor-text-200.png");
-    await browser.execute(async () => {
-      document.documentElement.style.fontSize = "100%";
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-      });
-    });
+    await persistTextScale(100);
     await browser.waitUntil(
       async () =>
         browser.execute(
@@ -346,9 +402,6 @@ describe("Day Schedule Next native smoke", () => {
     await expect($('//span[normalize-space(.)="翌日"]')).toBeDisplayed();
     await $('//label[contains(., "終了日")]/input[@type="date"]').waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-schedule-editor-cross-midnight.png");
-    await browser.execute(() => {
-      document.documentElement.style.fontSize = "";
-    });
     await $('//aside//button[normalize-space(.)="予定を作成"]').click();
     const created = $(`//*[normalize-space(.)="${title}"]`);
     await created.waitForDisplayed();
@@ -603,7 +656,7 @@ describe("Day Schedule Next native smoke", () => {
               const blockHeight = Number.parseFloat(block.style.height);
               return {
                 laneIndex,
-                title: block.getAttribute("title"),
+                label: block.getAttribute("aria-label"),
                 trackHeight,
                 trackInlineHeight: track.style.height,
                 trackInlineMinHeight: track.style.minHeight,
@@ -630,16 +683,16 @@ describe("Day Schedule Next native smoke", () => {
     await browser.saveScreenshot("./test-results/native-today-dual-strip-narrow.png");
 
     await setLogicalWindowSize(1180, 820);
-    const rootTextScale = await browser.execute(() => {
-      document.documentElement.style.fontSize = "200%";
-      return document.documentElement.style.fontSize;
-    });
-    expect(rootTextScale).toBe("200%");
+    await persistTextScale(200);
+    const rootTextScale = await browser.execute(() =>
+      Number.parseFloat(
+        getComputedStyle(document.documentElement).getPropertyValue("--app-font-1"),
+      ),
+    );
+    expect(rootTextScale).toBeGreaterThanOrEqual(32);
     await browser.pause(100);
     await browser.saveScreenshot("./test-results/native-today-dual-strip-text-200.png");
-    await browser.execute(() => {
-      document.documentElement.style.fontSize = "";
-    });
+    await persistTextScale(100);
   });
 
   it("keeps primary navigation usable at the minimum supported window width", async () => {
@@ -885,15 +938,11 @@ describe("Day Schedule Next native smoke", () => {
     await setLogicalWindowSize(720, 720);
     await scrollActiveViewToTop();
     await browser.saveScreenshot("./test-results/native-timers-narrow.png");
-    await browser.execute(() => {
-      document.documentElement.style.fontSize = "200%";
-    });
+    await persistTextScale(200);
     await scrollActiveViewToTop();
     await $('//main//h1[normalize-space(.)="タイマー"]').waitForDisplayed();
     await browser.saveScreenshot("./test-results/native-timers-text-200.png");
-    await browser.execute(() => {
-      document.documentElement.style.removeProperty("font-size");
-    });
+    await persistTextScale(100);
   });
 
   it("persists and renders the mild theme across main window reloads", async () => {
@@ -948,6 +997,378 @@ describe("Day Schedule Next native smoke", () => {
     await browser.waitUntil(async () => (await $("html").getAttribute("data-theme")) === "light", {
       timeoutMsg: "light fixture theme was not restored after mild-theme evidence capture",
     });
+  });
+
+  it("previews and persists 250% text without hiding settings or Today actions", async () => {
+    await setLogicalWindowSize(1180, 820);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
+    const scale = $('//label[contains(., "文字表示倍率")]/select');
+    await selectTextScale(100);
+    await scrollActiveViewToTop();
+    await browser.saveScreenshot("./test-results/native-settings-text-100.png");
+    for (const textScalePercent of textScaleValues.slice(1)) {
+      await selectTextScale(textScalePercent);
+    }
+    await expect(scale).toHaveValue("250");
+    const previewGeometry = await browser.execute(() => {
+      const view = document.querySelector<HTMLElement>(".settings-view");
+      const select = Array.from(document.querySelectorAll<HTMLSelectElement>("select")).find(
+        (candidate) => candidate.closest("label")?.textContent?.includes("文字表示倍率"),
+      );
+      const save = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+        (candidate) => candidate.textContent?.trim() === "設定を保存",
+      );
+      if (!view || !select || !save) throw new Error("250% settings layout was incomplete");
+      return {
+        horizontalOverflow: view.scrollWidth - view.clientWidth,
+        rootFontSize: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--app-font-1"),
+        ),
+        saveHeight: save.getBoundingClientRect().height,
+        selectHeight: select.getBoundingClientRect().height,
+      };
+    });
+    expect(previewGeometry.horizontalOverflow).toBeLessThanOrEqual(1);
+    expect(previewGeometry.rootFontSize).toBeGreaterThanOrEqual(40);
+    expect(previewGeometry.saveHeight).toBeGreaterThan(0);
+    expect(previewGeometry.selectHeight).toBeGreaterThan(0);
+
+    const settingsBottomGeometry = await browser.execute(() => {
+      const view = document.querySelector<HTMLElement>(".settings-view");
+      const save = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+        (candidate) => candidate.textContent?.trim() === "設定を保存",
+      );
+      if (!view || !save) throw new Error("250% settings save target was not rendered");
+      save.scrollIntoView({ block: "center" });
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const viewRect = view.getBoundingClientRect();
+      const saveRect = save.getBoundingClientRect();
+      const centerX = saveRect.left + saveRect.width / 2;
+      const centerY = saveRect.top + saveRect.height / 2;
+      const hit =
+        centerX >= 0 && centerX < viewportWidth && centerY >= 0 && centerY < viewportHeight
+          ? document.elementFromPoint(centerX, centerY)
+          : null;
+      return {
+        saveReachable:
+          saveRect.left >= 0 &&
+          saveRect.right <= viewportWidth + 1 &&
+          saveRect.top >= 0 &&
+          saveRect.bottom <= viewportHeight + 1 &&
+          saveRect.height > 0 &&
+          (hit === save || (hit instanceof Node && save.contains(hit))),
+        viewBottom: viewRect.bottom,
+        viewTop: viewRect.top,
+      };
+    });
+    expect(settingsBottomGeometry.saveReachable).toBe(true);
+    await scrollActiveViewToTop();
+    await browser.saveScreenshot("./test-results/native-settings-text-250.png");
+
+    await browser.execute(() => {
+      const save = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+        (candidate) => candidate.textContent?.trim() === "設定を保存",
+      );
+      save?.scrollIntoView({ block: "center" });
+    });
+    await $('//button[normalize-space(.)="設定を保存"]').click();
+    await browser.waitUntil(
+      async () => {
+        const bootstrap = (await browser.tauri.execute(({ core }) =>
+          core.invoke("bootstrap_get"),
+        )) as { settings: { textScalePercent: number } };
+        return bootstrap.settings.textScalePercent === 250;
+      },
+      { timeoutMsg: "250% text scale was not persisted" },
+    );
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
+    await browser.waitUntil(
+      async () => (await $("html").getAttribute("data-text-scale")) === "250",
+      {
+        timeoutMsg: "250% text scale was not restored after reload",
+      },
+    );
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "今日")]').click();
+    const todayGeometry = await browser.execute(() => {
+      const shell = document.querySelector<HTMLElement>(".app-shell");
+      const content = document.querySelector<HTMLElement>(".app-content");
+      const dock = document.querySelector<HTMLElement>(".now-dock");
+      const dateNavigation = document.querySelector<HTMLElement>(".date-navigation");
+      if (!shell || !content || !dock || !dateNavigation) {
+        throw new Error("250% Today layout was incomplete");
+      }
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const isReachable = (control: HTMLElement) => {
+        const rect = control.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const hit =
+          centerX >= 0 && centerX < viewportWidth && centerY >= 0 && centerY < viewportHeight
+            ? document.elementFromPoint(centerX, centerY)
+            : null;
+        return (
+          rect.left >= 0 &&
+          rect.right <= viewportWidth + 1 &&
+          rect.top >= 0 &&
+          rect.bottom <= viewportHeight + 1 &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          (hit === control || (hit instanceof Node && control.contains(hit)))
+        );
+      };
+      const controls = Array.from(dateNavigation.querySelectorAll<HTMLElement>("button"));
+      const primaryActions = [
+        ...Array.from(document.querySelectorAll<HTMLElement>(".topbar__actions .button--primary")),
+        ...Array.from(document.querySelectorAll<HTMLElement>(".history-actions button")),
+      ];
+      if (primaryActions.length === 0) throw new Error("250% Today actions were not rendered");
+      const nextDockItems = [
+        dock.querySelector<HTMLElement>(".now-dock__next"),
+        dock.querySelector<HTMLElement>(".now-dock__focus"),
+      ].filter((item): item is HTMLElement => item !== null);
+      const alarmText = dock.querySelector<HTMLElement>(".now-dock__alarm");
+      if (nextDockItems.length === 0 || !alarmText) {
+        throw new Error("250% Today dock items were not rendered");
+      }
+      dock.scrollTop = dock.scrollHeight;
+      const dockRect = dock.getBoundingClientRect();
+      const maxDockScroll = Math.max(0, dock.scrollHeight - dock.clientHeight);
+      const alarmRect = alarmText.getBoundingClientRect();
+      const alarmRange = document.createRange();
+      alarmRange.selectNodeContents(alarmText);
+      const alarmTextRects = Array.from(alarmRange.getClientRects());
+      if (alarmTextRects.length === 0) throw new Error("250% Today alarm text was empty");
+      return {
+        alarmContentInsideElement: alarmTextRects.every(
+          (rect) =>
+            rect.left >= alarmRect.left - 1 &&
+            rect.right <= alarmRect.right + 1 &&
+            rect.top >= alarmRect.top - 1 &&
+            rect.bottom <= alarmRect.bottom + 1,
+        ),
+        alarmContentInsideDock: alarmTextRects.every(
+          (rect) =>
+            rect.left >= dockRect.left - 1 &&
+            rect.right <= dockRect.right + 1 &&
+            rect.top >= dockRect.top - 1 &&
+            rect.bottom <= dockRect.bottom + 1,
+        ),
+        alarmInsideDock:
+          alarmRect.left >= dockRect.left - 1 &&
+          alarmRect.right <= dockRect.right + 1 &&
+          alarmRect.top >= dockRect.top - 1 &&
+          alarmRect.bottom <= dockRect.bottom + 1,
+        alarmHorizontalOverflow: alarmText.scrollWidth - alarmText.clientWidth,
+        alarmInsideViewport:
+          alarmRect.top >= 0 && alarmRect.bottom <= viewportHeight + 1 && alarmRect.height > 0,
+        alarmVerticalOverflow: alarmText.scrollHeight - alarmText.clientHeight,
+        controlsReachable: controls.every(isReachable),
+        dockAtBottom: Math.abs(dock.scrollTop - maxDockScroll) <= 1,
+        dockEndItemsReachable: nextDockItems.every((item) => {
+          const rect = item.getBoundingClientRect();
+          return (
+            rect.left >= dockRect.left &&
+            rect.right <= dockRect.right + 1 &&
+            rect.top >= dockRect.top &&
+            rect.bottom <= dockRect.bottom + 1 &&
+            rect.height > 0 &&
+            isReachable(item)
+          );
+        }),
+        dockScrollable: dock.scrollHeight > dock.clientHeight,
+        primaryActionsReachable: primaryActions.every(isReachable),
+        primaryActionLabels: primaryActions.map((action) => action.textContent?.trim() ?? ""),
+        shellOverflow: shell.scrollWidth - shell.clientWidth,
+        contentWidth: content.getBoundingClientRect().width,
+      };
+    });
+    expect(todayGeometry.controlsReachable).toBe(true);
+    expect(todayGeometry.primaryActionsReachable).toBe(true);
+    expect(todayGeometry.alarmContentInsideElement).toBe(true);
+    expect(todayGeometry.alarmContentInsideDock).toBe(true);
+    expect(todayGeometry.alarmInsideDock).toBe(true);
+    expect(todayGeometry.alarmInsideViewport).toBe(true);
+    expect(todayGeometry.alarmHorizontalOverflow).toBeLessThanOrEqual(1);
+    expect(todayGeometry.alarmVerticalOverflow).toBeLessThanOrEqual(1);
+    expect(todayGeometry.dockScrollable ? todayGeometry.dockAtBottom : true).toBe(true);
+    expect(todayGeometry.dockEndItemsReachable).toBe(true);
+    expect(todayGeometry.shellOverflow).toBeLessThanOrEqual(1);
+    expect(todayGeometry.contentWidth).toBeGreaterThan(0);
+    await browser.saveScreenshot("./test-results/native-today-text-250.png");
+
+    await setLogicalWindowSize(720, 720);
+    const narrowTextGeometry = await browser.execute(() => {
+      const shell = document.querySelector<HTMLElement>(".app-shell");
+      const workspace = document.querySelector<HTMLElement>(".workspace-main");
+      const history = document.querySelector<HTMLElement>(".history-actions");
+      const dock = document.querySelector<HTMLElement>(".now-dock");
+      const readableList = document.querySelector<HTMLElement>(".timeline-readable-list");
+      const timelineCanvas = document.querySelector<HTMLElement>(".timeline-canvas");
+      const alarmText = dock?.querySelector<HTMLElement>(".now-dock__alarm");
+      const hourNine = Array.from(
+        document.querySelectorAll<HTMLElement>(".timeline-hour span"),
+      ).find((label) => label.textContent?.trim() === "09:00");
+      if (
+        !shell ||
+        !workspace ||
+        !history ||
+        !dock ||
+        !readableList ||
+        !timelineCanvas ||
+        !alarmText ||
+        !hourNine
+      ) {
+        throw new Error("720px / 250% Today layout was incomplete");
+      }
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const isInsideViewport = (element: HTMLElement) => {
+        const rect = element.getBoundingClientRect();
+        return (
+          rect.left >= 0 &&
+          rect.right <= viewportWidth + 1 &&
+          rect.top >= 0 &&
+          rect.bottom <= viewportHeight + 1 &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      };
+      workspace.scrollTop = workspace.scrollHeight;
+      dock.scrollTop = dock.scrollHeight;
+      const workspaceMaxScroll = Math.max(0, workspace.scrollHeight - workspace.clientHeight);
+      const dockMaxScroll = Math.max(0, dock.scrollHeight - dock.clientHeight);
+      const dockRect = dock.getBoundingClientRect();
+      const alarmRect = alarmText.getBoundingClientRect();
+      const alarmRange = document.createRange();
+      alarmRange.selectNodeContents(alarmText);
+      const alarmTextRects = Array.from(alarmRange.getClientRects());
+      if (alarmTextRects.length === 0) throw new Error("720px / 250% Today alarm text was empty");
+      const hourNineRect = hourNine.getBoundingClientRect();
+      const hourNineRange = document.createRange();
+      hourNineRange.selectNodeContents(hourNine);
+      const hourNineTextRects = Array.from(hourNineRange.getClientRects());
+      if (hourNineTextRects.length === 0) throw new Error("720px / 250% hour label was empty");
+      const timelineCanvasRect = timelineCanvas.getBoundingClientRect();
+      const readableButtons = Array.from(
+        readableList.querySelectorAll<HTMLButtonElement>("button"),
+      );
+      const timelineTitles = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '.timeline-event[data-text-mode="summary"] > .timeline-event-title',
+        ),
+      );
+      return {
+        alarmContentInsideElement: alarmTextRects.every(
+          (rect) =>
+            rect.left >= alarmRect.left - 1 &&
+            rect.right <= alarmRect.right + 1 &&
+            rect.top >= alarmRect.top - 1 &&
+            rect.bottom <= alarmRect.bottom + 1,
+        ),
+        alarmContentInsideDock: alarmTextRects.every(
+          (rect) =>
+            rect.left >= dockRect.left - 1 &&
+            rect.right <= dockRect.right + 1 &&
+            rect.top >= dockRect.top - 1 &&
+            rect.bottom <= dockRect.bottom + 1,
+        ),
+        alarmHorizontalOverflow: alarmText.scrollWidth - alarmText.clientWidth,
+        alarmVerticalOverflow: alarmText.scrollHeight - alarmText.clientHeight,
+        hourLabelContentInsideElement: hourNineTextRects.every(
+          (rect) =>
+            rect.left >= hourNineRect.left - 1 &&
+            rect.right <= hourNineRect.right + 1 &&
+            rect.top >= hourNineRect.top - 1 &&
+            rect.bottom <= hourNineRect.bottom + 1,
+        ),
+        hourLabelSeparatedFromTimeline: hourNineTextRects.every(
+          (rect) => rect.right <= timelineCanvasRect.left - 1,
+        ),
+        hourLabelHorizontalOverflow: hourNine.scrollWidth - hourNine.clientWidth,
+        dockAtBottom: Math.abs(dock.scrollTop - dockMaxScroll) <= 1,
+        dockInsideViewport: isInsideViewport(dock),
+        historyButtonsInsideViewport: Array.from(
+          history.querySelectorAll<HTMLElement>("button"),
+        ).every(isInsideViewport),
+        shellOverflow: shell.scrollWidth - shell.clientWidth,
+        readableItemCount: readableButtons.length,
+        readableItemsOverflow: readableButtons.some(
+          (button) => button.scrollWidth > button.clientWidth + 1,
+        ),
+        summaryTitlesVisible: timelineTitles.some(
+          (title) => getComputedStyle(title).display !== "none",
+        ),
+        workspaceAtBottom: Math.abs(workspace.scrollTop - workspaceMaxScroll) <= 1,
+        workspaceHeight: workspace.clientHeight,
+      };
+    });
+    expect(narrowTextGeometry.shellOverflow).toBeLessThanOrEqual(1);
+    expect(narrowTextGeometry.alarmContentInsideElement).toBe(true);
+    expect(narrowTextGeometry.alarmContentInsideDock).toBe(true);
+    expect(narrowTextGeometry.alarmHorizontalOverflow).toBeLessThanOrEqual(1);
+    expect(narrowTextGeometry.alarmVerticalOverflow).toBeLessThanOrEqual(1);
+    expect(narrowTextGeometry.hourLabelContentInsideElement).toBe(true);
+    expect(narrowTextGeometry.hourLabelSeparatedFromTimeline).toBe(true);
+    expect(narrowTextGeometry.hourLabelHorizontalOverflow).toBeLessThanOrEqual(1);
+    expect(narrowTextGeometry.workspaceHeight).toBeGreaterThan(0);
+    expect(narrowTextGeometry.workspaceAtBottom).toBe(true);
+    expect(narrowTextGeometry.dockAtBottom).toBe(true);
+    expect(narrowTextGeometry.historyButtonsInsideViewport).toBe(true);
+    expect(narrowTextGeometry.dockInsideViewport).toBe(true);
+    expect(narrowTextGeometry.readableItemCount).toBeGreaterThan(0);
+    expect(narrowTextGeometry.readableItemsOverflow).toBe(false);
+    expect(narrowTextGeometry.summaryTitlesVisible).toBe(false);
+    await browser.saveScreenshot("./test-results/native-today-text-250-narrow.png");
+    await $(".timeline-readable-list").saveScreenshot(
+      "./test-results/native-today-readable-list-text-250.png",
+    );
+    await setLogicalWindowSize(1180, 820);
+
+    const destinations = await browser.execute(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>("aside nav button"), (button) =>
+        button.getAttribute("aria-label"),
+      ).filter((label): label is string => Boolean(label)),
+    );
+    const overflowedDestinations: string[] = [];
+    for (const destination of destinations) {
+      await browser.execute((label) => {
+        const button = Array.from(
+          document.querySelectorAll<HTMLButtonElement>("aside nav button"),
+        ).find((candidate) => candidate.getAttribute("aria-label") === label);
+        if (!button) throw new Error(`navigation destination was not found: ${label}`);
+        button.click();
+      }, destination);
+      await browser.waitUntil(
+        () =>
+          browser.execute(
+            (label) =>
+              document
+                .querySelector(`aside nav button[aria-current="page"]`)
+                ?.getAttribute("aria-label") === label,
+            destination,
+          ),
+        { timeoutMsg: `250% navigation did not reach ${destination}` },
+      );
+      const geometry = await browser.execute(() => {
+        const view = document.querySelector<HTMLElement>(".app-content > main");
+        if (!view) throw new Error("active 250% view was not rendered");
+        return {
+          height: view.getBoundingClientRect().height,
+          horizontalOverflow: view.scrollWidth - view.clientWidth,
+        };
+      });
+      if (geometry.height <= 0 || geometry.horizontalOverflow > 1) {
+        overflowedDestinations.push(destination);
+      }
+    }
+    expect(overflowedDestinations).toEqual([]);
+
+    await persistTextScale(100);
+    await browser.refresh();
+    await $(".app-shell").waitForDisplayed();
   });
 
   it("persists settings and exercises the native pointer-drag schedule path", async () => {
@@ -1815,16 +2236,7 @@ describe("Day Schedule Next native smoke", () => {
     await $(".app-shell").waitForDisplayed();
     await openTicketView();
     await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).waitForDisplayed();
-    await browser.execute(() => {
-      document.documentElement.style.fontSize = "200%";
-    });
-    await browser.waitUntil(
-      () =>
-        browser.execute(() => {
-          return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) >= 32;
-        }),
-      { timeoutMsg: "200% text state did not apply before ticket evidence capture" },
-    );
+    await persistTextScale(200);
     await setLogicalWindowSize(720, 820);
     await $(
       `//button[@aria-label="${ticketTitle}の詳細を開く"]//*[contains(@class, "ticket-card__tag") and normalize-space(.)="evidence"]`,
@@ -1833,16 +2245,7 @@ describe("Day Schedule Next native smoke", () => {
       requestAnimationFrame(() => requestAnimationFrame(done));
     });
     await browser.saveScreenshot("./test-results/native-ticket-board-tags-text-200.png");
-    await browser.execute(() => {
-      document.documentElement.style.removeProperty("font-size");
-    });
-    await browser.waitUntil(
-      () =>
-        browser.execute(
-          () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) < 32,
-        ),
-      { timeoutMsg: "ticket evidence text scaling did not reset" },
-    );
+    await persistTextScale(100);
     await setLogicalWindowSize(1280, 820);
     await $(`//button[@aria-label="${ticketTitle}の詳細を開く"]`).click();
     const ticketPlainPreview = $("#ticket-description-plain-panel");
@@ -1866,30 +2269,12 @@ describe("Day Schedule Next native smoke", () => {
     await setLogicalWindowSize(720, 820);
     await browser.saveScreenshot("./test-results/native-ticket-markdown-preview-narrow.png");
     await setLogicalWindowSize(1280, 820);
-    await browser.execute(() => {
-      document.documentElement.style.fontSize = "200%";
-    });
-    await browser.waitUntil(
-      () =>
-        browser.execute(
-          () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) >= 32,
-        ),
-      { timeoutMsg: "200% text state did not apply before Markdown preview capture" },
-    );
+    await persistTextScale(200);
     await browser.executeAsync((done: () => void) => {
       requestAnimationFrame(() => requestAnimationFrame(done));
     });
     await browser.saveScreenshot("./test-results/native-ticket-markdown-preview-text-200.png");
-    await browser.execute(() => {
-      document.documentElement.style.removeProperty("font-size");
-    });
-    await browser.waitUntil(
-      () =>
-        browser.execute(
-          () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) < 32,
-        ),
-      { timeoutMsg: "ticket Markdown preview text scaling did not reset" },
-    );
+    await persistTextScale(100);
     await browser.executeAsync((done: () => void) => {
       requestAnimationFrame(() => requestAnimationFrame(done));
     });
@@ -2136,13 +2521,9 @@ describe("Day Schedule Next native smoke", () => {
     await setLogicalWindowSize(720, 820);
     await browser.saveScreenshot("./test-results/native-ticket-board-narrow.png");
     await setLogicalWindowSize(1280, 820);
-    await browser.execute(() => {
-      document.documentElement.style.fontSize = "200%";
-    });
+    await persistTextScale(200);
     await browser.saveScreenshot("./test-results/native-ticket-board-text-200.png");
-    await browser.execute(() => {
-      document.documentElement.style.removeProperty("font-size");
-    });
+    await persistTextScale(100);
 
     const persisted = (await browser.tauri.execute(
       ({ core }, expectedTitle) =>
@@ -2309,6 +2690,23 @@ describe("Day Schedule Next native smoke", () => {
       timeoutMsg: "compact window was not created",
     });
     await browser.tauri.switchWindow("compact");
+    const compactRunsOnWindows = await browser.execute(() =>
+      navigator.userAgent.includes("Windows"),
+    );
+    if (compactRunsOnWindows) {
+      await browser.setWindowSize(420, 640);
+      await browser.waitUntil(
+        async () =>
+          browser.execute(
+            () =>
+              document.documentElement.clientWidth >= 400 &&
+              document.documentElement.clientHeight >= 600,
+          ),
+        { timeoutMsg: "compact Windows client area did not remain usable at 420x640 outer size" },
+      );
+    } else {
+      await setExactLogicalViewportSize(420, 640);
+    }
     await $(".compact-header h1").waitForDisplayed();
     const compactScheduleRendered = await browser.executeAsync(
       (expectedTitle: string, done: (rendered: boolean) => void) => {
@@ -2330,11 +2728,120 @@ describe("Day Schedule Next native smoke", () => {
     );
     expect(compactScheduleRendered).toBe(true);
     await browser.saveScreenshot("./test-results/native-compact.png");
+    await browser.tauri.switchWindow("main");
+    await persistTextScale(250);
+    await browser.tauri.switchWindow("compact");
+    await browser.waitUntil(
+      async () => (await $("html").getAttribute("data-text-scale")) === "250",
+      { timeoutMsg: "250% text scale did not propagate to Compact" },
+    );
+    const compactTextGeometry = await browser.execute(() => {
+      const shell = document.querySelector<HTMLElement>(".compact-shell");
+      const agenda = document.querySelector<HTMLElement>(".compact-agenda");
+      const actions = document.querySelector<HTMLElement>(".compact-actions");
+      const titles = Array.from(
+        document.querySelectorAll<HTMLElement>(".compact-current h2, .compact-next h2"),
+      );
+      if (!shell || !agenda || !actions || titles.length !== 2) {
+        throw new Error("250% Compact layout was incomplete");
+      }
+      shell.scrollTop = shell.scrollHeight;
+      const actionButtons = Array.from(actions.querySelectorAll<HTMLButtonElement>("button"));
+      if (actionButtons.length === 0) throw new Error("250% Compact actions were not rendered");
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = document.documentElement.clientHeight;
+      const shellRect = shell.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      const actionButtonsReachable = actionButtons.every((button) => {
+        const rect = button.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const hit =
+          centerX >= 0 && centerX < viewportWidth && centerY >= 0 && centerY < viewportHeight
+            ? document.elementFromPoint(centerX, centerY)
+            : null;
+        return (
+          rect.left >= shellRect.left &&
+          rect.right <= shellRect.right + 1 &&
+          rect.top >= shellRect.top &&
+          rect.bottom <= shellRect.bottom + 1 &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          (hit === button || (hit instanceof Node && button.contains(hit)))
+        );
+      });
+      const maxShellScroll = Math.max(0, shell.scrollHeight - shell.clientHeight);
+      const titleContentFits = titles.every((title) => {
+        const titleRect = title.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(title);
+        const textRects = Array.from(range.getClientRects());
+        return (
+          textRects.length > 0 &&
+          textRects.every(
+            (rect) =>
+              rect.left >= titleRect.left - 1 &&
+              rect.right <= titleRect.right + 1 &&
+              rect.top >= titleRect.top - 1 &&
+              rect.bottom <= titleRect.bottom + 1,
+          )
+        );
+      });
+      const overflowingElements = Array.from(shell.querySelectorAll<HTMLElement>("*"))
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.left < shellRect.left - 1 || rect.right > shellRect.right + 1;
+        })
+        .map((element) => ({
+          className: element.className,
+          tagName: element.tagName,
+          text: element.textContent?.trim().slice(0, 80) ?? "",
+        }));
+      return {
+        actionsHeight: actionsRect.height,
+        actionButtonsReachable,
+        actionsReachable:
+          actionsRect.top >= shellRect.top &&
+          actionsRect.bottom <= shellRect.bottom + 1 &&
+          actionsRect.height > 0,
+        horizontalOverflow: shell.scrollWidth - shell.clientWidth,
+        overflowingElements,
+        rootFontSize: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--app-font-1"),
+        ),
+        scrollbarWidth: Math.max(0, shell.offsetWidth - shell.clientWidth),
+        shellAtBottom: Math.abs(shell.scrollTop - maxShellScroll) <= 1,
+        titleContentFits,
+        titleHorizontalOverflow: Math.max(
+          ...titles.map((title) => title.scrollWidth - title.clientWidth),
+        ),
+      };
+    });
+    expect(compactTextGeometry.rootFontSize).toBeGreaterThanOrEqual(40);
+    expect(compactTextGeometry.overflowingElements).toEqual([]);
+    expect(compactTextGeometry.horizontalOverflow).toBeLessThanOrEqual(
+      compactTextGeometry.scrollbarWidth + 1,
+    );
+    // Depending on the native title-bar height, the actions either fit directly
+    // or become reachable by scrolling. Both states satisfy the compact layout.
+    expect(compactTextGeometry.shellAtBottom).toBe(true);
+    expect(compactTextGeometry.titleContentFits).toBe(true);
+    expect(compactTextGeometry.titleHorizontalOverflow).toBeLessThanOrEqual(1);
+    expect(compactTextGeometry.actionsReachable).toBe(true);
+    expect(compactTextGeometry.actionButtonsReachable).toBe(true);
+    expect(compactTextGeometry.actionsHeight).toBeGreaterThan(0);
+    await browser.saveScreenshot("./test-results/native-compact-text-250.png");
+    await $(".compact-actions").saveScreenshot(
+      "./test-results/native-compact-actions-text-250.png",
+    );
+    await browser.tauri.switchWindow("main");
+    await persistTextScale(100);
   });
 
   it("opens one native analog clock window with moving hands and accessible controls", async () => {
     await browser.tauri.switchWindow("main");
     await persistFixtureTheme("light");
+    await persistTextScale(100);
     await setLogicalWindowSize(1024, 640);
     await browser.execute(() => {
       localStorage.removeItem("day-schedule-next.analog-clock-theme");
@@ -2381,6 +2888,42 @@ describe("Day Schedule Next native smoke", () => {
     await settingsButton.waitForDisplayed();
     const pinButton = $(".analog-clock-pin-trigger");
     await pinButton.waitForDisplayed();
+    await browser.waitUntil(
+      async () => (await $("html").getAttribute("data-text-scale")) === "100",
+      { timeoutMsg: "analog clock did not start at the persisted 100% text scale" },
+    );
+    await browser.pause(100);
+
+    // Keep the already-open analog window alive while the main window saves a new scale.
+    // settings_update emits a cross-window event; no analog reload is used here.
+    const handlesWithAnalog = await browser.getWindowHandles();
+    await browser.tauri.switchWindow("main");
+    await setLogicalWindowSize(1180, 820);
+    await $('//aside[@aria-label="主要画面"]//button[contains(., "設定")]').click();
+    await selectTextScale(250);
+    const saveSettings = $('//button[normalize-space(.)="設定を保存"]');
+    await saveSettings.waitForDisplayed();
+    await browser.execute(() => {
+      const view = document.querySelector<HTMLElement>(".settings-view");
+      if (!view) throw new Error("settings view was not rendered for analog scale propagation");
+      view.scrollTop = view.scrollHeight;
+    });
+    await saveSettings.click();
+    await browser.waitUntil(
+      async () => {
+        const bootstrap = (await browser.tauri.execute(({ core }) =>
+          core.invoke("bootstrap_get"),
+        )) as { settings: { textScalePercent: number } };
+        return bootstrap.settings.textScalePercent === 250;
+      },
+      { timeoutMsg: "250% text scale was not persisted before analog propagation" },
+    );
+    await browser.tauri.switchWindow("analog-clock");
+    await browser.waitUntil(
+      async () => (await $("html").getAttribute("data-text-scale")) === "250",
+      { timeoutMsg: "250% text scale did not reach the already-open analog clock" },
+    );
+    expect(await browser.getWindowHandles()).toHaveLength(handlesWithAnalog.length);
 
     const cornerControls = await browser.execute(() => {
       const pin = document.querySelector<HTMLElement>(".analog-clock-pin-trigger");
@@ -2410,13 +2953,44 @@ describe("Day Schedule Next native smoke", () => {
         timeoutMsg: "analog clock pin did not reach the unpinned state",
       },
     );
-    expect(await pinButton.getAttribute("title")).toBe("常に手前に固定");
+    await browser.execute(() => {
+      document.querySelector<HTMLElement>(".analog-clock-pin-trigger")?.focus();
+    });
+    await browser.waitUntil(
+      async () => {
+        return browser.execute(() => {
+          const focused =
+            document.activeElement?.classList.contains("analog-clock-pin-trigger") ?? false;
+          return (
+            focused && document.querySelector('[role="tooltip"]')?.textContent === "常に手前に固定"
+          );
+        });
+      },
+      { timeout: 3_000, timeoutMsg: "analog clock pin tooltip did not appear on focus" },
+    );
     await pinButton.click();
     await browser.waitUntil(async () => (await pinButton.getAttribute("aria-pressed")) === "true", {
       timeout: 3_000,
       timeoutMsg: "analog clock pin did not enable always-on-top",
     });
-    expect(await pinButton.getAttribute("title")).toBe("常に手前を解除");
+    await pinButton.waitForEnabled({
+      timeout: 3_000,
+      timeoutMsg: "analog clock pin preference did not finish saving",
+    });
+    await browser.execute(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+      document.querySelector<HTMLElement>(".analog-clock-pin-trigger")?.focus();
+    });
+    await browser.waitUntil(
+      async () =>
+        browser.execute(
+          () => document.querySelector('[role="tooltip"]')?.textContent === "常に手前を解除",
+        ),
+      {
+        timeout: 3_000,
+        timeoutMsg: "analog clock unpin tooltip did not update",
+      },
+    );
     const pinnedPreference = (await browser.tauri.execute(({ core }) =>
       core.invoke("bootstrap_get"),
     )) as { windowPreferences: { analogClockAlwaysOnTop: boolean } };
@@ -2455,13 +3029,13 @@ describe("Day Schedule Next native smoke", () => {
       const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
       if (!dial) throw new Error("analog clock dial was not rendered");
       const rect = dial.getBoundingClientRect();
-      const viewportEdge = Math.min(
-        document.documentElement.clientWidth,
-        document.documentElement.clientHeight,
-      );
+      const stage = document.querySelector<HTMLElement>(".analog-clock-stage");
+      if (!stage) throw new Error("analog clock stage was not rendered");
+      const stageRect = stage.getBoundingClientRect();
+      const stageEdge = Math.min(stageRect.width, stageRect.height);
       return {
         bottom: rect.bottom,
-        clockRatio: rect.width / viewportEdge,
+        clockRatio: rect.width / stageEdge,
         clientHeight: document.documentElement.clientHeight,
         clientWidth: document.documentElement.clientWidth,
         left: rect.left,
@@ -2486,6 +3060,42 @@ describe("Day Schedule Next native smoke", () => {
     expect(await browser.execute(() => document.querySelectorAll("select").length)).toBe(0);
     await settingsButton.click();
     await $(".analog-clock-settings-panel").waitForDisplayed();
+    const scaledClockLayout = await browser.execute(() => {
+      const shell = document.querySelector<HTMLElement>(".analog-clock-shell");
+      const panel = document.querySelector<HTMLElement>(".analog-clock-settings-panel");
+      const digital = document.querySelector<HTMLElement>(".analog-clock-digital");
+      const numbers = document.querySelector<SVGTextElement>(".analog-clock-face__numbers text");
+      if (!shell || !panel || !digital || !numbers) {
+        throw new Error("250% analog layout was incomplete");
+      }
+      const panelRect = panel.getBoundingClientRect();
+      return {
+        digitalOverflow: digital.scrollWidth - digital.clientWidth,
+        numberFontSize: Number.parseFloat(getComputedStyle(numbers).fontSize),
+        panelBottom: panelRect.bottom,
+        panelLeft: panelRect.left,
+        panelRight: panelRect.right,
+        panelTop: panelRect.top,
+        rootFontSize: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--app-font-1"),
+        ),
+        viewportHeight: document.documentElement.clientHeight,
+        viewportWidth: document.documentElement.clientWidth,
+      };
+    });
+    expect(scaledClockLayout.rootFontSize).toBeGreaterThanOrEqual(40);
+    expect(scaledClockLayout.numberFontSize).toBeGreaterThanOrEqual(15);
+    expect(scaledClockLayout.digitalOverflow).toBeLessThanOrEqual(1);
+    expect(scaledClockLayout.panelLeft).toBeGreaterThanOrEqual(0);
+    expect(scaledClockLayout.panelTop).toBeGreaterThanOrEqual(0);
+    expect(scaledClockLayout.panelRight).toBeLessThanOrEqual(scaledClockLayout.viewportWidth + 1);
+    expect(scaledClockLayout.panelBottom).toBeLessThanOrEqual(scaledClockLayout.viewportHeight + 1);
+    await browser.saveScreenshot("./test-results/native-analog-clock-text-250.png");
+    await browser.keys("Escape");
+    await $(".analog-clock-settings-panel").waitForExist({ reverse: true });
+
+    await settingsButton.click();
+    await $(".analog-clock-settings-panel").waitForDisplayed();
     const soundLabel = $('//label[contains(normalize-space(.), "秒針音")]');
     await soundLabel.waitForDisplayed();
     const soundToggle = soundLabel.$('input[type="checkbox"]');
@@ -2504,11 +3114,19 @@ describe("Day Schedule Next native smoke", () => {
       timeout: 3_000,
       timeoutMsg: "analog clock settings did not disable always-on-top",
     });
+    await topmost.waitForEnabled({
+      timeout: 3_000,
+      timeoutMsg: "analog clock always-on-top disable did not finish saving",
+    });
     expect(await pinButton.getAttribute("aria-pressed")).toBe("false");
     await topmostLabel.click();
     await browser.waitUntil(() => topmost.isSelected(), {
       timeout: 3_000,
       timeoutMsg: "analog clock always-on-top setting was not enabled",
+    });
+    await topmost.waitForEnabled({
+      timeout: 3_000,
+      timeoutMsg: "analog clock always-on-top enable did not finish saving",
     });
     const persistedTopmost = (await browser.tauri.execute(({ core }) =>
       core.invoke("bootstrap_get"),
@@ -2546,9 +3164,17 @@ describe("Day Schedule Next native smoke", () => {
       async () =>
         browser.execute(() => {
           const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
-          if (!dial) return false;
-          const ratio = dial.getBoundingClientRect().width / document.documentElement.clientWidth;
-          return ratio >= 0.89 && ratio <= 0.96;
+          const stage = document.querySelector<HTMLElement>(".analog-clock-stage");
+          if (!dial || !stage) return false;
+          const rect = dial.getBoundingClientRect();
+          const stageRect = stage.getBoundingClientRect();
+          const ratio = rect.width / Math.min(stageRect.width, stageRect.height);
+          return (
+            ratio >= 0.89 &&
+            ratio <= 0.96 &&
+            rect.top >= 0 &&
+            rect.bottom <= document.documentElement.clientHeight + 1
+          );
         }),
       {
         timeout: 5_000,
@@ -2562,23 +3188,57 @@ describe("Day Schedule Next native smoke", () => {
       const dial = document.querySelector<SVGCircleElement>(".analog-clock-face__dial");
       const pin = document.querySelector<HTMLElement>(".analog-clock-pin-trigger");
       const settings = document.querySelector<HTMLElement>(".analog-clock-settings-trigger");
-      if (!digital || !fullDate || !compactTime || !dial || !pin || !settings) {
+      const shell = document.querySelector<HTMLElement>(".analog-clock-shell");
+      const stage = document.querySelector<HTMLElement>(".analog-clock-stage");
+      const face = document.querySelector<SVGSVGElement>(".analog-clock-face--full");
+      if (
+        !digital ||
+        !fullDate ||
+        !compactTime ||
+        !dial ||
+        !pin ||
+        !settings ||
+        !shell ||
+        !stage ||
+        !face
+      ) {
         throw new Error("compact analog clock layout was incomplete");
       }
       const digitalRect = digital.getBoundingClientRect();
       const dialRect = dial.getBoundingClientRect();
       const pinRect = pin.getBoundingClientRect();
       const settingsRect = settings.getBoundingClientRect();
+      const faceRect = face.getBoundingClientRect();
+      const shellRect = shell.getBoundingClientRect();
+      const stageRect = stage.getBoundingClientRect();
+      const overlaps = (first: DOMRect, second: DOMRect) =>
+        first.left < second.right &&
+        first.right > second.left &&
+        first.top < second.bottom &&
+        first.bottom > second.top;
       return {
-        clockRatio: dialRect.width / document.documentElement.clientWidth,
+        clockRatio: dialRect.width / Math.min(stageRect.width, stageRect.height),
         compactTimeDisplay: getComputedStyle(compactTime).display,
+        dialBottom: dialRect.bottom,
+        dialTop: dialRect.top,
+        digitalOverlapsControls:
+          overlaps(digitalRect, pinRect) || overlaps(digitalRect, settingsRect),
         digitalRight: digitalRect.right,
+        digitalOverflow: digital.scrollWidth - digital.clientWidth,
+        faceBottom: faceRect.bottom,
+        faceOverlapsControls: overlaps(faceRect, pinRect) || overlaps(faceRect, settingsRect),
+        faceTop: faceRect.top,
         fullDateDisplay: getComputedStyle(fullDate).display,
         pinHeight: pinRect.height,
         pinLeft: pinRect.left,
         pinWidth: pinRect.width,
         scrollHeight: document.documentElement.scrollHeight,
         scrollWidth: document.documentElement.scrollWidth,
+        shellHeight: shellRect.height,
+        shellTop: shellRect.top,
+        stageBottom: stageRect.bottom,
+        stageHeight: stageRect.height,
+        stageTop: stageRect.top,
         settingsHeight: settingsRect.height,
         settingsWidth: settingsRect.width,
         viewportHeight: document.documentElement.clientHeight,
@@ -2591,25 +3251,40 @@ describe("Day Schedule Next native smoke", () => {
     expect(minimumLayout.viewportWidth).toBeLessThan(360);
     expect(minimumLayout.viewportHeight).toBeGreaterThanOrEqual(279);
     expect(minimumLayout.viewportHeight).toBeLessThan(360);
+    expect(minimumLayout.shellHeight).toBeLessThanOrEqual(minimumLayout.viewportHeight + 1);
+    expect(minimumLayout.shellTop).toBeLessThanOrEqual(1);
+    expect(minimumLayout.stageHeight).toBeLessThanOrEqual(minimumLayout.viewportHeight + 1);
+    expect(minimumLayout.stageTop).toBeGreaterThanOrEqual(55);
+    expect(minimumLayout.stageTop).toBeLessThanOrEqual(57);
+    expect(minimumLayout.stageBottom).toBeLessThanOrEqual(minimumLayout.viewportHeight + 1);
+    expect(minimumLayout.faceTop).toBeGreaterThanOrEqual(0);
+    expect(minimumLayout.faceBottom).toBeLessThanOrEqual(minimumLayout.viewportHeight + 1);
+    expect(minimumLayout.faceOverlapsControls).toBe(false);
+    expect(minimumLayout.dialTop).toBeGreaterThanOrEqual(0);
+    expect(minimumLayout.dialBottom).toBeLessThanOrEqual(minimumLayout.viewportHeight + 1);
     expect(
       Math.abs(minimumLayout.viewportWidth - minimumLayout.viewportHeight),
     ).toBeLessThanOrEqual(1);
     expect(minimumLayout.fullDateDisplay).toBe("none");
     expect(minimumLayout.compactTimeDisplay).not.toBe("none");
-    expect(minimumLayout.digitalRight).toBeLessThanOrEqual(minimumLayout.pinLeft);
+    expect(minimumLayout.digitalOverlapsControls).toBe(false);
+    expect(minimumLayout.digitalRight).toBeLessThanOrEqual(minimumLayout.viewportWidth + 1);
     expect(minimumLayout.pinWidth).toBe(44);
     expect(minimumLayout.pinHeight).toBe(44);
     expect(minimumLayout.settingsWidth).toBe(44);
     expect(minimumLayout.settingsHeight).toBe(44);
+    expect(minimumLayout.digitalOverflow).toBeLessThanOrEqual(1);
     expect(minimumLayout.scrollWidth).toBeLessThanOrEqual(minimumLayout.viewportWidth + 1);
     expect(minimumLayout.scrollHeight).toBeLessThanOrEqual(minimumLayout.viewportHeight + 1);
     await browser.saveScreenshot("./test-results/native-analog-clock-minimum.png");
 
-    const originalFontSize = await browser.execute(() => {
-      const original = document.documentElement.style.fontSize;
-      document.documentElement.style.fontSize = "200%";
-      return original;
-    });
+    await browser.tauri.switchWindow("main");
+    await persistTextScale(200);
+    await browser.tauri.switchWindow("analog-clock");
+    await browser.waitUntil(
+      async () => (await $("html").getAttribute("data-text-scale")) === "200",
+      { timeoutMsg: "200% text scale did not reach the analog clock" },
+    );
     await settingsButton.click();
     await $(".analog-clock-settings-panel").waitForDisplayed();
     const enlargedSettings = await browser.execute(() => {
@@ -2630,9 +3305,6 @@ describe("Day Schedule Next native smoke", () => {
       enlargedSettings.panelClientWidth + 1,
     );
     await browser.saveScreenshot("./test-results/native-analog-clock-text-200.png");
-    await browser.execute((original) => {
-      document.documentElement.style.fontSize = original;
-    }, originalFontSize);
     await browser.keys("Escape");
     await $(".analog-clock-settings-panel").waitForExist({ reverse: true });
 
@@ -2643,5 +3315,7 @@ describe("Day Schedule Next native smoke", () => {
     await browser.tauri.switchWindow("analog-clock");
     await $('button[aria-label="時計の設定を開く"]').waitForDisplayed();
     expect(await browser.getWindowHandles()).toHaveLength(handlesBeforeReopen.length);
+    await browser.tauri.switchWindow("main");
+    await persistTextScale(100);
   });
 });

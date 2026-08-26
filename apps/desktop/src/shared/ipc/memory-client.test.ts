@@ -152,6 +152,7 @@ describe("MemoryAppClient", () => {
     const defaults = await client.defaultSettings();
     expect(defaults.focusWorkMinutes).toBe(25);
     expect(defaults.theme).toBe("system");
+    expect(defaults.textScalePercent).toBe(100);
     expect((await client.focusCommand("start")).phase).toBe("working");
     expect((await client.focusCommand("pause")).phase).toBe("paused");
     expect((await client.focusCommand("resume")).phase).toBe("working");

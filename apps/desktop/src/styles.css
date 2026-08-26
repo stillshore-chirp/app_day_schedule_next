@@ -1,4 +1,8 @@
 :root {
+  --app-font-scale-percent: 100%;
+  --app-font-scale-factor: 1;
+
+  font-size: 16px;
   font-family:
     Inter,
     ui-sans-serif,
@@ -10,6 +14,8 @@
   color: #172033;
   background: #eef2f7;
   font-synthesis: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
   --canvas: #eef2f7;
   --surface: #ffffff;
@@ -149,23 +155,30 @@
 html,
 body,
 #root {
-  min-width: 720px;
-  min-height: 600px;
+  min-width: 0;
+  min-height: 0;
   height: 100%;
   margin: 0;
 }
 
-:root[data-window="analog-clock"],
-:root[data-window="analog-clock"] body,
-:root[data-window="analog-clock"] #root {
-  min-width: 0;
-  min-height: 0;
+:root[data-window-kind="main"],
+:root[data-window-kind="main"] body,
+:root[data-window-kind="main"] #root {
+  min-width: 720px;
+  min-height: 600px;
 }
 
 body {
   color: var(--text);
   background: var(--canvas);
   overflow: hidden;
+}
+
+.app-shell,
+.compact-shell,
+.analog-clock-shell,
+.boot-screen {
+  font-size: var(--app-font-1, 1rem);
 }
 
 /* Ticket board keeps columns readable and scrolls horizontally instead of crushing content. */
@@ -215,7 +228,7 @@ body {
   gap: 5px;
   flex: 0 0 auto;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   font-weight: 700;
 }
 
@@ -286,7 +299,7 @@ body {
 
 .ticket-column__header h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--app-font-1, 1rem);
 }
 
 .ticket-column__header > span {
@@ -369,7 +382,7 @@ body {
   flex-wrap: wrap;
   gap: 5px;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--app-font-0-76, 0.76rem);
 }
 
 .ticket-card__priority {
@@ -605,6 +618,25 @@ button:disabled {
   border: 0;
 }
 
+.app-tooltip {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(24rem, calc(100vw - 1rem));
+  max-height: calc(100vh - 1rem);
+  padding: 0.45rem 0.65rem;
+  overflow: auto;
+  color: var(--on-accent);
+  background: var(--surface-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow);
+  font-size: var(--app-font-0-8125, 0.8125rem);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  white-space: normal;
+}
+
 .app-shell {
   --sidebar-width: 76px;
 
@@ -650,7 +682,7 @@ button:disabled {
 
 .topbar__brand {
   gap: 10px;
-  font-size: 1.05rem;
+  font-size: var(--app-font-1-05, 1.05rem);
   white-space: nowrap;
 }
 
@@ -662,7 +694,7 @@ button:disabled {
   color: var(--on-accent);
   background: linear-gradient(145deg, var(--brand-start), var(--brand-end));
   border-radius: 12px;
-  font-size: 16px;
+  font-size: var(--app-font-1, 1rem);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   box-shadow: 0 5px 14px var(--brand-shadow);
@@ -712,7 +744,7 @@ button:disabled {
   border: 1px solid var(--danger);
   border-radius: 8px;
   box-shadow: var(--shadow);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   line-height: 1.4;
   transform: translateX(-50%);
 }
@@ -745,9 +777,10 @@ button:disabled {
   stroke-width: 1.3;
 }
 
-.analog-clock-face__numbers {
+.analog-clock-face__numbers,
+.analog-clock-face__numbers text {
   fill: var(--text);
-  font-size: 6px;
+  font-size: var(--app-font-0-375, 0.375rem);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
@@ -943,7 +976,7 @@ button:disabled {
   text-align: center;
   background: var(--danger);
   border-radius: 99px;
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .compact-button {
@@ -985,7 +1018,7 @@ button:disabled {
 }
 
 .overview {
-  --overview-lane-label-width: 4.5rem;
+  --overview-lane-label-width: 72px;
 
   padding: 10px 18px;
   margin-bottom: 16px;
@@ -1025,12 +1058,12 @@ button:disabled {
 }
 
 .section-heading h2 {
-  font-size: 1rem;
+  font-size: var(--app-font-1, 1rem);
 }
 
 .eyebrow {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-0-72, 0.72rem);
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1045,7 +1078,7 @@ button:disabled {
   align-items: center;
   gap: 6px;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .legend__pending {
@@ -1093,13 +1126,13 @@ button:disabled {
 .overview-lane__heading h3 {
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: 0.9rem;
+  font-size: var(--app-font-0-9, 0.9rem);
   white-space: nowrap;
 }
 
 .overview-lane__kind {
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: var(--app-font-0-7, 0.7rem);
   font-weight: 750;
   white-space: nowrap;
 }
@@ -1134,7 +1167,7 @@ button:disabled {
   padding: 8px 18px;
   color: var(--text-muted);
   text-align: center;
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .overview-tick {
@@ -1143,7 +1176,7 @@ button:disabled {
   width: 1px;
   color: var(--text-muted);
   border-left: 1px solid var(--border);
-  font-size: 0.68rem;
+  font-size: var(--app-font-0-68, 0.68rem);
   font-variant-numeric: tabular-nums;
   transform: translateX(-1px);
 }
@@ -1167,7 +1200,7 @@ button:disabled {
   text-overflow: clip;
   border: 1px solid rgb(23 32 51 / 35%);
   border-radius: 7px;
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
   line-height: 1.2;
   text-align: left;
 }
@@ -1216,7 +1249,7 @@ button:disabled {
 
 .overview-event__index,
 .overview-template-block__index {
-  font-size: 0.68rem;
+  font-size: var(--app-font-0-68, 0.68rem);
   font-weight: 850;
   line-height: 1;
 }
@@ -1224,7 +1257,7 @@ button:disabled {
 .overview-event__start,
 .overview-template-block__start {
   color: rgb(23 32 51 / 78%);
-  font-size: 0.66rem;
+  font-size: var(--app-font-0-66, 0.66rem);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -1232,7 +1265,7 @@ button:disabled {
 .overview-event__title,
 .overview-template-block__title {
   align-self: start;
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
   font-weight: 750;
 }
 
@@ -1250,7 +1283,7 @@ button:disabled {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
-  font-size: 0.6rem;
+  font-size: var(--app-font-0-6, 0.6rem);
   font-weight: 750;
 }
 
@@ -1322,14 +1355,14 @@ button:disabled {
 
   .overview-event__index,
   .overview-template-block__index {
-    font-size: 0.62rem;
+    font-size: var(--app-font-0-62, 0.62rem);
   }
 
   .overview-event__start,
   .overview-template-block__start,
   .overview-event__title,
   .overview-template-block__title {
-    font-size: 0.61rem;
+    font-size: var(--app-font-0-61, 0.61rem);
   }
 }
 
@@ -1362,7 +1395,7 @@ button:disabled {
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-size: 0.68rem;
+  font-size: var(--app-font-0-68, 0.68rem);
   font-weight: 750;
 }
 
@@ -1373,7 +1406,7 @@ button:disabled {
   gap: 10px;
   margin-top: 4px;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .reference-time-control input {
@@ -1406,13 +1439,17 @@ button:disabled {
 
 .today-heading h1 {
   margin-top: 2px;
-  font-size: clamp(1.25rem, 1.7vw, 1.65rem);
+  font-size: clamp(
+    var(--app-font-1-25, 1.25rem),
+    var(--app-font-fluid-1-7, 1.7vw),
+    var(--app-font-1-65, 1.65rem)
+  );
 }
 
 .today-heading p {
   max-width: 560px;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .timeline-viewport {
@@ -1445,7 +1482,7 @@ button:disabled {
   width: 48px;
   color: var(--text-muted);
   text-align: right;
-  font-size: 0.76rem;
+  font-size: var(--app-font-0-76, 0.76rem);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1499,21 +1536,71 @@ button:disabled {
 .timeline-instructions {
   margin: -4px 0 10px;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .zoom-label {
   min-width: 44px;
   color: var(--text-muted);
   text-align: center;
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .save-indicator {
   margin: 0 0 8px;
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   font-weight: 700;
+}
+
+.timeline-readable-list {
+  display: grid;
+  max-height: min(34vh, 320px);
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.timeline-readable-list button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 12px max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  padding: 8px 10px;
+  color: var(--text);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.timeline-readable-list button[aria-pressed="true"] {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 22%, transparent);
+}
+
+.timeline-readable-list__swatch {
+  width: 12px;
+  height: 12px;
+  margin-top: 0.3em;
+  border: 1px solid rgb(23 32 51 / 38%);
+  border-radius: 3px;
+}
+
+.timeline-readable-list time,
+.timeline-readable-list strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.timeline-readable-list time {
+  color: var(--text-muted);
+  font-size: var(--app-font-0-76, 0.76rem);
+  font-variant-numeric: tabular-nums;
 }
 
 .timeline-resize-handle {
@@ -1555,7 +1642,7 @@ button:disabled {
 
 .timeline-drag-preview span,
 .timeline-drag-preview small {
-  font-size: 0.72rem;
+  font-size: var(--app-font-0-72, 0.72rem);
 }
 
 .timeline-event::after {
@@ -1590,8 +1677,14 @@ button:disabled {
   white-space: nowrap;
 }
 
+.timeline-event[data-text-mode="summary"] > .timeline-event-title,
+.timeline-event[data-text-mode="summary"] > .timeline-event-time,
+.timeline-event[data-text-mode="summary"] > .state-chip {
+  display: none;
+}
+
 .timeline-event span {
-  font-size: 0.72rem;
+  font-size: var(--app-font-0-72, 0.72rem);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1651,7 +1744,7 @@ button:disabled {
   color: var(--on-accent);
   background: var(--danger);
   border-radius: 5px;
-  font-size: 0.68rem;
+  font-size: var(--app-font-0-68, 0.68rem);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1664,7 +1757,7 @@ button:disabled {
   background: var(--state-chip-background);
   border: 1px solid var(--state-chip-border);
   border-radius: 99px;
-  font-size: 0.68rem;
+  font-size: var(--app-font-0-68, 0.68rem);
   font-weight: 700;
 }
 
@@ -1696,7 +1789,7 @@ button:disabled {
 }
 
 .inspector h2 {
-  font-size: 1.2rem;
+  font-size: var(--app-font-1-2, 1.2rem);
 }
 
 .settings-grid section {
@@ -1723,7 +1816,7 @@ label {
   display: grid;
   gap: 6px;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   font-weight: 700;
 }
 
@@ -1794,7 +1887,7 @@ textarea[aria-invalid="true"] {
 
 .field-help {
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: var(--app-font-0-74, 0.74rem);
 }
 
 .markdown-field {
@@ -1812,7 +1905,7 @@ textarea[aria-invalid="true"] {
 
 .markdown-field__label {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   font-weight: 700;
 }
 
@@ -1833,7 +1926,7 @@ textarea[aria-invalid="true"] {
   background: transparent;
   border: 0;
   border-radius: 6px;
-  font-size: 0.76rem;
+  font-size: var(--app-font-0-76, 0.76rem);
   font-weight: 700;
   cursor: pointer;
 }
@@ -1883,7 +1976,7 @@ textarea[aria-invalid="true"] {
   background: var(--surface);
   border: 1px solid var(--border-strong);
   border-radius: 9px;
-  font-size: 0.88rem;
+  font-size: var(--app-font-0-88, 0.88rem);
   font-weight: 500;
   line-height: 1.65;
 }
@@ -1909,22 +2002,22 @@ textarea[aria-invalid="true"] {
 .markdown-preview h1 {
   padding-bottom: 0.25em;
   border-bottom: 1px solid var(--border);
-  font-size: 1.45rem;
+  font-size: var(--app-font-1-45, 1.45rem);
 }
 
 .markdown-preview h2 {
   padding-bottom: 0.2em;
   border-bottom: 1px solid var(--border);
-  font-size: 1.25rem;
+  font-size: var(--app-font-1-25, 1.25rem);
 }
 
 .markdown-preview h3 {
-  font-size: 1.08rem;
+  font-size: var(--app-font-1-08, 1.08rem);
 }
 
 .markdown-preview ul,
 .markdown-preview ol {
-  padding-inline-start: 1.65rem;
+  padding-inline-start: 26px;
 }
 
 .markdown-preview li + li {
@@ -2048,7 +2141,7 @@ textarea[aria-invalid="true"] {
 
 .field-error {
   color: var(--danger);
-  font-size: 0.76rem;
+  font-size: var(--app-font-0-76, 0.76rem);
   font-weight: 700;
 }
 
@@ -2068,7 +2161,7 @@ textarea[aria-invalid="true"] {
 
 .time-adjuster__group > span {
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: var(--app-font-0-72, 0.72rem);
   font-weight: 750;
 }
 
@@ -2084,7 +2177,7 @@ textarea[aria-invalid="true"] {
 .schedule-time-card > legend {
   padding: 0 5px;
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: var(--app-font-0-82, 0.82rem);
   font-weight: 800;
 }
 
@@ -2199,7 +2292,7 @@ textarea[aria-invalid="true"] {
   gap: 8px;
   padding: 10px 12px;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: var(--app-font-0-8, 0.8rem);
   font-weight: 800;
 }
 
@@ -2224,7 +2317,7 @@ textarea[aria-invalid="true"] {
 
 .danger-zone p {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   line-height: 1.5;
 }
 
@@ -2284,7 +2377,7 @@ textarea[aria-invalid="true"] {
   place-items: center;
   background: transparent;
   border-color: transparent;
-  font-size: 1.3rem;
+  font-size: var(--app-font-1-3, 1.3rem);
 }
 
 .link-button {
@@ -2313,7 +2406,7 @@ textarea[aria-invalid="true"] {
   border: 1px solid var(--border);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.72rem;
+  font-size: var(--app-font-0-72, 0.72rem);
 }
 
 .button-row--center {
@@ -2343,7 +2436,7 @@ textarea[aria-invalid="true"] {
 .status-message p {
   margin-top: 3px;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--app-font-0-8, 0.8rem);
 }
 
 .status-message--success {
@@ -2378,7 +2471,7 @@ textarea[aria-invalid="true"] {
   color: var(--primary);
   background: var(--primary-soft);
   border-radius: 50%;
-  font-size: 1.7rem;
+  font-size: var(--app-font-1-7, 1.7rem);
 }
 
 .empty-state h2 {
@@ -2424,7 +2517,7 @@ textarea[aria-invalid="true"] {
 .now-dock__next > span,
 .now-dock__focus > span {
   color: var(--dock-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .now-dock__progress {
@@ -2484,7 +2577,7 @@ textarea[aria-invalid="true"] {
 
 .now-dock__concurrent li span {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .history-actions {
@@ -2508,7 +2601,11 @@ textarea[aria-invalid="true"] {
 
 .view-title h1 {
   margin-top: 4px;
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-size: clamp(
+    var(--app-font-1-6, 1.6rem),
+    var(--app-font-fluid-3, 3vw),
+    var(--app-font-2-2, 2.2rem)
+  );
 }
 
 .view-title p {
@@ -2549,7 +2646,7 @@ textarea[aria-invalid="true"] {
 }
 
 .week-day__heading strong {
-  font-size: 1.35rem;
+  font-size: var(--app-font-1-35, 1.35rem);
 }
 
 .week-day__heading small {
@@ -2571,7 +2668,7 @@ textarea[aria-invalid="true"] {
   background: var(--surface-soft);
   border-inline-start: 4px solid var(--primary);
   border-radius: 5px;
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .week-day time {
@@ -2611,7 +2708,7 @@ textarea[aria-invalid="true"] {
 }
 
 .month-day strong {
-  font-size: 1.1rem;
+  font-size: var(--app-font-1-1, 1.1rem);
 }
 
 .month-day span {
@@ -2648,7 +2745,7 @@ textarea[aria-invalid="true"] {
 .bulk-classification > p {
   margin: 0;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .bulk-classification__grid {
@@ -2680,7 +2777,7 @@ textarea[aria-invalid="true"] {
   display: grid;
   gap: 5px;
   color: var(--text-muted);
-  font-size: 0.76rem;
+  font-size: var(--app-font-0-76, 0.76rem);
   font-weight: 700;
 }
 
@@ -2701,13 +2798,13 @@ textarea[aria-invalid="true"] {
 
 .carry-control h2 {
   align-self: center;
-  font-size: 0.95rem;
+  font-size: var(--app-font-0-95, 0.95rem);
 }
 
 .carry-control p {
   align-self: center;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .pagination {
@@ -2785,7 +2882,7 @@ td {
 th {
   color: var(--text-muted);
   background: var(--surface-soft);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 tbody tr {
@@ -2814,12 +2911,12 @@ tbody tr:focus {
 .focus-card h2 {
   margin-top: 8px;
   color: var(--text);
-  font-size: 1.4rem;
+  font-size: var(--app-font-1-4, 1.4rem);
 }
 
 .focus-time {
   margin: 14px 0;
-  font-size: clamp(3rem, 9vw, 6rem);
+  font-size: clamp(var(--app-font-3, 3rem), var(--app-font-fluid-9, 9vw), var(--app-font-6, 6rem));
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.05em;
@@ -2845,7 +2942,7 @@ tbody tr:focus {
 
 .settings-grid h2 {
   margin: 0 0 5px;
-  font-size: 1rem;
+  font-size: var(--app-font-1, 1rem);
 }
 
 .settings-grid label:has(input[type="radio"]) {
@@ -2919,7 +3016,7 @@ tbody tr:focus {
 
 .import-preview dt {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .import-preview dd {
@@ -3068,7 +3165,7 @@ tbody tr:focus {
 
 .google-task-conflicts dt {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .google-task-conflicts dd {
@@ -3151,12 +3248,12 @@ tbody tr:focus {
 
 .diagnostics-grid dt {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .diagnostics-grid dd {
   margin: 5px 0 0;
-  font-size: 1.1rem;
+  font-size: var(--app-font-1-1, 1.1rem);
   font-weight: 750;
 }
 
@@ -3280,7 +3377,7 @@ tbody tr:focus {
 .library-card em,
 .operational-list small {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
   font-style: normal;
 }
 
@@ -3301,7 +3398,7 @@ tbody tr:focus {
 .weekday-picker legend {
   padding-inline: 6px;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .weekday-picker label,
@@ -3342,7 +3439,7 @@ tbody tr:focus {
   display: flex;
   justify-content: space-between;
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: var(--app-font-0-7, 0.7rem);
   font-variant-numeric: tabular-nums;
 }
 
@@ -3385,7 +3482,7 @@ tbody tr:focus {
   right: 5px;
   bottom: 1px;
   color: var(--text-muted);
-  font-size: 0.65rem;
+  font-size: var(--app-font-0-65, 0.65rem);
 }
 
 .template-detail-timeline {
@@ -3416,7 +3513,7 @@ tbody tr:focus {
   display: grid;
   gap: 4px;
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 .template-range-editor input[type="range"] {
@@ -3510,7 +3607,7 @@ tbody tr:focus {
 
 .preview-summary dt {
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: var(--app-font-0-7, 0.7rem);
 }
 
 .preview-summary dd {
@@ -3599,7 +3696,7 @@ tbody tr:focus {
 
 @media (max-width: 840px) {
   .overview {
-    --overview-lane-label-width: 4.5rem;
+    --overview-lane-label-width: 72px;
 
     padding-inline: 10px;
   }
@@ -3641,7 +3738,7 @@ tbody tr:focus {
 
   .date-navigation__date {
     min-width: 140px;
-    font-size: 0.82rem;
+    font-size: var(--app-font-0-82, 0.82rem);
   }
 
   .workspace-main--with-inspector {
@@ -3664,7 +3761,9 @@ tbody tr:focus {
 .analog-clock-shell {
   position: relative;
   display: grid;
+  width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
   padding: 0;
   place-items: center;
@@ -3683,12 +3782,16 @@ tbody tr:focus {
   display: grid;
   width: 100%;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   place-items: center;
 }
 
 .analog-clock-face--full {
   width: var(--analog-clock-face-size);
   height: var(--analog-clock-face-size);
+  max-width: 100%;
+  max-height: 100%;
   filter: drop-shadow(0 12px 22px rgb(21 33 51 / 16%));
 }
 
@@ -3704,7 +3807,7 @@ tbody tr:focus {
   background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   line-height: 1.2;
@@ -3791,7 +3894,7 @@ tbody tr:focus {
   border: 1px solid var(--danger);
   border-radius: 10px;
   box-shadow: var(--shadow);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   line-height: 1.4;
 }
 
@@ -3842,14 +3945,14 @@ tbody tr:focus {
 
 .analog-clock-settings-panel__header h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: var(--app-font-1-15, 1.15rem);
 }
 
 .analog-clock-settings-close {
   flex: 0 0 44px;
   width: 44px;
   height: 44px;
-  font-size: 1.5rem;
+  font-size: var(--app-font-1-5, 1.5rem);
   line-height: 1;
 }
 
@@ -3869,7 +3972,7 @@ tbody tr:focus {
 .analog-clock-controls legend {
   margin-bottom: 6px;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--app-font-0-8, 0.8rem);
   font-weight: 700;
 }
 
@@ -3902,7 +4005,7 @@ tbody tr:focus {
 .analog-clock-controls__status,
 .analog-clock-controls .inline-error {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .analog-clock-controls__help,
@@ -3981,11 +4084,12 @@ tbody tr:focus {
 }
 
 .compact-header h1 {
-  font-size: 1rem;
+  font-size: var(--app-font-1, 1rem);
 }
 
 .compact-header time {
-  font-size: 1.35rem;
+  color: var(--text);
+  font-size: var(--app-font-1-35, 1.35rem);
   font-variant-numeric: tabular-nums;
   font-weight: 750;
 }
@@ -4007,14 +4111,14 @@ tbody tr:focus {
 .compact-current > span,
 .compact-next > span {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
   font-weight: 700;
 }
 
 .compact-current h2,
 .compact-next h2 {
   margin-top: 4px;
-  font-size: 1.05rem;
+  font-size: var(--app-font-1-05, 1.05rem);
 }
 
 .compact-current p,
@@ -4022,7 +4126,7 @@ tbody tr:focus {
 .compact-agenda p {
   margin: 6px 0 0;
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--app-font-0-82, 0.82rem);
 }
 
 .compact-agenda {
@@ -4030,7 +4134,7 @@ tbody tr:focus {
 }
 
 .compact-agenda h2 {
-  font-size: 0.9rem;
+  font-size: var(--app-font-0-9, 0.9rem);
 }
 
 .compact-agenda ol {
@@ -4059,7 +4163,7 @@ tbody tr:focus {
 .compact-agenda li time,
 .compact-agenda li span {
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: var(--app-font-0-74, 0.74rem);
 }
 
 .compact-agenda li strong {
@@ -4075,7 +4179,7 @@ tbody tr:focus {
 
 .compact-actions > span {
   color: var(--text-muted);
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
 }
 
 @media (max-width: 380px) {
@@ -4090,6 +4194,518 @@ tbody tr:focus {
   .compact-agenda li span {
     grid-column: 3;
   }
+}
+
+/*
+ * Text scaling changes shared typography tokens while spacing, icons, and panel density keep their
+ * existing pixel sizes. These layout exceptions add the wrapping, vertical geometry, and scroll
+ * reachability needed to contain larger text.
+ */
+:root[data-text-scale-level="high"] .app-shell,
+:root[data-text-scale-level="extra"] .app-shell {
+  grid-template:
+    "topbar topbar" auto
+    "sidebar content" minmax(0, 1fr) /
+    var(--sidebar-width) minmax(0, 1fr);
+}
+
+:root[data-text-scale-level="high"] .app-shell[data-sidebar="expanded"],
+:root[data-text-scale-level="extra"] .app-shell[data-sidebar="expanded"] {
+  --sidebar-width: min(340px, 46vw);
+}
+
+:root[data-text-scale-level="high"] .topbar,
+:root[data-text-scale-level="extra"] .topbar {
+  grid-template:
+    "brand actions" auto
+    "date date" auto /
+    minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+:root[data-text-scale-level="high"] .topbar__brand,
+:root[data-text-scale-level="extra"] .topbar__brand {
+  grid-area: brand;
+}
+
+:root[data-text-scale-level="high"] .date-navigation,
+:root[data-text-scale-level="extra"] .date-navigation {
+  grid-area: date;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+:root[data-text-scale-level="high"] .date-navigation__date,
+:root[data-text-scale-level="extra"] .date-navigation__date {
+  min-width: 0;
+  white-space: normal;
+}
+
+:root[data-text-scale-level="high"] .topbar__actions,
+:root[data-text-scale-level="extra"] .topbar__actions {
+  grid-area: actions;
+  flex-wrap: wrap;
+}
+
+:root[data-text-scale-level="high"] .sidebar nav button,
+:root[data-text-scale-level="high"] .compact-button,
+:root[data-text-scale-level="extra"] .sidebar nav button,
+:root[data-text-scale-level="extra"] .compact-button {
+  height: auto;
+}
+
+:root[data-text-scale-level="high"] .sidebar__label,
+:root[data-text-scale-level="extra"] .sidebar__label {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: initial;
+  white-space: normal;
+}
+
+:root[data-text-scale-level="high"] .app-content,
+:root[data-text-scale-level="extra"] .app-content {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+}
+
+:root[data-text-scale-level="high"] .timeline-canvas,
+:root[data-text-scale-level="extra"] .timeline-canvas {
+  margin-left: 114px;
+}
+
+:root[data-text-scale-level="high"] .timeline-hour span,
+:root[data-text-scale-level="extra"] .timeline-hour span {
+  width: 96px;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+:root[data-text-scale-level="high"] .workspace-main,
+:root[data-text-scale-level="extra"] .workspace-main {
+  position: relative;
+  inset: auto;
+  grid-area: 1 / 1;
+}
+
+:root[data-text-scale-level="high"] .workspace-main--with-inspector,
+:root[data-text-scale-level="extra"] .workspace-main--with-inspector {
+  inset: auto;
+  padding-inline-end: min(520px, 70%);
+}
+
+:root[data-text-scale-level="high"] .inspector,
+:root[data-text-scale-level="extra"] .inspector {
+  position: relative;
+  inset: auto;
+  grid-area: 1 / 1;
+  justify-self: end;
+  width: min(520px, 100%);
+  height: 100%;
+}
+
+:root[data-text-scale-level="high"] .now-dock,
+:root[data-text-scale-level="extra"] .now-dock {
+  position: relative;
+  inset: auto;
+  grid-area: 3 / 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px 20px;
+  max-height: 38vh;
+  overflow: auto;
+}
+
+:root[data-text-scale-level="high"] .now-dock__focus,
+:root[data-text-scale-level="extra"] .now-dock__focus {
+  display: flex;
+}
+
+:root[data-text-scale-level="high"] .now-dock__current,
+:root[data-text-scale-level="high"] .now-dock__next,
+:root[data-text-scale-level="high"] .now-dock__focus,
+:root[data-text-scale-level="extra"] .now-dock__current,
+:root[data-text-scale-level="extra"] .now-dock__next,
+:root[data-text-scale-level="extra"] .now-dock__focus {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+:root[data-text-scale-level="high"] .now-dock__current strong,
+:root[data-text-scale-level="high"] .now-dock__next strong,
+:root[data-text-scale-level="high"] .now-dock__focus strong,
+:root[data-text-scale-level="extra"] .now-dock__current strong,
+:root[data-text-scale-level="extra"] .now-dock__next strong,
+:root[data-text-scale-level="extra"] .now-dock__focus strong {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: initial;
+  white-space: normal;
+}
+
+:root[data-text-scale-level="high"] .now-dock__next,
+:root[data-text-scale-level="extra"] .now-dock__next {
+  align-items: stretch;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  min-height: 0;
+}
+
+:root[data-text-scale-level="high"] .now-dock__next > span,
+:root[data-text-scale-level="high"] .now-dock__next > strong,
+:root[data-text-scale-level="high"] .now-dock__next > small,
+:root[data-text-scale-level="extra"] .now-dock__next > span,
+:root[data-text-scale-level="extra"] .now-dock__next > strong,
+:root[data-text-scale-level="extra"] .now-dock__next > small {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+:root[data-text-scale-level="high"] .now-dock__next > small,
+:root[data-text-scale-level="extra"] .now-dock__next > small {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+:root[data-text-scale-level="high"] .history-actions,
+:root[data-text-scale-level="extra"] .history-actions {
+  position: relative;
+  inset: auto;
+  grid-area: 2 / 1;
+  align-self: stretch;
+  justify-self: end;
+  margin: 0;
+  padding: 8px 18px;
+  background: var(--canvas);
+}
+
+:root[data-text-scale-level="high"] .overview,
+:root[data-text-scale-level="extra"] .overview {
+  --overview-lane-label-width: min(220px, 30vw);
+}
+
+:root[data-text-scale-level="high"] .overview-axis,
+:root[data-text-scale-level="extra"] .overview-axis {
+  height: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+:root[data-text-scale-level="high"] .overview-lane__heading h3,
+:root[data-text-scale-level="extra"] .overview-lane__heading h3 {
+  white-space: normal;
+}
+
+:root[data-text-scale-level="high"] .overview-tick,
+:root[data-text-scale-level="extra"] .overview-tick {
+  display: none;
+}
+
+:root[data-text-scale-level="high"] .overview-tick:nth-child(4n + 1),
+:root[data-text-scale-level="extra"] .overview-tick:nth-child(4n + 1) {
+  display: block;
+}
+
+:root[data-text-scale-level="high"] .overview-event__start,
+:root[data-text-scale-level="high"] .overview-event__title,
+:root[data-text-scale-level="high"] .overview-template-block__start,
+:root[data-text-scale-level="high"] .overview-template-block__title,
+:root[data-text-scale-level="extra"] .overview-event__start,
+:root[data-text-scale-level="extra"] .overview-event__title,
+:root[data-text-scale-level="extra"] .overview-template-block__start,
+:root[data-text-scale-level="extra"] .overview-template-block__title {
+  display: none;
+}
+
+:root[data-text-scale-level="high"] .overview-event__content,
+:root[data-text-scale-level="high"] .overview-template-block__content,
+:root[data-text-scale-level="extra"] .overview-event__content,
+:root[data-text-scale-level="extra"] .overview-template-block__content {
+  inset: 0;
+  place-content: center;
+}
+
+:root[data-text-scale-level="high"] .overview-event:disabled,
+:root[data-text-scale-level="extra"] .overview-event:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+:root[data-text-scale-level="high"] .overview-readable-list,
+:root[data-text-scale-level="extra"] .overview-readable-list {
+  grid-column: 2;
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+:root[data-text-scale-level="high"] .overview-readable-list button,
+:root[data-text-scale-level="high"] .overview-readable-list li > span,
+:root[data-text-scale-level="extra"] .overview-readable-list button,
+:root[data-text-scale-level="extra"] .overview-readable-list li > span {
+  display: grid;
+  width: 100%;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 7px 9px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: left;
+}
+
+:root[data-text-scale-level="high"] .overview-readable-list time,
+:root[data-text-scale-level="high"] .overview-readable-list strong,
+:root[data-text-scale-level="extra"] .overview-readable-list time,
+:root[data-text-scale-level="extra"] .overview-readable-list strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+:root[data-text-scale-level="high"] .settings-grid,
+:root[data-text-scale-level="high"] .diagnostics-grid,
+:root[data-text-scale-level="high"] .ticket-dialog__grid,
+:root[data-text-scale-level="high"] .timer-card__editor,
+:root[data-text-scale-level="high"] .timer-create-form,
+:root[data-text-scale-level="high"] .timer-side-column,
+:root[data-text-scale-level="high"] .ticket-focus-metrics,
+:root[data-text-scale-level="high"] .preview-summary,
+:root[data-text-scale-level="extra"] .settings-grid,
+:root[data-text-scale-level="extra"] .diagnostics-grid,
+:root[data-text-scale-level="extra"] .ticket-dialog__grid,
+:root[data-text-scale-level="extra"] .timer-card__editor,
+:root[data-text-scale-level="extra"] .timer-create-form,
+:root[data-text-scale-level="extra"] .timer-side-column,
+:root[data-text-scale-level="extra"] .ticket-focus-metrics,
+:root[data-text-scale-level="extra"] .preview-summary {
+  grid-template-columns: 1fr;
+}
+
+:root[data-text-scale-level="high"] .section-heading,
+:root[data-text-scale-level="high"] .today-heading,
+:root[data-text-scale-level="high"] .status-message,
+:root[data-text-scale-level="high"] .ticket-view__header,
+:root[data-text-scale-level="high"] .ticket-planner__heading,
+:root[data-text-scale-level="high"] .schedule-ticket-link__current,
+:root[data-text-scale-level="high"] .priority-ticket-drawer__toggle,
+:root[data-text-scale-level="extra"] .section-heading,
+:root[data-text-scale-level="extra"] .today-heading,
+:root[data-text-scale-level="extra"] .status-message,
+:root[data-text-scale-level="extra"] .ticket-view__header,
+:root[data-text-scale-level="extra"] .ticket-planner__heading,
+:root[data-text-scale-level="extra"] .schedule-ticket-link__current,
+:root[data-text-scale-level="extra"] .priority-ticket-drawer__toggle {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+:root[data-text-scale-level="high"] .button-row,
+:root[data-text-scale-level="high"] .inspector__actions,
+:root[data-text-scale-level="high"] .ticket-dialog__actions,
+:root[data-text-scale-level="extra"] .button-row,
+:root[data-text-scale-level="extra"] .inspector__actions,
+:root[data-text-scale-level="extra"] .ticket-dialog__actions {
+  flex-wrap: wrap;
+}
+
+:root[data-text-scale-level="high"] .timer-card output,
+:root[data-text-scale-level="high"] .stopwatch-card output,
+:root[data-text-scale-level="high"] .focus-time,
+:root[data-text-scale-level="extra"] .timer-card output,
+:root[data-text-scale-level="extra"] .stopwatch-card output,
+:root[data-text-scale-level="extra"] .focus-time {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+:root[data-text-scale-level="high"] .compact-header,
+:root[data-text-scale-level="extra"] .compact-header {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+:root[data-text-scale-level="high"] .compact-shell,
+:root[data-text-scale-level="extra"] .compact-shell {
+  grid-template-rows: none;
+  grid-auto-rows: max-content;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+:root[data-text-scale-level="high"] .compact-shell > *,
+:root[data-text-scale-level="extra"] .compact-shell > * {
+  min-width: 0;
+}
+
+:root[data-text-scale-level="high"] .compact-header time,
+:root[data-text-scale-level="high"] .compact-actions .button,
+:root[data-text-scale-level="extra"] .compact-header time,
+:root[data-text-scale-level="extra"] .compact-actions .button {
+  max-width: 100%;
+  height: auto;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+:root[data-text-scale-level="high"] .compact-current h2,
+:root[data-text-scale-level="high"] .compact-next h2,
+:root[data-text-scale-level="extra"] .compact-current h2,
+:root[data-text-scale-level="extra"] .compact-next h2 {
+  max-width: 100%;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+:root[data-text-scale-level="high"] .compact-agenda,
+:root[data-text-scale-level="extra"] .compact-agenda {
+  overflow: visible;
+}
+
+:root[data-text-scale-level="high"] .compact-agenda li,
+:root[data-text-scale-level="extra"] .compact-agenda li {
+  grid-template-columns: 5px auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: start;
+}
+
+:root[data-text-scale-level="high"] .compact-agenda li i,
+:root[data-text-scale-level="extra"] .compact-agenda li i {
+  grid-column: 1;
+  grid-row: 1 / -1;
+}
+
+:root[data-text-scale-level="high"] .compact-agenda li time,
+:root[data-text-scale-level="extra"] .compact-agenda li time {
+  grid-column: 2;
+  grid-row: 1 / -1;
+}
+
+:root[data-text-scale-level="high"] .compact-agenda li strong,
+:root[data-text-scale-level="extra"] .compact-agenda li strong {
+  grid-column: 3;
+  grid-row: 1;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: initial;
+  white-space: normal;
+}
+
+:root[data-text-scale-level="high"] .compact-agenda li span,
+:root[data-text-scale-level="extra"] .compact-agenda li span {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+:root[data-text-scale-level="high"] .analog-clock-digital,
+:root[data-text-scale-level="extra"] .analog-clock-digital {
+  position: static;
+  grid-row: 3;
+  align-self: end;
+  justify-self: stretch;
+  width: auto;
+  max-width: none;
+  margin: 0 12px 12px;
+  overflow: visible;
+  text-align: center;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+:root[data-text-scale-level="high"] .analog-clock-shell,
+:root[data-text-scale-level="extra"] .analog-clock-shell {
+  grid-template-rows: 56px minmax(0, 1fr) auto;
+  align-items: stretch;
+}
+
+:root[data-text-scale-level="high"] .analog-clock-stage,
+:root[data-text-scale-level="extra"] .analog-clock-stage {
+  grid-row: 2;
+}
+
+:root[data-text-scale-level="high"] .analog-clock-digital__full,
+:root[data-text-scale-level="extra"] .analog-clock-digital__full {
+  display: none;
+}
+
+:root[data-text-scale-level="high"] .analog-clock-digital__compact,
+:root[data-text-scale-level="extra"] .analog-clock-digital__compact {
+  display: inline;
+}
+
+:root[data-text-scale-level="extra"] .ticket-toolbar,
+:root[data-text-scale-level="extra"] .list-filter-grid,
+:root[data-text-scale-level="extra"] .bulk-classification__grid,
+:root[data-text-scale-level="extra"] .carry-control,
+:root[data-text-scale-level="extra"] .library-layout,
+:root[data-text-scale-level="extra"] .block-editor,
+:root[data-text-scale-level="extra"] .reference-time-control {
+  grid-template-columns: 1fr;
+}
+
+:root[data-text-scale-level="extra"] .ticket-toolbar {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  overflow: visible;
+}
+
+:root[data-text-scale-level="extra"] .ticket-toolbar label,
+:root[data-text-scale-level="extra"] .ticket-toolbar input,
+:root[data-text-scale-level="extra"] .ticket-toolbar select {
+  width: 100%;
+}
+
+:root[data-text-scale-level="extra"] .section-heading-row,
+:root[data-text-scale-level="extra"] .conflict-card > header,
+:root[data-text-scale-level="extra"] .ticket-planner__heading,
+:root[data-text-scale-level="extra"] .schedule-ticket-link__current {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+:root[data-text-scale-level="extra"] .ticket-planner__form,
+:root[data-text-scale-level="extra"] .schedule-ticket-link__form {
+  grid-template-columns: 1fr;
+}
+
+:root[data-text-scale-level="extra"] .ticket-planner__summary {
+  text-align: left;
+}
+
+:root[data-text-scale-level="extra"] .template-strip-row {
+  min-height: 4em;
+}
+
+:root[data-text-scale-level="extra"] .template-strip-block {
+  overflow: auto;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+:root[data-text-scale-level="extra"] .notification-history table {
+  min-width: max-content;
+  table-layout: auto;
+}
+
+:root[data-text-scale-level="extra"] .notification-history td {
+  white-space: normal;
+}
+
+:root[data-text-scale-level="extra"] .apply-preview li {
+  grid-template-columns: 8px max-content minmax(0, 1fr);
+  align-items: start;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4131,7 +4747,7 @@ tbody tr:focus {
 .sync-queue-table th {
   background: var(--surface-soft);
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .conflict-list {
@@ -4262,7 +4878,7 @@ tbody tr:focus {
   display: grid;
   gap: 6px;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
   font-weight: 700;
 }
 
@@ -4293,7 +4909,7 @@ tbody tr:focus {
   align-items: center;
   gap: 5px;
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: var(--app-font-0-74, 0.74rem);
   font-weight: 700;
 }
 
@@ -4365,7 +4981,11 @@ tbody tr:focus {
 .timer-card output,
 .stopwatch-card output {
   color: var(--text);
-  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  font-size: clamp(
+    var(--app-font-1-8, 1.8rem),
+    var(--app-font-fluid-5, 5vw),
+    var(--app-font-2-8, 2.8rem)
+  );
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
@@ -4399,7 +5019,7 @@ tbody tr:focus {
   background: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: var(--app-font-0-72, 0.72rem);
   font-weight: 800;
 }
 
@@ -4448,7 +5068,11 @@ tbody tr:focus {
 }
 
 .stopwatch-card output {
-  font-size: clamp(2.2rem, 6vw, 3.5rem);
+  font-size: clamp(
+    var(--app-font-2-2, 2.2rem),
+    var(--app-font-fluid-6, 6vw),
+    var(--app-font-3-5, 3.5rem)
+  );
 }
 
 .stopwatch-view__panel {
@@ -4486,7 +5110,7 @@ tbody tr:focus {
 
 .timer-set-list p {
   overflow-wrap: anywhere;
-  font-size: 0.78rem;
+  font-size: var(--app-font-0-78, 0.78rem);
 }
 
 .timer-lifecycle-note {
@@ -4579,9 +5203,9 @@ tbody tr:focus {
 }
 
 .ticket-planner__summary {
-  max-width: 24rem;
+  max-width: 384px;
   text-align: right;
-  font-size: 0.82rem;
+  font-size: var(--app-font-0-82, 0.82rem);
 }
 
 .ticket-focus-metrics {
@@ -4621,7 +5245,7 @@ tbody tr:focus {
 }
 
 .ticket-focus-metrics dt {
-  font-size: 0.75rem;
+  font-size: var(--app-font-0-75, 0.75rem);
   color: var(--text-muted);
 }
 
@@ -4698,7 +5322,7 @@ tbody tr:focus {
 }
 
 .priority-ticket-drawer__toggle strong {
-  font-size: 1.05rem;
+  font-size: var(--app-font-1-05, 1.05rem);
 }
 
 .priority-ticket-drawer__summary {
@@ -4740,7 +5364,7 @@ tbody tr:focus {
 
 .priority-ticket-card span {
   color: var(--text-muted);
-  font-size: 0.82rem;
+  font-size: var(--app-font-0-82, 0.82rem);
 }
 
 .priority-ticket-card strong {

@@ -259,6 +259,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             onRetryTemplate={() => void templatesQuery.refetch()}
             referenceMinute={referenceMinute}
             onReferenceChange={setReferenceMinute}
+            textScalePercent={bootstrap.settings.textScalePercent}
           />
         ) : null}
         <PriorityTicketDrawer client={client} />
@@ -273,6 +274,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             onCreateRange={(startUtc, endUtc) => openCreate({ startUtc, endUtc })}
             onAdjust={(schedule, startUtc, endUtc) => adjustSchedule(schedule, startUtc, endUtc)}
             referenceMinute={referenceMinute}
+            textScalePercent={bootstrap.settings.textScalePercent}
           />
         ) : null}
       </main>

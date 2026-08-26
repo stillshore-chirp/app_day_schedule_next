@@ -67,12 +67,26 @@ function renderOverview(overrides: Partial<React.ComponentProps<typeof DayOvervi
     onRetryTemplate: vi.fn(),
     referenceMinute: 0,
     onReferenceChange: vi.fn(),
+    textScalePercent: 100,
     ...overrides,
   };
   return { ...render(<DayOverview {...props} />), props };
 }
 
 describe("DayOverview", () => {
+  it("expands only the overview vertical geometry needed by 250% text", () => {
+    const { container } = renderOverview({ textScalePercent: 250 });
+    const track = container.querySelector<HTMLElement>(".overview-lane__track");
+    const templateTrack = container.querySelector<HTMLElement>(".overview-lane__track--template");
+    const event = container.querySelector<HTMLElement>(".overview-event");
+
+    expect(track?.style.height).toBe("190px");
+    expect(event?.style.height).toBe("150px");
+    expect(screen.getByRole("button", { name: /09:00–09:30.*30分の短時間予定/ })).toBeVisible();
+    expect(event).toHaveAttribute("aria-hidden", "true");
+    expect(templateTrack).toHaveAttribute("aria-hidden", "true");
+  });
+
   it("renders one shared axis and independent schedule and template lanes", () => {
     const { container } = renderOverview();
 
@@ -245,6 +259,7 @@ describe("DayOverview", () => {
         onRetryTemplate={retry}
         referenceMinute={0}
         onReferenceChange={vi.fn()}
+        textScalePercent={100}
       />,
     );
     await user.click(screen.getByRole("button", { name: "再試行" }));
@@ -263,10 +278,43 @@ describe("DayOverview", () => {
         onRetryTemplate={retry}
         referenceMinute={0}
         onReferenceChange={vi.fn()}
+        textScalePercent={100}
       />,
     );
     expect(screen.getByText("表示できる日次テンプレートがありません")).toBeVisible();
     expect(screen.queryByRole("button", { name: "日次テンプレートを作成" })).toBeNull();
+  });
+
+  it("keeps template recovery states reachable at high text scale", () => {
+    const { container, rerender } = renderOverview({
+      template: null,
+      templateState: "loading",
+      textScalePercent: 250,
+    });
+    const templateTrack = container.querySelector<HTMLElement>(".overview-lane__track--template");
+
+    expect(templateTrack).not.toHaveAttribute("aria-hidden");
+    expect(screen.getByText("日次テンプレートを読み込み中")).toBeVisible();
+
+    rerender(
+      <DayOverview
+        schedules={[schedule]}
+        scheduleState="ready"
+        selectedDate={new Date(2026, 6, 20)}
+        selectedId={null}
+        onSelect={vi.fn()}
+        onCreateSchedule={vi.fn()}
+        template={null}
+        templateState="error"
+        onRetryTemplate={vi.fn()}
+        referenceMinute={0}
+        onReferenceChange={vi.fn()}
+        textScalePercent={250}
+      />,
+    );
+
+    expect(templateTrack).not.toHaveAttribute("aria-hidden");
+    expect(screen.getByRole("button", { name: "再試行" })).toBeVisible();
   });
 
   it("announces a cross-midnight template block without wrapping it to the next day", () => {

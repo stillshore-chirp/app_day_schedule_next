@@ -1,7 +1,12 @@
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
-import type { GoogleCalendar, GoogleConnection, GoogleTaskConflict } from "../../shared/contracts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type {
+  GoogleCalendar,
+  GoogleConnection,
+  GoogleTaskConflict,
+  Settings,
+} from "../../shared/contracts";
 import { MemoryAppClient } from "../../shared/ipc/memory-client";
 import { SettingsView } from "./OperationalViews";
 
@@ -85,7 +90,7 @@ class GoogleStateClient extends MemoryAppClient {
   }
 }
 
-async function renderSettings(client: GoogleStateClient) {
+async function renderSettings(client: MemoryAppClient) {
   const bootstrap = await client.bootstrap();
   await act(async () => {
     render(
@@ -94,6 +99,153 @@ async function renderSettings(client: GoogleStateClient) {
     await Promise.resolve();
   });
 }
+
+class FailOnceSettingsClient extends MemoryAppClient {
+  saveAttempts = 0;
+
+  override updateSettings(settings: Settings): Promise<Settings> {
+    this.saveAttempts += 1;
+    if (this.saveAttempts === 2) {
+      return Promise.reject(new Error("synthetic_settings_failure"));
+    }
+    return super.updateSettings(settings);
+  }
+}
+
+class DeferredSettingsClient extends MemoryAppClient {
+  requestedSettings: Settings | null = null;
+  resolveSave: (() => void) | null = null;
+
+  override updateSettings(settings: Settings): Promise<Settings> {
+    this.requestedSettings = structuredClone(settings);
+    return new Promise<Settings>((resolve, reject) => {
+      this.resolveSave = () => {
+        void super.updateSettings(settings).then(resolve, reject);
+      };
+    });
+  }
+}
+
+describe("Settings save feedback", () => {
+  it("clears stale success, retains input and preview after failure, and allows retry", async () => {
+    const user = userEvent.setup();
+    const client = new FailOnceSettingsClient([]);
+    const onTextScalePreview = vi.fn();
+    const bootstrap = await client.bootstrap();
+    render(
+      <SettingsView
+        client={client}
+        bootstrap={bootstrap}
+        onSettingsSaved={() => undefined}
+        onTextScalePreview={onTextScalePreview}
+      />,
+    );
+
+    const textScale = screen.getByRole("combobox", { name: "文字表示倍率" });
+    await user.selectOptions(textScale, "250");
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+    expect(await screen.findByText("設定をこの端末に保存しました")).toBeVisible();
+
+    await user.selectOptions(textScale, "200");
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+
+    const alertTitle = await screen.findByText("設定を保存できませんでした。");
+    const alert = alertTitle.closest('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert).toHaveTextContent("設定を保存できませんでした。");
+    expect(alert).toHaveTextContent("入力内容は保持されています。もう一度保存してください。");
+    expect(screen.queryByText("設定をこの端末に保存しました")).toBeNull();
+    expect(textScale).toHaveValue("200");
+    expect(onTextScalePreview).toHaveBeenLastCalledWith(200);
+    expect(client.saveAttempts).toBe(2);
+
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+    expect(await screen.findByText("設定をこの端末に保存しました")).toBeVisible();
+    expect(screen.queryByText("設定を保存できませんでした。")).toBeNull();
+    expect(client.saveAttempts).toBe(3);
+  });
+
+  it("merges an external settings snapshot without rolling back untouched fields", async () => {
+    const user = userEvent.setup();
+    const client = new MemoryAppClient();
+    const initialBootstrap = await client.bootstrap();
+    const { rerender } = render(
+      <SettingsView
+        client={client}
+        bootstrap={initialBootstrap}
+        onSettingsSaved={() => undefined}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "テーマ" }), "dark");
+
+    const updatedBootstrap = {
+      ...initialBootstrap,
+      settings: {
+        ...initialBootstrap.settings,
+        theme: "system" as const,
+        textScalePercent: 250 as const,
+      },
+    };
+    rerender(
+      <SettingsView
+        client={client}
+        bootstrap={updatedBootstrap}
+        onSettingsSaved={() => undefined}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "テーマ" })).toHaveValue("dark");
+      expect(screen.getByRole("combobox", { name: "文字表示倍率" })).toHaveValue("250");
+    });
+
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+    await waitFor(async () => {
+      const saved = await client.bootstrap();
+      expect(saved.settings.theme).toBe("dark");
+      expect(saved.settings.textScalePercent).toBe(250);
+    });
+  });
+
+  it("keeps input changed while a save is pending when the response succeeds", async () => {
+    const user = userEvent.setup();
+    const client = new DeferredSettingsClient([]);
+    const onSettingsSaved = vi.fn();
+    const onTextScalePreview = vi.fn();
+    const initialBootstrap = await client.bootstrap();
+    render(
+      <SettingsView
+        client={client}
+        bootstrap={initialBootstrap}
+        onSettingsSaved={onSettingsSaved}
+        onTextScalePreview={onTextScalePreview}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "文字表示倍率" }), "250");
+    await user.click(screen.getByRole("button", { name: "設定を保存" }));
+    await waitFor(() => expect(client.requestedSettings).not.toBeNull());
+    expect(client.requestedSettings?.textScalePercent).toBe(250);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "テーマ" }), "dark");
+    await user.selectOptions(screen.getByRole("combobox", { name: "文字表示倍率" }), "200");
+    act(() => {
+      client.resolveSave?.();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "テーマ" })).toHaveValue("dark");
+      expect(screen.getByRole("combobox", { name: "文字表示倍率" })).toHaveValue("200");
+    });
+    expect(screen.queryByText("設定をこの端末に保存しました")).toBeNull();
+    expect(onSettingsSaved).toHaveBeenCalledWith(
+      expect.objectContaining({ theme: "system", textScalePercent: 250 }),
+    );
+    expect(onTextScalePreview).toHaveBeenLastCalledWith(200);
+    expect((await client.bootstrap()).settings.theme).toBe("system");
+  });
+});
 
 describe("Google Calendar settings", () => {
   it("starts the app-managed OAuth flow without requiring a JSON import", async () => {

@@ -3,5 +3,5 @@
   "identifier": "analog-clock",
   "description": "Analog clock window invokes only allowlisted application commands.",
   "windows": ["analog-clock"],
-  "permissions": []
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
 }

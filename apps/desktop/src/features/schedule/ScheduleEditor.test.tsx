@@ -95,10 +95,14 @@ describe("ScheduleEditor", () => {
     const end = screen.getByLabelText("終了時刻");
     const startChoice = screen.getByLabelText("開始時刻の候補");
     const endChoice = screen.getByLabelText("終了時刻の候補");
-    expect(startChoice).toHaveAttribute("title", "開始時刻の候補");
-    expect(endChoice).toHaveAttribute("title", "終了時刻の候補");
+    expect(startChoice).not.toHaveAttribute("title");
+    expect(endChoice).not.toHaveAttribute("title");
     expect(startChoice.parentElement).toHaveClass("time-input__choice-trigger");
     expect(endChoice.parentElement).toHaveClass("time-input__choice-trigger");
+    fireEvent.mouseEnter(startChoice);
+    expect(await screen.findByRole("tooltip", { name: "開始時刻の候補" })).toBeVisible();
+    fireEvent.mouseLeave(startChoice);
+    expect(screen.queryByRole("tooltip", { name: "開始時刻の候補" })).not.toBeInTheDocument();
     fireEvent.change(start, { target: { value: "10:07" } });
     expect(start).toHaveValue("10:07");
     expect(end).toHaveValue("10:37");

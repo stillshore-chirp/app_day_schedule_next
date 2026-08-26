@@ -99,7 +99,7 @@ describe("timer contracts", () => {
 });
 
 describe("settingsSchema", () => {
-  it("accepts the mild theme and rejects unknown theme names", () => {
+  it("accepts supported themes and text scales while defaulting old settings to 100%", () => {
     const settings = {
       theme: "mild",
       locale: "ja",
@@ -120,6 +120,9 @@ describe("settingsSchema", () => {
     };
 
     expect(settingsSchema.safeParse(settings).success).toBe(true);
+    expect(settingsSchema.parse(settings).textScalePercent).toBe(100);
+    expect(settingsSchema.safeParse({ ...settings, textScalePercent: 250 }).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...settings, textScalePercent: 225 }).success).toBe(false);
     expect(settingsSchema.safeParse({ ...settings, theme: "sepia" }).success).toBe(false);
   });
 });

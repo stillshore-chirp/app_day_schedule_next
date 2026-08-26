@@ -1,20 +1,36 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Settings } from "../../shared/contracts";
 import { MemoryAppClient } from "../../shared/ipc/memory-client";
 import { AnalogClockApp } from "./AnalogClockApp";
+
+const listenMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@tauri-apps/api/event", () => ({ listen: listenMock }));
 
 afterEach(() => {
   cleanup();
   localStorage.clear();
   delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset.textScale;
+  delete document.documentElement.dataset.textScaleLevel;
+  delete document.documentElement.dataset.windowKind;
+  delete document.documentElement.dataset.window;
+  document.documentElement.style.removeProperty("--app-font-scale-percent");
+  document.documentElement.style.removeProperty("--app-font-scale-factor");
+  document.documentElement.style.removeProperty("font-size");
+  delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  listenMock.mockReset();
 });
 
 describe("AnalogClockApp", () => {
   it("keeps the clock dominant and opens migrated controls on demand", async () => {
     localStorage.setItem("day-schedule-next.analog-clock-theme", "dark");
     const client = new MemoryAppClient();
+    const bootstrap = await client.bootstrap();
+    await client.updateSettings({ ...bootstrap.settings, textScalePercent: 250 });
     const resize = vi.spyOn(client, "resizeAnalogClockWindow");
     const setAlwaysOnTop = vi.spyOn(client, "setWindowAlwaysOnTop");
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -30,9 +46,11 @@ describe("AnalogClockApp", () => {
     expect(screen.getByText(/\d{4}\/\d{2}\/\d{2}.*\d{2}:\d{2}:\d{2}/)).toBeVisible();
     expect(screen.queryByRole("dialog", { name: "時計の設定" })).toBeNull();
     const pin = await screen.findByRole("button", { name: "常に手前に固定" });
-    expect(pin).toHaveAttribute("title", "常に手前に固定");
     expect(pin).toHaveAttribute("aria-pressed", "false");
     await waitFor(() => expect(pin).toBeEnabled());
+    await user.hover(pin);
+    expect(await screen.findByRole("tooltip", { name: "常に手前に固定" })).toBeVisible();
+    await user.unhover(pin);
     await user.click(pin);
     expect(setAlwaysOnTop).toHaveBeenCalledWith("analog-clock", true);
     expect(await screen.findByRole("button", { name: "常に手前を解除" })).toHaveAttribute(
@@ -46,6 +64,8 @@ describe("AnalogClockApp", () => {
     expect(screen.getByRole("slider", { name: "秒針音の音量" })).toHaveValue("50");
     expect(screen.queryByRole("combobox", { name: /音声出力/ })).toBeNull();
     expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(document.documentElement.dataset.textScale).toBe("250");
+    expect(document.documentElement.dataset.textScaleLevel).toBe("extra");
 
     await user.click(screen.getByRole("button", { name: "サイズ変更（1×）" }));
     expect(resize).toHaveBeenCalledWith(1.5);
@@ -124,5 +144,72 @@ describe("AnalogClockApp", () => {
     expect(
       screen.getByText(/秒針音を開始できませんでした。OSの音量と音声出力を確認/),
     ).toBeVisible();
+  });
+
+  it("subscribes to native settings updates and unregisters the listener on unmount", async () => {
+    type SettingsEvent = { event: string; id: number; payload: Settings };
+    const unlisten = vi.fn();
+    let onSettingsUpdated: ((event: SettingsEvent) => void) | undefined;
+    listenMock.mockImplementation(
+      (_eventName: string, listener: (event: SettingsEvent) => void) => {
+        onSettingsUpdated = listener;
+        return Promise.resolve(unlisten);
+      },
+    );
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+
+    const client = new MemoryAppClient();
+    const currentSettings = (await client.bootstrap()).settings;
+    const updatedSettings: Settings = { ...currentSettings, textScalePercent: 200 };
+    await client.updateSettings(updatedSettings);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <AnalogClockApp client={client} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(listenMock).toHaveBeenCalledWith("settings-updated", expect.any(Function));
+      expect(onSettingsUpdated).toBeTypeOf("function");
+    });
+    act(() => {
+      onSettingsUpdated?.({
+        event: "settings-updated",
+        id: 1,
+        payload: updatedSettings,
+      });
+    });
+    expect(document.documentElement.dataset.textScale).toBe("200");
+
+    unmount();
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles native settings listener registration failure", async () => {
+    listenMock.mockRejectedValueOnce(new Error("event permission denied"));
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const unhandledRejection = vi.fn();
+    window.addEventListener("unhandledrejection", unhandledRejection);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AnalogClockApp client={new MemoryAppClient()} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() =>
+      expect(listenMock).toHaveBeenCalledWith("settings-updated", expect.any(Function)),
+    );
+    await Promise.resolve();
+    window.removeEventListener("unhandledrejection", unhandledRejection);
+    expect(unhandledRejection).not.toHaveBeenCalled();
   });
 });

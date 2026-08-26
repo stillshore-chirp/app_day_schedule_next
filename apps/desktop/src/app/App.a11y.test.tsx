@@ -10,6 +10,13 @@ import { useUiStore } from "./ui-store";
 
 afterEach(() => {
   cleanup();
+  delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset.textScale;
+  delete document.documentElement.dataset.textScaleLevel;
+  delete document.documentElement.dataset.windowKind;
+  delete document.documentElement.dataset.window;
+  document.documentElement.style.removeProperty("--app-font-scale-percent");
+  document.documentElement.style.removeProperty("--app-font-scale-factor");
   useUiStore.setState({
     activeView: "today",
     selectedDate: new Date(),
@@ -126,6 +133,8 @@ describe("App accessibility", () => {
     );
     await user.click(await screen.findByRole("button", { name: "設定" }));
     await screen.findByRole("button", { name: "Google カレンダーに接続" });
+    await user.selectOptions(screen.getByRole("combobox", { name: "文字表示倍率" }), "250");
+    expect(document.documentElement.dataset.textScale).toBe("250");
 
     const result = await act(() =>
       axe.run(container, {

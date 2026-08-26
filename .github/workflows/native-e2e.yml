@@ -131,14 +131,27 @@ jobs:
           path: target/debug/bundle/
           if-no-files-found: error
           retention-days: 7
-      - name: Upload redacted failure diagnostics
+      - name: Upload allowlisted synthetic failure screenshots
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: native-e2e-failure-${{ matrix.label }}
           path: |
-            apps/desktop/test-results/
-            apps/desktop/logs/
-            apps/desktop/wdio-logs/
+            apps/desktop/test-results/native-settings-text-100.png
+            apps/desktop/test-results/native-settings-text-250.png
+            apps/desktop/test-results/native-today-text-250.png
+            apps/desktop/test-results/native-today-text-250-narrow.png
+            apps/desktop/test-results/native-today-readable-list-text-250.png
+            apps/desktop/test-results/native-compact-text-250.png
+            apps/desktop/test-results/native-compact-actions-text-250.png
+            apps/desktop/test-results/native-analog-clock-text-250.png
+            apps/desktop/test-results/native-analog-clock-minimum.png
+            apps/desktop/test-results/visual-diff/native-today.png
+            apps/desktop/test-results/visual-diff/native-week.png
+            apps/desktop/test-results/visual-diff/native-template-editor.png
+            apps/desktop/test-results/visual-diff/native-compact.png
+            apps/desktop/test-results/visual-diff/native-conflict.png
+            apps/desktop/test-results/visual-diff/native-google-calendar-recovery.png
+            apps/desktop/test-results/visual-diff/native-google-calendar-recovery-text-200.png
           if-no-files-found: ignore
           retention-days: 7

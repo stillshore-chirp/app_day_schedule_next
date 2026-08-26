@@ -39,10 +39,11 @@ let requiredSnapshots = [
 let channelTolerance = 36
 let mismatchRatioTolerance = 0.04
 let canonicalSnapshotSizes: [String: (width: Int, height: Int)] = [
-    // WebKit element screenshots append the native titlebar inset below the
-    // verified 1024x640 app-shell rect (32px on local Retina, 28px on CI 1x).
-    // Compare the product-owned rect and exclude only that trailing blank area.
+    // WebKit screenshots can append the native titlebar inset below the verified
+    // product-owned rect (32px on local Retina, 28px on CI 1x). Compare only the
+    // logical client area and exclude that trailing native decoration.
     "native-today.png": (1024, 640),
+    "native-compact.png": (420, 640),
 ]
 
 func loadRGBA(_ url: URL, canonicalSize: (width: Int, height: Int)? = nil) throws -> RGBAImage {

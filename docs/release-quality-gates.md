@@ -36,7 +36,7 @@ Day Schedule Next を「出荷可能」と呼ぶための最終ゲートです�
 - pointer drag と keyboard / direct edit equivalence。
 - keyboard-only critical flows、visible focus、accessible name、status announcement。
 - WCAG 2.2 AA を目標に P0 なし。
-- empty / loading / offline / conflict / error / permission / 500 items / 200% text。
+- empty / loading / offline / conflict / error / permission / 500 items / 100%・200%・250% text。
 - user value、熟練者効率、満足感・信頼感、反証レビューの証跡。
 
 ## RG-06 Security
