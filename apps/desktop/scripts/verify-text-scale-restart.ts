@@ -13,6 +13,7 @@ function runPhase(phase: "persist" | "restore", dataDirectory: string): Promise<
         DAY_SCHEDULE_TEST_DATA_DIR: dataDirectory,
         TEXT_SCALE_RESTART_PHASE: phase,
       },
+      shell: process.platform === "win32",
       stdio: "inherit",
     });
     child.once("error", reject);
