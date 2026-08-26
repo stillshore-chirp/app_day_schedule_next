@@ -87,6 +87,12 @@ root、Skill、docs、tool ruleへ同じ長文を複製
 - review未提供時は代替自己reviewと未確認範囲を記録する。
 - merge、close、releaseは別の明示指示がある場合だけ行う。
 
+## サブエージェント運用
+
+委任、再監査、検証段階、risk lane台帳の正本は [`docs/agent-harness.md`](../agent-harness.md) のSubagent orchestrationとします。root `AGENTS.md`は全agentが到達する短い入口だけを持ち、nested rule、Skill、adapterへ同じ運用本文を複製しません。
+
+運用を変更する時は、積極利用と重複防止の両方を保ちます。新しい専門riskを独立laneへ委任できることを維持しつつ、同一HEADの重複監査、根拠のない再実行、過剰なfork文脈を増やさないことをreviewします。
+
 ## Issueと対象面
 
 - Issueは [`14-issue-quality-gate.md`](14-issue-quality-gate.md) に従い、理由、根拠、現在と目標、acceptance、riskを記録する。
