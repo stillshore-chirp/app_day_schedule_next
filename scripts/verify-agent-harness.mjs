@@ -52,6 +52,38 @@ function requireContractBlock(file, contractId, expected) {
   }
 }
 
+function requireHeadingBlock(file, heading, expected, ordered = false) {
+  if (!exists(file)) return;
+  const text = read(file);
+  const marker = text.indexOf(heading);
+  if (marker < 0) {
+    fail(`${file}: heading ${JSON.stringify(heading)} is missing`);
+    return;
+  }
+  if (text.indexOf(heading, marker + heading.length) >= 0) {
+    fail(
+      `${file}: heading ${JSON.stringify(heading)} must appear exactly once`,
+    );
+    return;
+  }
+  const nextHeading = text.indexOf("\n## ", marker + heading.length);
+  const block = text.slice(marker, nextHeading < 0 ? text.length : nextHeading);
+  let previous = -1;
+  for (const value of expected) {
+    const position = block.indexOf(value);
+    if (position < 0) {
+      fail(
+        `${file}: section ${JSON.stringify(heading)} must contain ${JSON.stringify(value)}`,
+      );
+    } else if (ordered && position <= previous) {
+      fail(
+        `${file}: section ${JSON.stringify(heading)} has out-of-order ${JSON.stringify(value)}`,
+      );
+    }
+    previous = position;
+  }
+}
+
 function requirePackageScripts(expected) {
   if (!exists("package.json")) return;
   let packageJson;
@@ -357,9 +389,14 @@ requireText("docs/agent-harness.md", "Hard gateとheuristic");
 requireText("docs/agent-harness.md", "Instruction budget");
 requireText("docs/agent-harness.md", "clean review");
 requireText("docs/agent-harness.md", "Windows");
-requireText("AGENTS.md", "risk lane");
+requireHeadingBlock("AGENTS.md", "## 1. 作業開始", [
+  "包括レビュー",
+  "同一verified snapshotと同一risk lane集合",
+  "初回と、必要な修正後の再レビューまでで原則収束",
+  "docs/agent-harness.md",
+]);
 requireText("docs/agent-harness.md", "同一HEAD・同一risk laneの独立監査は原則1回");
-requireText("docs/agent-harness.md", "full-history forkを既定にしません");
+requireText("docs/agent-harness.md", "全履歴の共有を既定にせず");
 requireText("docs/agent-harness.md", "risk lane台帳");
 requireText("docs/ai-governance/13-maintenance-policy.md", "サブエージェント運用");
 requireText("docs/agent-principles.md", "重複回数だけで抽象化を強制しない");
@@ -368,6 +405,77 @@ requireText("docs/ai-governance/13-maintenance-policy.md", "GitHub共同作業�
 requireText("docs/ai-governance/14-issue-quality-gate.md", "現在と対応後のユーザー体験");
 requireText("docs/ai-governance/15-agent-harness-compatibility.md", "alwaysApply: false");
 
+requireContractBlock(
+  "docs/agent-harness.md",
+  "DSN-COMPREHENSIVE-REVIEW-ROUNDS",
+  [
+    "同一のverified snapshotと同一のrisk lane集合",
+    "review機能、実行環境が異なっても",
+    "latest meaningful changeを含む配送候補HEAD",
+    "初回包括レビューを1回",
+    "修正後の再レビューを1回",
+    "3回目以降の包括レビューは原則実行しない",
+    "未解決のP0またはP1",
+    "セキュリティ、秘密情報、データ整合性、破壊的操作",
+    "新しい変更pathまたはrisk lane",
+    "対象漏れ、証拠不足、一次証拠との矛盾",
+    "受け入れ条件またはhard gateを満たさない新しい証拠",
+    "失効した証拠、対象risk lane、変更path、確認する具体的な問い",
+    "P2以下の指摘だけが残る場合",
+    "verifierの正しさ",
+    "non-blockingと判断した根拠",
+    "review threadへの回答",
+    "回帰testは包括レビューラウンドへ数えません",
+    "回数制限を迂回しません",
+    "review収束後に配送対象の最終HEADを確定",
+    "最終HEADで必要なfull gateを原則1回",
+    "生成物変更、環境変更、証拠期限切れ",
+  ],
+);
+requireHeadingBlock(
+  "docs/agent-harness.md",
+  "## 10. 包括レビュー収束",
+  [
+    "実装中は変更pathに対応するfocused testを実行する",
+    "配送候補HEADで初回包括レビューを実行する",
+    "指摘修正後は変更pathのfocused testを実行する",
+    "必要な場合だけ2回目の包括レビューを実行する",
+    "review収束後に配送対象の最終HEADを確定する",
+    "最終HEADで必要なfull gateを原則1回実行する",
+  ],
+  true,
+);
+requireHeadingBlock("docs/agent-harness.md", "## 13. Subagent orchestration", [
+  "| review round |",
+  "ラウンド外のfocused確認はnot counted",
+  "| verified snapshot |",
+  "| reviewed risk lanes |",
+  "前回snapshotから追加・変更されたpath",
+  "| status |",
+  "| invalidation condition |",
+  "| additional review justification |",
+]);
+requireContractBlock(
+  "docs/ai-governance/13-maintenance-policy.md",
+  "DSN-REVIEW-ROUND-CANONICAL-PLACEMENT",
+  [
+    "tool非依存の唯一の詳細正本",
+    "root `AGENTS.md`には全agentが到達する短い入口だけ",
+    "nested `AGENTS.md`、adapter、Skillへ契約本文や数え方を複製しません",
+    "固有の起動方法は共有正本とmachine verifierへ追加しません",
+    "正本への薄い参照",
+  ],
+);
+for (const file of [
+  ...nestedRules,
+  ...canonicalSkills,
+  ...claudeRules,
+  ...claudeSkills,
+  ...cursorRules,
+]) {
+  rejectText(file, "DSN-COMPREHENSIVE-REVIEW-ROUNDS");
+  rejectText(file, "DSN-REVIEW-ROUND-CANONICAL-PLACEMENT");
+}
 requireContractBlock("docs/testing/index.md", "DSN-RISK-BASED-DELIVERY", [
   "| G: governance / docs |",
   "| U: UI / application |",
