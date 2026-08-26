@@ -4269,6 +4269,18 @@ tbody tr:focus {
   grid-template-rows: minmax(0, 1fr) auto auto;
 }
 
+:root[data-text-scale-level="high"] .timeline-canvas,
+:root[data-text-scale-level="extra"] .timeline-canvas {
+  margin-left: 114px;
+}
+
+:root[data-text-scale-level="high"] .timeline-hour span,
+:root[data-text-scale-level="extra"] .timeline-hour span {
+  width: 96px;
+  overflow: visible;
+  white-space: nowrap;
+}
+
 :root[data-text-scale-level="high"] .workspace-main,
 :root[data-text-scale-level="extra"] .workspace-main {
   position: relative;
@@ -4542,6 +4554,17 @@ tbody tr:focus {
   max-width: 100%;
   height: auto;
   overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+:root[data-text-scale-level="high"] .compact-current h2,
+:root[data-text-scale-level="high"] .compact-next h2,
+:root[data-text-scale-level="extra"] .compact-current h2,
+:root[data-text-scale-level="extra"] .compact-next h2 {
+  max-width: 100%;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
   white-space: normal;
 }
 

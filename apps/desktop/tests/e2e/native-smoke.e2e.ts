@@ -1198,8 +1198,21 @@ describe("Day Schedule Next native smoke", () => {
       const history = document.querySelector<HTMLElement>(".history-actions");
       const dock = document.querySelector<HTMLElement>(".now-dock");
       const readableList = document.querySelector<HTMLElement>(".timeline-readable-list");
+      const timelineCanvas = document.querySelector<HTMLElement>(".timeline-canvas");
       const alarmText = dock?.querySelector<HTMLElement>(".now-dock__alarm");
-      if (!shell || !workspace || !history || !dock || !readableList || !alarmText) {
+      const hourNine = Array.from(
+        document.querySelectorAll<HTMLElement>(".timeline-hour span"),
+      ).find((label) => label.textContent?.trim() === "09:00");
+      if (
+        !shell ||
+        !workspace ||
+        !history ||
+        !dock ||
+        !readableList ||
+        !timelineCanvas ||
+        !alarmText ||
+        !hourNine
+      ) {
         throw new Error("720px / 250% Today layout was incomplete");
       }
       const viewportWidth = document.documentElement.clientWidth;
@@ -1225,6 +1238,12 @@ describe("Day Schedule Next native smoke", () => {
       alarmRange.selectNodeContents(alarmText);
       const alarmTextRects = Array.from(alarmRange.getClientRects());
       if (alarmTextRects.length === 0) throw new Error("720px / 250% Today alarm text was empty");
+      const hourNineRect = hourNine.getBoundingClientRect();
+      const hourNineRange = document.createRange();
+      hourNineRange.selectNodeContents(hourNine);
+      const hourNineTextRects = Array.from(hourNineRange.getClientRects());
+      if (hourNineTextRects.length === 0) throw new Error("720px / 250% hour label was empty");
+      const timelineCanvasRect = timelineCanvas.getBoundingClientRect();
       const readableButtons = Array.from(
         readableList.querySelectorAll<HTMLButtonElement>("button"),
       );
@@ -1250,6 +1269,17 @@ describe("Day Schedule Next native smoke", () => {
         ),
         alarmHorizontalOverflow: alarmText.scrollWidth - alarmText.clientWidth,
         alarmVerticalOverflow: alarmText.scrollHeight - alarmText.clientHeight,
+        hourLabelContentInsideElement: hourNineTextRects.every(
+          (rect) =>
+            rect.left >= hourNineRect.left - 1 &&
+            rect.right <= hourNineRect.right + 1 &&
+            rect.top >= hourNineRect.top - 1 &&
+            rect.bottom <= hourNineRect.bottom + 1,
+        ),
+        hourLabelSeparatedFromTimeline: hourNineTextRects.every(
+          (rect) => rect.right <= timelineCanvasRect.left - 1,
+        ),
+        hourLabelHorizontalOverflow: hourNine.scrollWidth - hourNine.clientWidth,
         dockAtBottom: Math.abs(dock.scrollTop - dockMaxScroll) <= 1,
         dockInsideViewport: isInsideViewport(dock),
         historyButtonsInsideViewport: Array.from(
@@ -1272,6 +1302,9 @@ describe("Day Schedule Next native smoke", () => {
     expect(narrowTextGeometry.alarmContentInsideDock).toBe(true);
     expect(narrowTextGeometry.alarmHorizontalOverflow).toBeLessThanOrEqual(1);
     expect(narrowTextGeometry.alarmVerticalOverflow).toBeLessThanOrEqual(1);
+    expect(narrowTextGeometry.hourLabelContentInsideElement).toBe(true);
+    expect(narrowTextGeometry.hourLabelSeparatedFromTimeline).toBe(true);
+    expect(narrowTextGeometry.hourLabelHorizontalOverflow).toBeLessThanOrEqual(1);
     expect(narrowTextGeometry.workspaceHeight).toBeGreaterThan(0);
     expect(narrowTextGeometry.workspaceAtBottom).toBe(true);
     expect(narrowTextGeometry.dockAtBottom).toBe(true);
@@ -2682,7 +2715,12 @@ describe("Day Schedule Next native smoke", () => {
       const shell = document.querySelector<HTMLElement>(".compact-shell");
       const agenda = document.querySelector<HTMLElement>(".compact-agenda");
       const actions = document.querySelector<HTMLElement>(".compact-actions");
-      if (!shell || !agenda || !actions) throw new Error("250% Compact layout was incomplete");
+      const titles = Array.from(
+        document.querySelectorAll<HTMLElement>(".compact-current h2, .compact-next h2"),
+      );
+      if (!shell || !agenda || !actions || titles.length !== 2) {
+        throw new Error("250% Compact layout was incomplete");
+      }
       shell.scrollTop = shell.scrollHeight;
       const actionButtons = Array.from(actions.querySelectorAll<HTMLButtonElement>("button"));
       if (actionButtons.length === 0) throw new Error("250% Compact actions were not rendered");
@@ -2709,6 +2747,22 @@ describe("Day Schedule Next native smoke", () => {
         );
       });
       const maxShellScroll = Math.max(0, shell.scrollHeight - shell.clientHeight);
+      const titleContentFits = titles.every((title) => {
+        const titleRect = title.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(title);
+        const textRects = Array.from(range.getClientRects());
+        return (
+          textRects.length > 0 &&
+          textRects.every(
+            (rect) =>
+              rect.left >= titleRect.left - 1 &&
+              rect.right <= titleRect.right + 1 &&
+              rect.top >= titleRect.top - 1 &&
+              rect.bottom <= titleRect.bottom + 1,
+          )
+        );
+      });
       const overflowingElements = Array.from(shell.querySelectorAll<HTMLElement>("*"))
         .filter((element) => {
           const rect = element.getBoundingClientRect();
@@ -2734,6 +2788,10 @@ describe("Day Schedule Next native smoke", () => {
         scrollbarWidth: Math.max(0, shell.offsetWidth - shell.clientWidth),
         shellAtBottom: Math.abs(shell.scrollTop - maxShellScroll) <= 1,
         shellScrollable: shell.scrollHeight > shell.clientHeight,
+        titleContentFits,
+        titleHorizontalOverflow: Math.max(
+          ...titles.map((title) => title.scrollWidth - title.clientWidth),
+        ),
       };
     });
     expect(compactTextGeometry.rootFontSize).toBeGreaterThanOrEqual(40);
@@ -2743,6 +2801,8 @@ describe("Day Schedule Next native smoke", () => {
     );
     expect(compactTextGeometry.shellScrollable).toBe(true);
     expect(compactTextGeometry.shellAtBottom).toBe(true);
+    expect(compactTextGeometry.titleContentFits).toBe(true);
+    expect(compactTextGeometry.titleHorizontalOverflow).toBeLessThanOrEqual(1);
     expect(compactTextGeometry.actionsReachable).toBe(true);
     expect(compactTextGeometry.actionButtonsReachable).toBe(true);
     expect(compactTextGeometry.actionsHeight).toBeGreaterThan(0);

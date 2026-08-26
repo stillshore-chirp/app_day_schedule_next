@@ -182,6 +182,18 @@ describe("mild theme contrast", () => {
     expect(stylesheet).toContain(
       ':root[data-text-scale-level="extra"] .compact-actions .button {\n  max-width: 100%;',
     );
+    expect(stylesheet).toContain(
+      ':root[data-text-scale-level="extra"] .compact-next h2 {\n  max-width: 100%;\n  overflow: visible;\n  overflow-wrap: anywhere;',
+    );
+  });
+
+  it("reserves a scale-aware gutter for complete timeline hour labels", () => {
+    expect(stylesheet).toContain(
+      ':root[data-text-scale-level="high"] .timeline-canvas,\n:root[data-text-scale-level="extra"] .timeline-canvas {\n  margin-left: 114px;',
+    );
+    expect(stylesheet).toContain(
+      ':root[data-text-scale-level="extra"] .timeline-hour span {\n  width: 96px;\n  overflow: visible;\n  white-space: nowrap;',
+    );
   });
 
   it("wraps high-scale Now Dock alarm text with an auto-growing block", () => {
