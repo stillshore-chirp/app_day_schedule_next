@@ -7,11 +7,15 @@ import test from "node:test";
 import {
   actionPinViolations,
   collectSkillIdentities,
+  DEFAULT_ROOT,
   parseFrontmatter,
+  parseWorkflowYaml,
   renderedMarkdownLinks,
   taskPathsOverlap,
   validateTaskStateDocument,
+  validateWorkflowInventory,
   validateWorkflowActions,
+  WORKFLOW_PATHS,
 } from "./validate-governance.mjs";
 
 function fails(callback, pattern) {
@@ -157,4 +161,33 @@ test("workflow Actions require lowercase full SHA pins and version comments", ()
     () => validateWorkflowActions(valid.replace("actions/checkout@" + sha, "actions/checkout@actions-ref"), "fixture.yml"),
     /lowercase 40-character commit SHA/,
   );
+});
+
+test("workflow inventory is exactly the allowlisted set", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "day-schedule-workflows-"));
+  try {
+    const workflowDirectory = path.join(root, ".github/workflows");
+    fs.mkdirSync(workflowDirectory, { recursive: true });
+    for (const workflow of WORKFLOW_PATHS) {
+      const file = path.join(root, workflow);
+      fs.writeFileSync(file, "name: fixture\n");
+    }
+    fs.writeFileSync(path.join(workflowDirectory, "unexpected.yml"), "name: unexpected\n");
+    fails(() => validateWorkflowInventory(root), /workflow inventory mismatch/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+  assert.deepEqual(validateWorkflowInventory(DEFAULT_ROOT), [...WORKFLOW_PATHS].sort());
+});
+
+test("workflow YAML parser rejects an invalidly indented sequence fixture", () => {
+  const invalidFixture = [
+    "jobs:",
+    "  build:",
+    "    steps:",
+    "      - name: first",
+    "        run: echo first",
+    "       - name: second",
+  ].join("\n");
+  fails(() => parseWorkflowYaml(invalidFixture, "invalid-workflow.yml"), /indentation|sequence/);
 });

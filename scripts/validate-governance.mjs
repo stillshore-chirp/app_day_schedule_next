@@ -865,6 +865,339 @@ function validateRouterLinks(canonical, routers, root) {
   }
 }
 
+function yamlIndent(raw, label, lineIndex) {
+  if (/^\t/.test(raw)) fail(`${label}: tabs are not valid YAML indentation at line ${lineIndex + 1}`);
+  return /^ */.exec(raw)[0].length;
+}
+
+function stripYamlComment(value) {
+  let quote = null;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote === '"') {
+      if (character === "\\") index += 1;
+      else if (character === '"') quote = null;
+      continue;
+    }
+    if (quote === "'") {
+      if (character === "'" && value[index + 1] === "'") index += 1;
+      else if (character === "'") quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '#' && (index === 0 || /\s/.test(value[index - 1]))) {
+      return value.slice(0, index).trimEnd();
+    }
+  }
+  return value.trimEnd();
+}
+
+function quotedScalar(value, label) {
+  const quote = value[0];
+  let end = -1;
+  if (quote === '"') {
+    for (let index = 1; index < value.length; index += 1) {
+      if (value[index] === "\\") {
+        index += 1;
+      } else if (value[index] === '"') {
+        end = index;
+        break;
+      }
+    }
+  } else if (quote === "'") {
+    for (let index = 1; index < value.length; index += 1) {
+      if (value[index] === "'" && value[index + 1] === "'") {
+        index += 1;
+      } else if (value[index] === "'") {
+        end = index;
+        break;
+      }
+    }
+  }
+  if (end < 0) fail(`${label}: unterminated quoted YAML scalar`);
+  if (value.slice(end + 1).trim()) fail(`${label}: quoted YAML scalar has trailing content`);
+  const literal = value.slice(0, end + 1);
+  if (quote === '"') {
+    try {
+      return JSON.parse(literal);
+    } catch (error) {
+      fail(`${label}: invalid double-quoted YAML scalar (${error instanceof Error ? error.message : String(error)})`);
+    }
+  }
+  return literal.slice(1, -1).replaceAll("''", "'");
+}
+
+function flowScalar(value, label) {
+  const stack = [];
+  let quote = null;
+  let end = -1;
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (quote === '"') {
+      if (character === "\\") index += 1;
+      else if (character === '"') quote = null;
+      continue;
+    }
+    if (quote === "'") {
+      if (character === "'" && value[index + 1] === "'") index += 1;
+      else if (character === "'") quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '[' || character === '{') {
+      stack.push(character);
+    } else if (character === ']' || character === '}') {
+      const expected = character === ']' ? '[' : '{';
+      if (stack.pop() !== expected) fail(`${label}: mismatched YAML flow collection delimiter`);
+      if (stack.length === 0) {
+        end = index;
+        break;
+      }
+    }
+  }
+  if (quote) fail(`${label}: unterminated quoted YAML scalar`);
+  if (stack.length) fail(`${label}: unterminated YAML flow collection`);
+  if (end < 0 || value.slice(end + 1).trim()) fail(`${label}: invalid YAML flow collection`);
+  return value;
+}
+
+function blockScalarIndicator(value) {
+  return /^[|>](?:(?:[+-]?[1-9]?)|(?:[1-9]?[+-]))?$/.test(value);
+}
+
+function yamlScalar(value, label) {
+  const normalized = stripYamlComment(value).trim();
+  if (!normalized) return null;
+  if (blockScalarIndicator(normalized)) return normalized;
+  if (normalized[0] === '"' || normalized[0] === "'") return quotedScalar(normalized, label);
+  if (normalized[0] === '[' || normalized[0] === '{') return flowScalar(normalized, label);
+  if (/:\s/.test(normalized)) fail(`${label}: colon must be quoted in a plain YAML scalar`);
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  if (normalized === "null" || normalized === "~") return null;
+  if (/^[+-]?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(normalized)) return Number(normalized);
+  return normalized;
+}
+
+function yamlMappingEntry(content, label) {
+  let quote = null;
+  let depth = 0;
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index];
+    if (quote === '"') {
+      if (character === "\\") index += 1;
+      else if (character === '"') quote = null;
+      continue;
+    }
+    if (quote === "'") {
+      if (character === "'" && content[index + 1] === "'") index += 1;
+      else if (character === "'") quote = null;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '[' || character === '{') {
+      depth += 1;
+      continue;
+    }
+    if (character === ']' || character === '}') {
+      depth -= 1;
+      if (depth < 0) fail(`${label}: mismatched YAML flow collection delimiter`);
+      continue;
+    }
+    if (character === ':' && depth === 0 && (index === content.length - 1 || /\s/.test(content[index + 1]))) {
+      const key = content.slice(0, index).trim();
+      if (!key) fail(`${label}: YAML mapping key is empty`);
+      return { key: yamlScalar(key, `${label}.key`), value: content.slice(index + 1).trim() };
+    }
+  }
+  if (quote) fail(`${label}: unterminated quoted YAML mapping key`);
+  if (depth) fail(`${label}: unterminated YAML flow collection`);
+  return null;
+}
+
+class WorkflowYamlParser {
+  constructor(source, label) {
+    this.lines = normalize(source).replace(/^\uFEFF/, "").split("\n");
+    this.label = label;
+  }
+
+  record(index) {
+    const raw = this.lines[index];
+    const indent = yamlIndent(raw, this.label, index);
+    return { index, indent, content: stripYamlComment(raw.slice(indent)).trim() };
+  }
+
+  nextMeaningful(index) {
+    let cursor = index;
+    while (cursor < this.lines.length) {
+      yamlIndent(this.lines[cursor], this.label, cursor);
+      const trimmed = this.lines[cursor].trim();
+      if (trimmed && !trimmed.startsWith("#")) return cursor;
+      cursor += 1;
+    }
+    return -1;
+  }
+
+  consumeBlockScalar(index, parentIndent, indicator) {
+    const content = [];
+    let cursor = index + 1;
+    const indentationHint = /[1-9]/.test(indicator)
+      ? parentIndent + Number(indicator.match(/[1-9]/)[0])
+      : null;
+    let contentIndent = indentationHint;
+    while (cursor < this.lines.length) {
+      const raw = this.lines[cursor];
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        content.push("");
+        cursor += 1;
+        continue;
+      }
+      const indent = yamlIndent(raw, this.label, cursor);
+      if (indent <= parentIndent) break;
+      if (indentationHint !== null && indent < indentationHint) {
+        fail(`${this.label}: block scalar indentation is too shallow at line ${cursor + 1}`);
+      }
+      if (contentIndent === null) contentIndent = indent;
+      content.push(raw.slice(Math.min(contentIndent, raw.length)));
+      cursor += 1;
+    }
+    return { value: content.join("\n"), next: cursor };
+  }
+
+  entryValue(entry, index, parentIndent) {
+    const rawValue = stripYamlComment(entry.value).trim();
+    if (blockScalarIndicator(rawValue)) return this.consumeBlockScalar(index, parentIndent, rawValue);
+    if (rawValue) return { value: yamlScalar(rawValue, `${this.label} line ${index + 1}`), next: index + 1 };
+    const child = this.nextMeaningful(index + 1);
+    if (child < 0) return { value: null, next: index + 1 };
+    const childRecord = this.record(child);
+    if (childRecord.content === "...") return { value: null, next: index + 1 };
+    if (childRecord.indent <= parentIndent) return { value: null, next: index + 1 };
+    return this.parseBlock(childRecord.indent, child);
+  }
+
+  parseMapping(indent, start) {
+    const result = {};
+    let cursor = this.nextMeaningful(start);
+    while (cursor >= 0) {
+      const record = this.record(cursor);
+      if (record.content === "...") return { value: result, next: cursor };
+      if (record.indent < indent) return { value: result, next: cursor };
+      if (record.indent > indent) fail(`${this.label}: unexpected YAML indentation at line ${cursor + 1}`);
+      if (/^-(?:\s|$)/.test(record.content)) fail(`${this.label}: sequence item is not valid in a YAML mapping at line ${cursor + 1}`);
+      const entry = yamlMappingEntry(record.content, `${this.label} line ${cursor + 1}`);
+      if (!entry) fail(`${this.label}: expected a YAML mapping entry at line ${cursor + 1}`);
+      if (typeof entry.key !== "string") fail(`${this.label}: YAML mapping keys must be strings at line ${cursor + 1}`);
+      if (Object.hasOwn(result, entry.key)) fail(`${this.label}: duplicate YAML mapping key ${entry.key}`);
+      const parsed = this.entryValue(entry, cursor, indent);
+      result[entry.key] = parsed.value;
+      cursor = this.nextMeaningful(parsed.next);
+    }
+    return { value: result, next: this.lines.length };
+  }
+
+  parseSequence(indent, start) {
+    const result = [];
+    let cursor = this.nextMeaningful(start);
+    while (cursor >= 0) {
+      const record = this.record(cursor);
+      if (record.content === "...") return { value: result, next: cursor };
+      if (record.indent < indent) return { value: result, next: cursor };
+      if (record.indent > indent) fail(`${this.label}: unexpected YAML sequence indentation at line ${cursor + 1}`);
+      if (!/^-(?:\s|$)/.test(record.content)) fail(`${this.label}: expected a YAML sequence item at line ${cursor + 1}`);
+      const rest = record.content.slice(1).trim();
+      if (!rest) {
+        const child = this.nextMeaningful(cursor + 1);
+        if (child >= 0 && this.record(child).indent > indent) {
+          const parsed = this.parseBlock(this.record(child).indent, child);
+          result.push(parsed.value);
+          cursor = this.nextMeaningful(parsed.next);
+        } else {
+          result.push(null);
+          cursor = this.nextMeaningful(cursor + 1);
+        }
+        continue;
+      }
+      const entry = yamlMappingEntry(rest, `${this.label} line ${cursor + 1}`);
+      if (!entry) {
+        result.push(yamlScalar(rest, `${this.label} line ${cursor + 1}`));
+        const next = this.nextMeaningful(cursor + 1);
+        if (next >= 0 && this.record(next).indent > indent) {
+          fail(`${this.label}: scalar YAML sequence item cannot have an indented child at line ${next + 1}`);
+        }
+        cursor = next;
+        continue;
+      }
+      const mapIndent = indent + 2;
+      const item = {};
+      if (typeof entry.key !== "string") fail(`${this.label}: YAML mapping keys must be strings at line ${cursor + 1}`);
+      const first = this.entryValue(entry, cursor, mapIndent);
+      item[entry.key] = first.value;
+      cursor = this.nextMeaningful(first.next);
+      if (cursor >= 0) {
+        const nextRecord = this.record(cursor);
+        if (nextRecord.content !== "..." && nextRecord.indent > indent) {
+          if (nextRecord.indent !== mapIndent) fail(`${this.label}: sequence mapping indentation must be ${mapIndent} spaces at line ${cursor + 1}`);
+          const continuation = this.parseMapping(mapIndent, cursor);
+          for (const [key, value] of Object.entries(continuation.value)) {
+            if (Object.hasOwn(item, key)) fail(`${this.label}: duplicate YAML mapping key ${key}`);
+            item[key] = value;
+          }
+          cursor = this.nextMeaningful(continuation.next);
+        }
+      }
+      result.push(item);
+    }
+    return { value: result, next: this.lines.length };
+  }
+
+  parseBlock(indent, start) {
+    const cursor = this.nextMeaningful(start);
+    if (cursor < 0) fail(`${this.label}: YAML document is empty`);
+    const record = this.record(cursor);
+    if (record.indent !== indent) fail(`${this.label}: YAML block indentation is inconsistent at line ${cursor + 1}`);
+    if (/^-(?:\s|$)/.test(record.content)) return this.parseSequence(indent, cursor);
+    if (yamlMappingEntry(record.content, `${this.label} line ${cursor + 1}`)) return this.parseMapping(indent, cursor);
+    fail(`${this.label}: expected a YAML mapping or sequence at line ${cursor + 1}`);
+  }
+
+  parse() {
+    let start = this.nextMeaningful(0);
+    if (start < 0) fail(`${this.label}: YAML document is empty`);
+    if (this.record(start).content === "---") {
+      start = this.nextMeaningful(start + 1);
+      if (start < 0) fail(`${this.label}: YAML document is empty`);
+    }
+    const root = this.record(start);
+    const parsed = this.parseBlock(root.indent, start);
+    const trailing = this.nextMeaningful(parsed.next);
+    if (trailing >= 0) {
+      if (this.record(trailing).content === "...") {
+        if (this.nextMeaningful(trailing + 1) >= 0) fail(`${this.label}: multiple YAML documents are not supported`);
+      } else {
+        fail(`${this.label}: unexpected YAML content at line ${trailing + 1}`);
+      }
+    }
+    return parsed.value;
+  }
+}
+
+/** Parse a GitHub Actions workflow without installing a YAML package or spawning a process. */
+export function parseWorkflowYaml(source, label = "workflow") {
+  if (typeof source !== "string") fail(`${label}: YAML source must be a string`);
+  return new WorkflowYamlParser(source, label).parse();
+}
+
 function workflowLines(source) {
   return normalize(source).split("\n");
 }
@@ -1065,13 +1398,43 @@ export function validateWorkflowActions(source, file = "workflow") {
 }
 
 function validateWorkflowFile(source, file) {
+  parseWorkflowYaml(source, file);
   if (file.endsWith("/ci.yml")) validateCiWorkflow(source, file);
   else if (file.endsWith("/dependency-audit.yml")) validateDependencyWorkflow(source, file);
   else if (file.endsWith("/native-e2e.yml")) validateNativeWorkflow(source, file);
   validateWorkflowActions(source, file);
 }
 
+function relativeWorkflowPaths(root, workflowPaths) {
+  return workflowPaths.map((workflowPath) => {
+    const file = path.isAbsolute(workflowPath) ? workflowPath : path.join(root, workflowPath);
+    return rel(path.resolve(file), root);
+  }).sort();
+}
+
+/** Enumerate every workflow file and reject anything outside the allowlist. */
+export function workflowInventory(root = DEFAULT_ROOT) {
+  const directory = path.join(path.resolve(root), ".github/workflows");
+  if (!isDirectory(directory)) fail(".github/workflows directory is required");
+  return walkFiles(directory).map((file) => rel(file, path.resolve(root))).sort();
+}
+
+export function validateWorkflowInventory(root = DEFAULT_ROOT, workflowPaths = WORKFLOW_PATHS) {
+  const actual = workflowInventory(root);
+  const expected = relativeWorkflowPaths(path.resolve(root), workflowPaths);
+  const actualSet = new Set(actual);
+  const expectedSet = new Set(expected);
+  const missing = expected.filter((file) => !actualSet.has(file));
+  const unknown = actual.filter((file) => !expectedSet.has(file));
+  if (missing.length || unknown.length || expected.length !== expectedSet.size) {
+    fail(`workflow inventory mismatch: missing=${missing.join(",")} unknown=${unknown.join(",")}`);
+  }
+  return actual;
+}
+
 export function validateWorkflowSemantics(root, workflowPaths = WORKFLOW_PATHS) {
+  const resolvedRoot = path.resolve(root);
+  validateWorkflowInventory(resolvedRoot, workflowPaths);
   for (const workflowPath of workflowPaths) {
     const file = path.isAbsolute(workflowPath) ? workflowPath : path.join(root, workflowPath);
     if (!isFile(file)) fail(`required workflow missing: ${rel(file, root)}`);
