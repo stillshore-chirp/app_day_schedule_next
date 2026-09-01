@@ -57,21 +57,51 @@ test("native E2E and Rust paths remain native-only where possible", () => {
   }
 });
 
-test("dependency and patch inputs select the dependency gate", () => {
+test("root package and Dependabot policy are governance-only", () => {
+  const plan = classifyPaths(["package.json", ".github/dependabot.yml"]);
+
+  assert.equal(plan.classification_ok, true);
+  assert.equal(plan.governance, true);
+  assert.equal(plan.frontend, false);
+  assert.equal(plan.native, false);
+  assert.equal(plan.dependency, false);
+});
+
+test("product dependency and patch inputs select dependency gates", () => {
+  const desktopPackage = classifyPaths(["apps/desktop/package.json"]);
+  assert.equal(desktopPackage.classification_ok, true);
+  assert.equal(desktopPackage.governance, false);
+  assert.equal(desktopPackage.frontend, true);
+  assert.equal(desktopPackage.native, false);
+  assert.equal(desktopPackage.dependency, true);
+
   const plan = classifyPaths([
-    "package.json",
+    "apps/desktop/package.json",
     "pnpm-workspace.yaml",
     "pnpm-lock.yaml",
+    "Cargo.toml",
+    "Cargo.lock",
+    "apps/desktop/src-tauri/Cargo.toml",
+    "rust-toolchain.toml",
+    "deny.toml",
     "patches/brace-expansion@5.0.9.patch",
-    ".github/dependabot.yml",
-    "scripts/verify-patched-dependencies.mjs",
   ]);
 
   assert.equal(plan.classification_ok, true);
   assert.equal(plan.dependency, true);
   assert.equal(plan.frontend, true);
   assert.equal(plan.native, true);
+  assert.equal(plan.governance, false);
+});
+
+test("patched dependency verifier remains governance and dependency scoped", () => {
+  const plan = classifyPaths(["scripts/verify-patched-dependencies.mjs"]);
+
+  assert.equal(plan.classification_ok, true);
   assert.equal(plan.governance, true);
+  assert.equal(plan.frontend, false);
+  assert.equal(plan.native, false);
+  assert.equal(plan.dependency, true);
 });
 
 test("workflow paths are governance-only", () => {

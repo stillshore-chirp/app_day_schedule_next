@@ -73,11 +73,9 @@ const NATIVE_EXACT = new Set([
   "deny.toml",
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
-  "package.json",
 ]);
 
 const DEPENDENCY_EXACT = new Set([
-  "package.json",
   "apps/desktop/package.json",
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
@@ -86,7 +84,6 @@ const DEPENDENCY_EXACT = new Set([
   "apps/desktop/src-tauri/Cargo.toml",
   "rust-toolchain.toml",
   "deny.toml",
-  ".github/dependabot.yml",
   "scripts/verify-patched-dependencies.mjs",
 ]);
 
@@ -199,9 +196,10 @@ export function classifyPath(value) {
     classification.governance = true;
   }
 
-  // The root package/workspace files affect every install and native build.
+  // Workspace and lockfiles affect every install and native build. The root
+  // package only changes verification/control-plane scripts in this product;
+  // product dependency declarations live in the desktop package.
   if (
-    normalized === "package.json" ||
     normalized === "pnpm-workspace.yaml" ||
     normalized === "pnpm-lock.yaml"
   ) {
