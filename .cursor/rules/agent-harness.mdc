@@ -1,7 +1,7 @@
 ---
 description: "Agent harness、governance、adapterを変更する時の正本router"
-globs: "{AGENTS.md,CLAUDE.md,.agents/**/*,.claude/**/*,.cursor/**/*,docs/agent-harness.md,docs/agent-principles.md,docs/ai-governance/**/*,scripts/verify-agent-harness.mjs,.github/ISSUE_TEMPLATE/**/*,.github/pull_request_template.md}"
+globs: "AGENTS.md,CLAUDE.md,.agents/**,.claude/**,.cursor/**,docs/agent-harness.md,docs/agent-principles.md,docs/ai-governance/**,scripts/validate-governance.mjs,.github/ISSUE_TEMPLATE/**,.github/pull_request_template.md"
 alwaysApply: false
 ---
 
-root `AGENTS.md`、`docs/agent-harness.md`、`docs/ai-governance/13-maintenance-policy.md`、`docs/ai-governance/15-agent-harness-compatibility.md` を読んでください。このMDCはpath adapterであり、新しい品質基準を持ちません。
+エージェントルール、Skill、adapter、検証scriptを変更する前に、@docs/agent-harness.md と @docs/ai-governance/13-maintenance-policy.md を読み、Codex・Claude Code・Cursorの到達性、instruction budget、正本とadapterの分離を確認します。形式・参照・budgetの検証には `scripts/validate-governance.mjs` を使います。

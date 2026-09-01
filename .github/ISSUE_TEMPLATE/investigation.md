@@ -1,8 +1,10 @@
 ---
-name: Investigation
+name: 調査
 about: 実装前の調査、原因調査、技術・設計・UX検証
 title: "[Investigation]: "
 ---
+
+<!-- Issueのタイトルと本文は日本語を原則とします。固有名詞、製品名、code identifier、version/path、GitHub構文、[Investigation]のカテゴリ接頭辞は原表記を維持できます。確認済み事実、仮説、未確認事項を分け、公開禁止情報を貼らないでください。 -->
 
 <!-- boundedな内部改善・ガバナンスでは、必須情報を少数sectionへ統合し、非該当章を削除して現在 / 目標workflowを簡潔に記載する。 -->
 

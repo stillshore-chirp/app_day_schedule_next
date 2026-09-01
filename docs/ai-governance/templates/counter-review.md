@@ -1,37 +1,41 @@
-# Counter-review
+# 反証レビュー
 
-## Purpose
+## 目的
 
-実装を正当化せず、completion を拒否する理由を探す。
+このレビューは、実装を正当化するためではなく、完了不可理由を探すために行う。
 
-## Questions
+## 反証観点
 
-- User goal / product fit は曖昧でないか:
-- Today / current / primary action は3秒で分かるか:
-- Selected date / schedule / calendar / scope は明確か:
-- Pointer drag の keyboard / direct edit equivalent はあるか:
-- Empty / offline / conflict / permission / error を混同していないか:
-- Local save / Google sync を誤表示していないか:
-- Data loss / duplicate / silent overwrite path はないか:
-- DST / cross-midnight / recurrence / sleep / resume を見落としていないか:
-- Migration / restore / import に rollback はあるか:
-- macOS / Windows の一方だけで確認していないか:
-- Accessibility P0 はないか:
-- Novice help が expert efficiency を壊していないか:
-- Warning / copy が trust を損ねていないか:
-- Evidence は主張を直接示しているか:
-- Personal data / secret が evidence にないか:
-- 未実行を pass としていないか:
+- ユーザー価値は曖昧ではないか:
+- 初見理解は成立しているか:
+- 主操作は見つかるか:
+- 状態は漏れていないか:
+- エラー回復は十分か:
+- アクセシビリティにP0はないか:
+- 視覚階層は誤誘導していないか:
+- コピーはユーザーを責めていないか:
+- 初心者向け配慮が熟練者効率を壊していないか:
+- 待機・成功・失敗・危険操作が信頼できるか:
+- 証跡は十分か:
+- 未実行検証を成功扱いしていないか:
 
-## Findings
+## 指摘
 
-| Severity | Area | Problem | Evidence | User / data impact | Fix |
-|---|---|---|---|---|---|
-| P0/P1/P2 |  |  |  |  |  |
+| 優先度 | 問題 | 根拠 | 修正案 |
+|---|---|---|---|
+|  |  |  |  |
 
-## Conclusion
+## 結論
 
-- Pass / Fail:
-- Completion blocker:
-- Missing evidence:
-- Remaining risk:
+- Pass/Fail:
+- 完了を拒否する理由:
+- 残リスク:
+
+## Day Schedule Nextの反証入力
+
+- Todayのdate / current / next / primary action:
+- 1分保存と表示snap、23:59 / 日跨ぎ / DST:
+- overlap / 複数current / 500件 / 長い日本語:
+- offline / conflict / auth expired / notification permission:
+- Template replace / delete / restore / importのscopeと回復:
+- macOS / Windows / Compactの差分と未確認範囲:

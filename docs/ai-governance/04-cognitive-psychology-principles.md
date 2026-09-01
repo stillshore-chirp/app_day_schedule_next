@@ -1,69 +1,113 @@
-# Cognitive Psychology and Cognitive Accessibility
+# 認知心理学・認知アクセシビリティ原則
 
-## 1. 作業記憶を使わせない
+この文書は、UI/UXレビューで扱う認知面の原則を、AIエージェントが実行できるチェックへ変換します。
 
-- current date、selected item、target calendar、sync state を画面内に残す。
-- previous screen の time / category / recurrence を覚えないと編集できない構造を避ける。
-- `Quick Block` や `Template` は必要な初回説明と具体例を持つ。
-- internal ID / schema / sync token を出さない。
+## 1. 認知負荷を増やしすぎない
 
-## 2. 記憶より認識
+ユーザーの作業記憶には限界があります。UIは、覚えさせるのではなく、見れば分かる状態を作る必要があります。
 
-- 空き時間、drag handle、selected block、snap、current time を見える手がかりにする。
-- previous values、recent categories、last calendar、saved filters を必要に応じて保持する。
-- validation rule は入力後だけでなく入力中に示す。
-- shortcut は help / menu から参照できる。
+確認事項:
 
-## 3. mental model
+- 画面目的が見出しや文脈で分かるか。
+- 今どこにいるか分かるか。
+- 操作対象や適用範囲が分かるか。
+- 前の画面で見た情報を覚えていないと操作できない状態になっていないか。
+- 内部ID、実装用語、開発者だけが知る分類をユーザーに押し付けていないか。
 
-ユーザーの概念:
+## 2. 記憶より認識を優先する
 
-- 今日の予定。
-- 一日の型。
-- 一時的なブロック。
-- 現在 / 次 / 残り。
-- この端末に保存 / Google へ同期。
+ユーザーに「覚えておく」ことを要求せず、画面上に手がかりを出します。
 
-実装概念 `schedule_items`, `template_blocks`, `outbox`, `mapping`, `etag` を UI 構造に漏らしません。
+確認事項:
 
-## 4. 注意誘導
+- 操作候補が見えるか。
+- 選択中の状態が見えるか。
+- 過去の選択や入力が保持されているか。
+- 必要な条件や制約が、入力後ではなく入力前または入力中に分かるか。
 
-- main action は予定作成 / 調整。
-- current / next は高い優先度だが、編集操作を覆わない。
-- sync conflict / data corruption / restore impact は見逃せない強さにする。
-- routine pending sync は過剰な赤 warning にしない。
-- 同時に複数の強い badge / banner / animation を競合させない。
+## 3. メンタルモデルに合わせる
 
-## 5. 選択肢
+UIは、実装構造ではなく、ユーザーが世界を理解する分類に合わせます。
 
-- basic create では title、time、duration、calendar 等の必要項目を優先する。
-- recurrence、timezone、advanced notification は progressive disclosure。
-- default は安全で、previous setting は user intent に合う範囲で再利用する。
-- conflict resolution は field grouping と recommended action を示すが、silent auto-choice はしない。
+確認事項:
 
-## 6. 失敗と回復
+- 用語がユーザーの業務・目的・生活文脈に合っているか。
+- データ構造の都合が画面構造に漏れていないか。
+- 「作成」「保存」「公開」「送信」「削除」などの結果がユーザーの期待と一致するか。
 
-- drag は preview、Esc、Undo。
-- invalid time は input を保持。
-- offline は local save を保持し retry 状態を示す。
-- auth expiry は再接続しても local data を失わない。
-- restore / import は preview、cancel、backup、rollback。
+## 4. 注意を誘導する
 
-## 7. 初心者と熟練者
+重要なものは、視覚的に自然と見つかる必要があります。
 
-- first-run help は dismiss / reopen 可能。
-- recurring explanation を毎回表示しない。
-- expert は keyboard、duplicate、template、multi-select、saved filter を使える。
-- safety confirmation は destructive / remote impact に絞る。
+確認事項:
 
-## 8. review conversion
+- 主操作が最も見つけやすいか。
+- 警告やエラーが適切に目に入るか。
+- 補助情報が主情報を邪魔していないか。
+- 一度に複数の強調が競合していないか。
 
-```text
+## 5. 選択肢を制御する
+
+選択肢が多すぎると判断に時間がかかります。ただし、必要な選択肢を隠しすぎても迷います。
+
+確認事項:
+
+- 最初に必要な選択肢だけが見えるか。
+- 高度な選択肢は段階的に開示されているか。
+- よく使う操作が、まれな操作より見つけやすいか。
+- デフォルト値は安全で妥当か。
+
+## 6. 失敗を前提にする
+
+ユーザーは入力を間違え、読み違え、戻りたくなります。良いUIはそれを責めず、回復を助けます。
+
+確認事項:
+
+- エラーの場所が分かるか。
+- 原因が分かるか。
+- 修正方法が分かるか。
+- 入力済みデータが失われないか。
+- 取り消し、戻る、再試行、下書き保存が必要な場面で提供されているか。
+
+## 7. 初心者と熟練者を両立する
+
+初見ユーザーに優しいUIは重要ですが、永続的に説明過多である必要はありません。
+
+確認事項:
+
+- 初心者には十分な文脈があるか。
+- 慣れたユーザーは説明を読み飛ばせるか。
+- 反復作業の邪魔になる確認やチュートリアルがないか。
+- 詳細説明は必要な時に参照できる形になっているか。
+
+## 8. AIレビュー時の注意
+
+AIは理論名を並べるだけでは不十分です。必ず次へ変換してください。
+
+```txt
 認知原則
--> timeline / dialog / status 上の観察点
--> Pass / Fail
--> evidence
--> concrete fix
+↓
+画面上の観察点
+↓
+Pass/Fail条件
+↓
+証跡
+↓
+修正案
 ```
 
-理論名だけの指摘は禁止します。
+理論名だけの指摘は禁止です。
+
+## Day Schedule Nextでの適用
+
+Day Schedule Nextでは、ユーザーが保持すべき概念を「今日の予定」「現在・次・残り」「空き時間」「一日のテンプレート」「クイックブロック」「この端末に保存」「Googleへの同期」として画面へ出します。schedule_items、template_blocks、Outbox、sync mapping、optimistic versionなどの内部構造をUIの分類や文言へ漏らしません。
+
+レビューでは次を具体的に確認します。
+
+- Todayでは日付、現在時刻、表示範囲、選択予定、current / next / free time、主操作を同時に理解できる。
+- detail timelineでは分精度、duration、overlap、日跨ぎ、snapを見ながら作成・移動・resizeでき、preview、Esc、Undoまたは直接入力で誤操作から戻れる。
+- Template / Quick Blockでは、適用先の日付、対象件数、既存予定への影響、取り消し方法を記憶や推測に頼らず判断できる。
+- Google接続、offline、conflict、permission、backup / restoreでは、local dataの保持とremoteへの影響を区別して理解できる。
+- Focus、notification、Compactでは、進行中の予定やphaseの変化を過剰な毎秒通知なしに把握できる。
+
+各指摘は「認知原則 → timeline / dialog / status上の観察点 → Pass / Fail条件 → evidence → concrete fix」へ変換し、理論名だけで終わらせません。

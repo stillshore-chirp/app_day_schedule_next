@@ -1,97 +1,123 @@
-# UI Copy and Microcopy
+# UIコピーとマイクロコピー
 
-## 1. 原則
+UIコピーは、ユーザーの理解、予測、安心、回復を支援するための設計要素です。
 
-- ユーザーの言葉を使う。
-- action label は結果を示す。
-- local state と remote state を正確に区別する。
-- error は原因、影響、data retention、recovery を示す。
-- permission / delete / restore / conflict で false reassurance をしない。
+## 1. 基本原則
 
-## 2. 用語
+- ユーザーの言葉で書く。
+- 抽象語より具体語を使う。
+- 操作ラベルは結果を示す。
+- エラーは責めず、回復を示す。
+- 空状態は次の行動を示す。
+- 不安を煽らず、必要なリスクを正確に伝える。
 
-推奨:
+## 2. ボタン・リンク
 
-- `予定`、`一日のテンプレート`、`クイックブロック`、`Google カレンダー`。
-- `この端末に保存済み`、`Google への同期待ち`、`同期済み`。
-- `同期の競合`、`再接続が必要`、`通知が許可されていません`。
+確認事項:
 
-UI へ出さない:
+- 「OK」「実行」「送信」だけで結果が曖昧になっていないか。
+- 何を作成、保存、公開、削除、送信するのか分かるか。
+- 危険操作は対象と影響が分かるか。
+- リンクは遷移先や結果が予測できるか。
 
-- outbox、etag、nextSyncToken、mapping、schema、migration id、raw HTTP status。
+改善例:
 
-technical details は diagnostics / support detail に限定します。
+- 弱い: `実行`
+- 良い: `選択した3件を削除`
 
-## 3. Action labels
+- 弱い: `送信`
+- 良い: `レビュー依頼を送信`
 
-弱い: `OK`, `実行`, `保存`, `削除`。
+## 3. エラー文
 
-具体例:
+エラー文は、最低限次を含めます。
 
-- `予定を作成`
-- `変更を保存`
-- `Google と同期を再試行`
-- `この端末から削除`
-- `この端末と Google から削除`
-- `バックアップを作成して復元`
-- `選択した12件を翌日に移動`
+- 何が起きたか。
+- なぜ起きた可能性があるか。
+- 何に影響するか。
+- ユーザーは何をすればよいか。
 
-## 4. Save / sync
+悪い例:
 
-- local transaction 完了時: `この端末に保存しました。Google への同期を待っています。`
-- remote complete: `Google カレンダーと同期しました。`
-- offline: `この端末には保存済みです。接続が戻ると同期します。`
-- retry: next attempt / manual action を示す。
-
-「保存しました」を remote complete の意味で誤用しません。
-
-## 5. Error format
-
-最低要素:
-
-1. 何が起きたか。
-2. 何に影響するか。
-3. 入力 / local data が保持されているか。
-4. 次にできること。
-
-例:
-
-```text
-Google へ反映できませんでした。この端末の変更は保存されています。接続を確認して「同期を再試行」を選んでください。
+```txt
+エラーが発生しました。
 ```
 
-## 6. Conflict
+良い例:
 
-- conflict した field と remote / local の更新時刻を必要な粒度で示す。
-- `端末の変更を使う`、`Google の変更を使う`、`項目ごとに選ぶ`。
-- recurrence / delete の series scope を明示する。
-- `おすすめ` を出す場合も、理由と影響を示す。
+```txt
+保存できませんでした。通信が一時的に切れている可能性があります。入力内容は保持されています。接続を確認して、もう一度保存してください。
+```
 
-## 7. Permission / lifecycle
+## 4. 空状態
 
-- notification permission の用途と request timing を説明する。
-- denied 時は OS settings への具体導線。
-- complete exit 中の notification 制約を曖昧にしない。
-- tray / background を導入する場合は、終了との違いを明示する。
+空状態は単なる診断表示ではありません。次の行動を示す必要があります。
 
-## 8. Empty / disabled
+確認事項:
 
-- initial empty: 予定作成 / template apply の次 action。
-- search no result: query / filter reset。
-- permission / error を empty に見せない。
-- disabled は理由と有効化条件を keyboard / touch でも確認可能にする。
+- なぜ空なのか分かるか。
+- ユーザーが次に何をできるか分かるか。
+- 初回利用の空と、検索結果なしの空が区別されているか。
+- 権限不足やエラーを空状態として隠していないか。
 
-## 9. Tone
+## 5. disabled文言
+
+disabledは、押せないだけでは不十分です。
+
+確認事項:
+
+- なぜ押せないか分かるか。
+- どうすれば有効になるか分かるか。
+- disabledにするより、押した後に理由を説明する方がよい場面ではないか。
+
+## 6. 成功メッセージ
+
+成功メッセージは、安心と次の見通しを作ります。
+
+確認事項:
+
+- 何が完了したか分かるか。
+- データが保存・送信・公開されたか分かるか。
+- 次にできる行動が分かるか。
+- 取り消しや確認が必要な場合に提供されているか。
+
+## 7. トーン
 
 禁止:
 
-- user を責める。
-- `簡単です`, `当然です`。
-- data risk を曖昧に安心させる。
-- technical detail で user に責任転嫁する。
+- ユーザーを責める。
+- 不必要に怖がらせる。
+- 曖昧に安心させる。
+- 実際より安全に見せる。
+- 実際より危険に見せる。
 
 推奨:
 
-- 事実、影響、回復を短く示す。
-- user work が保持される場合は明示する。
-- destructive impact を具体化する。
+- 事実を短く伝える。
+- 影響を明確にする。
+- 回復手段を示す。
+- データが保持される場合は明示する。
+- ユーザーの作業を尊重する。
+
+## 8. 用語の一貫性
+
+確認事項:
+
+- 同じ概念に同じ名前を使っているか。
+- 開発者用語をUIに出していないか。
+- 略語を説明なしに使っていないか。
+- 日本語と英語の混在が不要な認知負荷になっていないか。
+
+## Day Schedule Nextの用語と結果表示
+
+推奨するユーザー向け用語は、予定、一日のテンプレート、クイックブロック、Google カレンダー、Focus、現在、次、残り、同期の競合、再接続が必要、通知が許可されていませんです。outbox、etag、nextSyncToken、mapping、schema、migration id、raw HTTP statusなどの内部用語は、diagnostics / support detailへ限定します。
+
+保存と同期は、次の状態を区別して書きます。
+
+- local transaction完了: 「この端末に保存しました。Googleへの同期を待っています。」
+- offline: 「この端末には保存済みです。接続が戻ると同期します。」
+- remote反映完了: 「Google カレンダーと同期しました。」
+- sync失敗: 「Googleへ反映できませんでした。この端末の変更は保存されています。接続を確認して『同期を再試行』を選んでください。」
+- conflict: 「同期の競合があります。端末の変更、Googleの変更、項目ごとの選択を確認してください。」
+
+削除、テンプレート適用、restore / import、disconnect / revokeでは、対象、件数、local / remote scope、影響、取り消し・rollback可否をラベルと確認文へ含めます。「保存しました」をremote反映完了の意味で使わず、permission denied、notification delivery failure、complete exitとtray residencyの能力差を成功表示へ混ぜません。

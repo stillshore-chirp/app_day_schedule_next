@@ -1,153 +1,76 @@
 # ガバナンス保守方針
 
-この文書は、AIエージェント向けルールとUI/UXガバナンスを保守する方針です。Codex・Claude Code・Cursorを支援する全体構成は [`docs/agent-harness.md`](../agent-harness.md) を正本とします。
+この文書は、rule、Skill、adapter、validator、fixture、self-test、workflowを増減・変更する判断基準です。3製品の読者、委任、evidence、task-stateの詳細は [`docs/agent-harness.md`](../agent-harness.md) を正本とします。
 
-## 正本
+## 上流baselineとDay Schedule overlay
 
-- 共通の常時読込契約: root `AGENTS.md`
-- 領域固有契約: 対象に最も近いnested `AGENTS.md`
-- task固有手順: `.agents/skills/<name>/SKILL.md`
-- product contract: `docs/product-invariants.md`
-- architecture: `docs/architecture-boundaries.md`
-- UI/UX詳細: `docs/ai-governance/`
-- 公開安全性: `docs/security-publication-checklist.md`
-- Claude Code adapter: `.claude/rules/`, `.claude/skills/`
-- Cursor adapter: `.cursor/rules/`
-- 機械検証: `scripts/verify-agent-harness.mjs`, `npm run verify:bootstrap`
+共通ガバナンスの再適用で参照した上流の対象revisionを固定します。
 
-`CLAUDE.md` は `@AGENTS.md` だけを維持します。tool adapterは正本を参照し、新しい判断基準を持ちません。
+`stillshore-chirp/wordpack-for-english@c40782e15a8799ea74e68414d97ddd4f6a9166fa`（2026-09-01 JSTに確認）
 
-## 3製品確認
+参照した上流正本は `AGENTS.md`、`docs/agent-harness.md`、`docs/agent-principles.md`、`docs/ai-governance/00-index.md`、`03-evidence-and-completion-gates.md`、`13-maintenance-policy.md`、`14-issue-quality-gate.md`、`templates/task-state.json` です。このrepositoryへは、reader routing、minimal execution、checkpoint、closure-bound evidence、task-state、static/runtime境界を取り込み、Day Schedule固有のpath bridgeと製品不変条件を維持します。file単位の全置換は行いません。
 
-rule、Skill、adapter、verifierを変更する場合は同じPRで確認します。
+Contract ID: `DSN-WORDPACK-OVERLAY`
 
-### Codex
+overlayは [`docs/testing/index.md`](../testing/index.md) の `DSN-RISK-BASED-DELIVERY`、[`docs/engineering/desktop-platform-and-release.md`](../engineering/desktop-platform-and-release.md) の `DSN-LATEST-APP-HANDOFF`、およびlocal-first、同期、時刻、通知、migration、backup、Tauri、securityの正本です。検証重複を減らしても、これらのhard gateを弱めません。governance / docsだけの変更へnative screenshot、全state matrix、アプリ再生成を定型要求しません。明示的な再評価なしにoverlayを削除・弱化・重厚化しません。
 
-- rootとnearest `AGENTS.md`から必要な規則へ到達できる。
-- task手順がrootへ混入せず `.agents/skills/` へ分離されている。
-- rootとnestedのinstruction budgetを満たす。
+## 正本と責務
 
-### Claude Code
+- 全体のhard gate、権限、path bridge、最小実行: root `AGENTS.md`
+- path固有契約: 対象に最も近いnested `AGENTS.md`
+- taskの発動条件・手順・成果物: `.agents/skills/<name>/SKILL.md`
+- 製品不変条件・architecture: `docs/product-invariants.md`、`docs/architecture-boundaries.md`
+- UI/Issue/evidenceの判定基準: `docs/ai-governance/`
+- 公開安全性: `docs/security-publication-checklist.md` とsecurity-publication Skill
+- Claude Code / Cursor: `.claude/`、`.cursor/`の薄いadapter
+- 決定的な形式・参照・budget検査: `scripts/validate-governance.mjs`
 
-- `CLAUDE.md`がroot契約を一重にimportしている。
-- `.claude/rules/` のpathsが必要な正本へ案内する。
-- `.claude/skills/` が共有Skillを唯一の手順正本として参照する。
-- adapterへ長文本文をcopyしていない。
+`CLAUDE.md`は`@AGENTS.md`だけをimportし、adapterへ品質基準本文を複製しません。validatorはstatic検査であり、製品runtime、Hook、権限、実際のrule discoveryを証明しません。
 
-### Cursor
+## 追加・変更・削除の基準
 
-- root `AGENTS.md`と `.cursor/rules/` が競合しない。
-- MDC ruleは `alwaysApply: false` と限定したglobsを持つ。
-- task手順は `.agents/skills/` を正本として利用する。
-- `.cursor` directoryを禁止しない。
-- adapterへ共通核やSkill本文をcopyしていない。
+各変更は、対象scope、発動条件、正本owner、enforcement（static / test / runtime / advisory）、coverage、関連risk、instruction・実行cost、sunsetまたはreplacementを先に記録します。
 
-## ルール追加の判断
+1. 既存の正本、adapter、Skill、validator、fixture、self-test、workflowを検索し、統合またはreplacementを先に検討する。
+2. 全作業のhard gateはroot、path差分はnearest rule、task手順はSkill、理由と詳細checklistはdocsへ置く。
+3. 決定的な検査はscript / test / CIへ置き、static結果をruntimeやlive benchmarkの成功と表現しない。
+4. workflow / jobはtrigger locus、failure mode、runner・wall-clock cost、artifact、failure owner、統合できない理由、sunset条件を記録する。
+5. security、authorization、data integrity、公開API、production safetyは可能なenforcementへ結び、repositoryで観測できない部分はadvisory / unverifiedとする。
+6. 削除はconsumer、link、coverage、replacement、sunset理由を確認してから行う。
 
-1. 機械判定できる場合はscript、test、lint、CIへ置く。
-2. 全作業で必要なhard gateだけをrootへ置く。
-3. 特定pathだけならnested `AGENTS.md`と薄いtool adapterへ置く。
-4. 特定taskだけなら `.agents/skills/` と必要なadapterへ置く。
-5. 詳細な根拠やchecklistは既存docsへ統合する。
+soft heuristicをexact-matchや大規模fixtureだけで固定せず、判断理由と観測可能な結果を残します。
 
-rootへ詳細手順を追加する変更は、他の配置で成立しない理由をIssueとPRへ書きます。
+## 3製品・重複・レビュー
 
-## 重複禁止
+rule、Skill、adapter、validatorを変更するPRでは、Codexのroot/nearest routing、Claude Codeの`CLAUDE.md`/path/Skill接続、Cursorの`alwaysApply: false`と限定globを同じ変更で確認します。adapterは正本への接続だけを持ち、`.cursor` directory自体を禁止しません。
 
-同じhard gate、checklist、workflow本文を複数箇所で正本化しません。
+同じhard gate、checklist、workflow本文を複数箇所で正本化しません。indexは入口、Skillは実行順、詳細docsは判定基準、validatorは機械判定を担当します。rootへ詳細手順を追加する場合は、他の配置で成立しない理由をIssue / PRへ記録します。
 
-良い構造:
+包括reviewとfull gateの回数、証拠失効、risk lane台帳は [`docs/agent-harness.md`](../agent-harness.md) の `DSN-COMPREHENSIVE-REVIEW-ROUNDS` を唯一のtool非依存正本とします。同じsnapshotへのclean reviewを繰り返しません。merge、close、release、deployは別の明示指示が必要です。
 
-```text
-AGENTS.md -> nearest AGENTS.md / task Skill -> detailed docs
-Claude / Cursor adapter -> same AGENTS or Skill
-```
+### サブエージェント運用
 
-避ける構造:
-
-```text
-root、Skill、docs、tool ruleへ同じ長文を複製
-```
-
-表現を変えた意味上の重複も対象です。indexは入口、Skillは実行順、詳細docsは判定基準を担当します。
-
-## Hard gateとheuristic
-
-- P0、secret、証跡捏造、data loss、公開contract、権限境界はhard gateとして明確にする。
-- DRY、KISS、SRP、OCP、file size、重複回数、coverage、test配分はheuristicとして扱う。
-- heuristicを数値だけのFail条件へ変えない。
-- P0を格下げする場合は、完了blockerでない根拠、replacement control、evidenceをIssueとPRへ記録する。
-
-## Review収束
-
-- latest meaningful changeに対するCIと利用可能なreviewを確認する。
-- 包括reviewとfull gateの再確認は `docs/agent-harness.md` の包括レビュー収束に従い、証拠の失効理由がない同一snapshotへ反復しない。
-- 変更のないheadへclean reviewを複数回要求しない。
-- 特定review botやclient名を3製品共通条件にしない。
-- review未提供時は代替自己reviewと未確認範囲を記録する。
-- merge、close、releaseは別の明示指示がある場合だけ行う。
-
-## サブエージェント運用
-
-委任、再監査、検証段階、risk lane台帳の正本は [`docs/agent-harness.md`](../agent-harness.md) のSubagent orchestrationとします。root `AGENTS.md`は全agentが到達する短い入口だけを持ち、nested rule、Skill、adapterへ同じ運用本文を複製しません。
-
-運用を変更する時は、積極利用と重複防止の両方を保ちます。新しい専門riskを独立laneへ委任できることを維持しつつ、同一HEADの重複監査、根拠のない再実行、過剰な共有文脈を増やさないことをreviewします。
+委任、再監査、timeout、scope shrink、evidence packageの契約もharnessへ集約し、各adapterやSkillへ複製しません。
 
 ## 包括レビュー契約の配置
 
 Contract ID: `DSN-REVIEW-ROUND-CANONICAL-PLACEMENT`
 
-包括レビューラウンドの定義、回数、例外、P2以下の扱い、検証順序、risk lane台帳は、[`docs/agent-harness.md`](../agent-harness.md) の `DSN-COMPREHENSIVE-REVIEW-ROUNDS` をtool非依存の唯一の詳細正本とします。root `AGENTS.md`には全agentが到達する短い入口だけを置き、nested `AGENTS.md`、adapter、Skillへ契約本文や数え方を複製しません。
+`DSN-COMPREHENSIVE-REVIEW-ROUNDS`はtool非依存の唯一の詳細正本です。root `AGENTS.md`には全agentが到達する短い入口だけを置き、nested `AGENTS.md`、adapter、Skillへ契約本文や数え方を複製しません。agent runtime固有の起動方法は共有正本へ追加せず、adapterは正本への薄い参照に限定します。
 
-agent runtime、review機能、実行環境に固有の起動方法は共有正本とmachine verifierへ追加しません。adapterがroutingを必要とする場合も正本への薄い参照に限定し、共通契約の変更は詳細正本、root入口、verifierを同じ変更で整合させます。
+## Issue、対象面、研究
 
-## Issueと対象面
+Issueは [`14-issue-quality-gate.md`](14-issue-quality-gate.md) に従い、理由、根拠、現在と目標、scope、acceptance、verification、riskを記録します。GitHub共同作業面を含む対象面は [`02-uiux-review-framework.md`](02-uiux-review-framework.md) で分類し、harness / template / Markdownだけの変更へnative screenshotや全state matrixを要求しません。app UI変更ではDay Schedule固有state、native evidence、platform差分を維持します。
 
-- Issueは [`14-issue-quality-gate.md`](14-issue-quality-gate.md) に従い、理由、根拠、現在と目標、acceptance、riskを記録する。
-- app UIとGitHub共同作業面を [`02-uiux-review-framework.md`](02-uiux-review-framework.md) で分類する。
-- harness / template / Markdownだけの変更へ、native screenshotや全state matrixを定型要求しない。
-- app UI変更では、Day Schedule固有state、native evidence、platform差分を弱めない。
+新しい研究やguidanceはofficial specification、安定したHCI / accessibility standard、cognitive accessibility guidance、current research、single studyの順に強制力を判断します。単発研究や一時的なtool挙動だけでhard gateを増やしません。tool仕様変更時は3製品の現行仕様を確認し、adapterとvalidatorを整合させます。
 
-## 研究・標準
+## 保守ゲートと停止条件
 
-新しい研究やguidanceを取り込む時は、official specification、安定したHCI / accessibility standard、cognitive accessibility guidance、current research、single studyの順に強制力を判断します。単発研究や一時的なtool挙動を根拠なくhard gateへしません。
-
-tool仕様が変わった場合は、3製品の現行仕様を確認し、adapterとverifierを同じ変更で更新します。
-
-## WordPack正本の再適用とDay Schedule固有overlay
-
-Contract ID: `DSN-WORDPACK-OVERLAY`
-
-WordPack for Englishは共通ガバナンスの上流正本です。再適用時は対象revisionを固定して共通hard gate、rule配置、Skill、adapter、machine verifierを比較し、Day Schedule Nextへ適合する差分だけを取り込みます。file単位の全置換、上流が厳しいという理由だけのlocal gate追加、非該当checklistの復活は行いません。
-
-次はDay Schedule Next固有overlayとして維持します。
-
-- `docs/testing/index.md` の `DSN-RISK-BASED-DELIVERY`: focused local checks後にlatest-head CIを開始し、同じfull gateを理由なく直列重複させない。
-- `docs/engineering/desktop-platform-and-release.md` の `DSN-LATEST-APP-HANDOFF`: ユーザー向けdesktop変更ではlatest verified commitからアプリを生成し、checksum、復旧可能なinstall、launchを必須とする。
-- visual差分を持たないinteractionへ意味のないbefore / after screenshotや全state matrixを要求せず、focused test、accessibility、native observationを使う。
-- DMG / installerの構造、署名、upgrade / uninstall検査をdistribution変更、release判断、明示依頼へ限定する。
-- sync、time、notification、migration、backup、security、data lossのhard gateはrisk laneで緩和しない。
-
-再適用PRでは、上流で変わった共通契約、維持したlocal overlay、採用しなかった重厚化と理由をIssue / PRへ記録します。overlayを変更する場合は、対象contract ID、時間短縮だけに依存しないrisk評価、replacement control、受け入れ条件、verifier変更を同じPRへ含めます。明示的な再評価なしにoverlayを削除・弱化・重厚化しません。
-
-## 検証
+変更前に対象path、正本、読者、owner、enforcement、公開範囲、必要な検証を確認します。変更後は3製品の到達性、frontmatter、重要link、budget、重複、公開安全性、関連fixture / self-testを確認し、次を観測値・未確認に分けて報告します。
 
 ```bash
-node scripts/verify-agent-harness.mjs
+node scripts/validate-governance.mjs
 npm run verify:bootstrap
 ```
 
-加えて、変更したNode / JSON / YAML / Markdown、document link、公開安全性、既存CIを確認します。検証できない項目は理由と残るリスクを報告します。
-
-## Desktop固有contractの維持
-
-ハーネス保守で次を一般化・削除しません。
-
-- local-first、UTC instant + IANA timezone、transactional Outbox
-- Google incremental sync、conflict、retry、token保護
-- notification delivery ledger、Focus state machine
-- forward-only migration、backup / restore、legacy import
-- Tauri capability、CSP、keyring、macOS / Windows差分
-- latest検証commitとartifact / install / launchの対応
-
-これらの詳細はproduct invariants、engineering docs、5つの専門Skillを正本とし、rootからのroutingをmachine verifierで固定します。
+共通hard gateへ到達できない、adapterだけに重要判断がある、正本間で食い違う、replacementなしに増える、owner・enforcement・coverage・cost・sunsetが不明、budget超過、壊れたlink、公開範囲未確認がある場合は完了扱いにしません。実行できない検証は理由と残るriskを記録します。

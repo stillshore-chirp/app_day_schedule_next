@@ -1,18 +1,7 @@
 name: Dependency audit
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - package.json
-      - apps/desktop/package.json
-      - pnpm-lock.yaml
-      - Cargo.toml
-      - Cargo.lock
-      - apps/desktop/src-tauri/Cargo.toml
-      - deny.toml
-      - .github/workflows/dependency-audit.yml
+  workflow_call:
   workflow_dispatch:
   schedule:
     - cron: "41 17 1 * *"
@@ -31,21 +20,25 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "22"
       - name: Activate pnpm
         run: |
           corepack enable
           corepack prepare pnpm@11.17.0 --activate
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify patched dependency compatibility
+        run: pnpm verify:patched-dependencies
       - name: Audit JavaScript dependencies
         run: pnpm audit --audit-level moderate
       - name: Verify Rust advisories, licenses and sources
-        uses: EmbarkStudios/cargo-deny-action@v2.1.1
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           rust-version: "1.89.0"
           command: check advisories licenses sources

@@ -50,7 +50,7 @@ Today overview の実予定レーンとテンプレートレーンの各バー�
 ## 最小スモーク
 
 ```bash
-node scripts/verify-agent-harness.mjs
+node scripts/validate-governance.mjs
 ```
 
 ## 検証記録

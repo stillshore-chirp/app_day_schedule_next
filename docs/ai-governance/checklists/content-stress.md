@@ -1,14 +1,19 @@
-# Content Stress Checklist
+# コンテンツストレスチェックリスト
 
-- [ ] Empty, one, many, 500 schedules.
-- [ ] No overlap, 1-minute overlap, 5-minute overlap, many lanes.
-- [ ] Cross-midnight, all-day, 23:59, DST ambiguity.
-- [ ] Long Japanese title / category / tag / error message.
-- [ ] Long unbreakable synthetic identifier does not break layout.
-- [ ] 0 / 1 / large counts and durations.
-- [ ] Google disconnected / syncing / offline / conflict / auth required.
-- [ ] Permission denied and native unavailable.
-- [ ] Compact Window minimum size.
-- [ ] 200% text / OS scale / narrow width.
-- [ ] Truncation has accessible full-value access.
-- [ ] Icon / color alone is not required to understand content.
+- [ ] 長い日本語ラベルで崩れない。
+- [ ] 長い英数字、URL、メールアドレスで崩れない。
+- [ ] 件数が0、1、多数の場合に崩れない。
+- [ ] 空リスト、部分データ、大量データで崩れない。
+- [ ] 長いエラーメッセージで読みにくくならない。
+- [ ] 多言語相当の長さでも主要操作が見える。
+- [ ] 日時、数値、単位、桁数、通貨が読みやすい。
+- [ ] アイコンだけに意味を依存していない。
+- [ ] 省略表示にtitleや詳細確認導線が必要か検討した。
+- [ ] 狭幅、文字拡大、ズームで操作不能にならない。
+
+## Day Schedule Next
+
+- [ ] 23:59、日跨ぎ、終日、DST、複数current、重複予定で日時と範囲が読める。
+- [ ] 500件の予定、長い予定名・メモ・カテゴリ、長い日本語と英数字で主操作・選択・状態が失われない。
+- [ ] Today、Inspector、Compact、Ticket、Sync / Conflictの長いエラー・警告・成功文が折り返し、全文へ到達できる。
+- [ ] 200% text / OS scale、狭幅、macOS / Windowsのwindow boundsでclip、overlap、二方向scrollが発生しない。

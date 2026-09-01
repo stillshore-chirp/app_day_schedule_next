@@ -50,14 +50,14 @@
 ## 最小スモーク
 
 ```bash
-node scripts/verify-agent-harness.mjs
+node scripts/validate-governance.mjs
 ```
 
 ## 検証記録
 
 | Command / check                                  | Result | Evidence                                          |
 | ------------------------------------------------ | ------ | ------------------------------------------------- |
-| `node scripts/verify-agent-harness.mjs`          | Pass   | 81 required files / 5 skills                      |
+| 旧harness検証（履歴）                              | Pass   | 実行時点の旧構成: 81 required files / 5 skills      |
 | direct Vitest `DayOverview.test.tsx` before edit | Pass   | 8 tests                                           |
 | direct Vitest `DayOverview.test.tsx` after edit  | Pass   | 9 tests                                           |
 | frontend full / axe                              | Pass   | 16 files 92 tests / 3 files 7 tests               |

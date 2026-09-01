@@ -1,35 +1,76 @@
-# Governance Glossary
+# UI/UX Governance Glossary
+
+この glossary は、ガバナンス文書内に残る英語表記を日本語でメンテナンスできるようにするための対応表である。
+
+## 運用方針
+
+- 本文の説明は日本語を原則にする。
+- 英語は、外部標準名、tool が読む識別子、一般的な UI/UX 用語、またはファイル名として必要な場合に限って残す。
+- 新しい英語用語を追加したら、この表にも日本語の意味を追加する。
+- 同じ意味の訳語を複数作らず、この表の訳語に寄せる。
+
+## 用語
+
+| 英語 | 日本語での意味 |
+|---|---|
+| accessibility | 障害の有無や利用環境に関わらず使えること |
+| accessible name | 支援技術が control の名前として読み上げる名前 |
+| action | ユーザーが押す、選ぶ、入力するなどの操作 |
+| affordance | 見た目から「操作できる」と分かる手がかり |
+| artifact | 証跡として残す成果物 |
+| contrast | 文字や部品の見分けやすさを示す明暗差 |
+| counter-review | 作業を却下するつもりで欠点を探す反証レビュー |
+| efficiency | 反復作業や熟練利用で無駄なく速く使えること |
+| emotional UX | 不安、安心、信頼、満足感など感情面を含む体験 |
+| evidence | 検証したことを示す証跡 |
+| focus | キーボード操作で現在選ばれている場所 |
+| focus order | キーボード操作で focus が移動する順序 |
+| gate | 完了扱いにする前の合否条件 |
+| happy path | すべてが正常に進む成功パターン |
+| icon-only | 文字ラベルがなく icon だけで意味を伝える状態 |
+| keyboard trap | キーボード操作で抜け出せない状態 |
+| label | 画面上の項目名や button 名 |
+| landmark | 画面領域の意味を支援技術へ伝える構造 |
+| microcopy | button、helper text、error などの短い UI 文言 |
+| novice simulation | 初見ユーザーのつもりで迷いを探す疑似レビュー |
+| P0 | 残っていると完了不可の重大問題 |
+| P1 | merge 前に修正するか、明示的延期が必要な問題 |
+| P2 | 改善機会 |
+| primary action | その場で最も重要な主要操作 |
+| product fit | 画面や機能がユーザー目的と製品価値に合っていること |
+| recovery | 失敗や間違いから戻る手段 |
+| scope | 操作や表示が影響する範囲 |
+| state | 通常、読み込み中、空、エラーなどの画面状態 |
+| state matrix | 各状態で何を見せ、何を理解させ、何を操作できるかの表 |
+| target size | button などの押せる領域の大きさ |
+| trace | browser test などで残る操作記録 |
+| trust | 結果、状態、警告、操作が信頼できると感じられること |
+| UI/UX | 画面の見た目、操作、理解しやすさ、体験全体 |
+| utility | ユーザーの目的達成に実際に役立つこと |
+| viewport | 表示領域の大きさ |
+| visual hierarchy | 何が重要かを視覚的に伝える階層 |
+| WCAG | Web アクセシビリティの国際的な標準 |
+
+## Day Schedule Nextで追加する用語
 
 | English | 日本語での意味 |
 |---|---|
-| accessibility | 利用者の能力や環境に関わらず操作・理解できること |
-| accessible name | 支援技術が control の名前として認識する名前 |
-| all-day | 時刻ではなく date range で表す終日予定 |
-| base snapshot | 3-way merge の共通祖先となる前回同期状態 |
-| capability | Tauri window / command に許可する権限集合 |
-| conflict | local と remote が同じ意味領域を異なる値へ変更した状態 |
-| counter-review | 完了を拒否する観点で欠点を探す反証レビュー |
-| CSP | WebView が読み込める source を制限する Content Security Policy |
-| DST gap | 夏時間移行等で存在しない local time |
-| DST overlap | 同じ local time が2回存在する曖昧時間 |
-| evidence | 検証した事実を裏付ける証跡 |
-| expert efficiency | 慣れた利用者の反復操作の速さと無駄の少なさ |
-| Focus | 作業・一時停止・休憩を管理する状態機械 |
-| IANA timezone | `Asia/Tokyo` のような地域名付き timezone |
+| all-day | 時刻ではなくlocal date rangeで表す終日予定 |
+| base snapshot | 3-way mergeの共通祖先となる前回同期状態 |
+| capability | Tauri window / commandに許可する権限集合 |
+| conflict | localとremoteが同じ意味領域を異なる値へ変更した状態 |
+| DST gap | 存在しないlocal time |
+| DST overlap | 同じlocal timeが2回存在する曖昧時間 |
+| Focus | 作業・一時停止・休憩・次待ちを管理する状態機械 |
+| IANA timezone | Asia/Tokyoのような地域名付きtimezone |
 | idempotency | 同じ操作を再実行しても重複副作用が増えない性質 |
-| local-first | local data を先に確定し、network を後から整合させる設計 |
-| MinuteOfDay | 0:00 からの分数 0..1439 |
-| novice simulation | 初見利用者のつもりで迷いを探す疑似レビュー |
-| Outbox | local transaction と同時に保存する remote 反映待ち操作 |
-| P0 | 残っていると completion / merge 不可の重大問題 |
-| P1 | 原則同じ変更で修正し、延期には Issue と根拠が必要な問題 |
-| P2 | 改善機会 |
-| PKCE | OAuth authorization code を verifier / challenge で保護する方式 |
-| recovery | 失敗や誤操作から安全に戻る手段 |
-| recurrence exception | series の特定 occurrence だけの変更・取消 |
+| local-first | local dataを先に確定し、networkを後から整合させる設計 |
+| MinuteOfDay | 0:00からの分数（0..1439） |
+| Outbox | local transactionと同時に保存するremote反映待ち操作 |
+| PKCE | OAuth authorization codeをverifier / challengeで保護する方式 |
+| recurrence exception | seriesの特定occurrenceだけの変更・取消 |
 | source of truth | その情報の一次正本 |
-| state matrix | 各画面状態の表示・理解・行動・回復・a11y・証跡の表 |
-| trust | 結果、data、sync、warning、recovery を信頼できること |
-| UTC instant | timezone に依存しない絶対時刻 |
-| visual hierarchy | 重要度を見た目で伝える構造 |
-| WCAG | Web Content Accessibility Guidelines |
+| Ticket | 何を完了させるかを表す作業対象。Scheduleとは独立する |
+| Schedule | いつ作業するかを表す予定 |
+| UTC instant | timezoneに依存しない絶対時刻 |
+| window restore | display構成変更後も可視領域へwindow位置・サイズを復元すること |

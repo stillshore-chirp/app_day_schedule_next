@@ -1,15 +1,24 @@
-# Cognitive Walkthrough Checklist
+# 認知的ウォークスルーチェックリスト
 
-- [ ] Target user / context / user goal is explicit.
-- [ ] Screen purpose and current date are understood in 3 seconds.
-- [ ] Current / next / selected schedule is identifiable.
-- [ ] First meaningful action is visible.
-- [ ] Operation scope and predicted result are clear.
-- [ ] Overview / detail / Inspector relationship is understood.
-- [ ] Template / Quick Block / Google terms use user language.
-- [ ] User does not need to remember previous screen values.
-- [ ] Basic action does not expose unnecessary advanced choices.
-- [ ] Error retains input and recovery is discoverable.
-- [ ] Offline / auth / conflict does not look like empty data.
-- [ ] Novice help exists but expert can skip it.
-- [ ] Dangerous action explains local / Google / series impact.
+- [ ] 対象ユーザーを説明できる。
+- [ ] ユーザー目的を説明できる。
+- [ ] 画面目的を初見で説明できる。
+- [ ] 現在地を説明できる。
+- [ ] 最初の有意味な行動を説明できる。
+- [ ] 主操作が見つかる。
+- [ ] 操作結果を予測できる。
+- [ ] 失敗時の回復手段が分かる。
+- [ ] 内部用語に依存していない。
+- [ ] 前画面の記憶に依存していない。
+- [ ] 選択肢が多すぎない。
+- [ ] 高度な設定が必要に応じて段階的に出る。
+- [ ] 初心者向け説明がある。
+- [ ] 熟練者が説明を読み飛ばせる。
+
+## Day Schedule Next
+
+- [ ] Todayで日付、表示範囲、現在時刻、current / next / free time、主操作が初見で分かる。
+- [ ] timelineで保存精度1分、表示snap、duration、overlap、日跨ぎを推測せず扱える。
+- [ ] Template / Quick Blockの適用先、件数、既存予定への影響、Undo / cancelが分かる。
+- [ ] Google接続、offline、conflict、permission、backup / restoreの状態と次の回復行動が分かる。
+- [ ] Focus、notification、Compactの現在状態を内部実装用語なしで理解できる。

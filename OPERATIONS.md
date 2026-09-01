@@ -87,7 +87,7 @@ pnpm tauri:build:debug
 
 ## リリース
 
-- PR CI は重複するpush実行を作らず、harness / frontend と、native影響時のmacOS arm64 Rust test・通常Tauri no-bundle buildを行います。
+- PR CIは重複するpush実行を作らず、変更pathをclassifierで分類して該当する governance / frontend / native / dependency gateを選択します。security text scanと集約Quality gateは全PRで実行し、native影響時はmacOS arm64 Rust test・通常Tauri no-bundle buildを追加します。
 - macOS x64 / Windows、Native E2E、unsigned debug installerは `Native release validation` workflowで対象を選択します。普段は実際に使うmacOS arm64だけ、release判断時は`all`と`build_installers=true`を指定します。
 - Dependency auditは依存ファイル変更PR、月1回、手動実行に限定します。Dependabotのversion updateも3 ecosystemを月次groupにします。
 - 個人利用でも、対象 OS で install、launch、quit、tray、window、notification、credential store、OAuth loopback、backup / restore を観測します。

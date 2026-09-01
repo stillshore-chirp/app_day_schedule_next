@@ -1,13 +1,20 @@
-# Expert Efficiency Checklist
+# 熟練者効率チェックリスト
 
-- [ ] Repetitive tasks are identified.
-- [ ] Pointer and keyboard step counts are reviewed.
-- [ ] Same time / calendar / category / duration is not repeatedly re-entered.
-- [ ] Date / view / zoom / snap / filter state is retained when appropriate.
-- [ ] Error / retry retains input and selection.
-- [ ] First-run help does not appear every time.
-- [ ] Shortcut / duplicate / bulk / template / Quick Block / Undo are considered.
-- [ ] Direct time edit exists alongside drag.
-- [ ] Non-dangerous operation avoids excessive confirmation.
-- [ ] Dangerous operation prioritizes safety with clear scope.
-- [ ] Frequent action is more discoverable than rare diagnostics / settings.
+- [ ] 主要反復タスクを特定した。
+- [ ] 主要タスク完了までの手数を確認した。
+- [ ] 同じ情報を何度も入力させていない。
+- [ ] 同じ選択を毎回やり直させていない。
+- [ ] 入力、選択、フィルタ、表示状態が必要に応じて保持される。
+- [ ] 初心者向け説明が毎回邪魔にならない。
+- [ ] 詳細説明を折りたためる、または必要時に参照できる。
+- [ ] 一括操作、再実行、複製、テンプレート、前回設定を検討した。
+- [ ] 危険ではない操作に過剰な確認がない。
+- [ ] 危険操作では効率より安全性を優先している。
+- [ ] よく使う操作が、まれな操作より見つけやすい。
+
+## Day Schedule Next
+
+- [ ] 空き時間からの予定作成、start / end / duration変更、複製・移動・翌日繰越の手数を確認した。
+- [ ] Template / Quick Block、category / tag / calendar、Focus、sync retry / conflict解決の反復導線を確認した。
+- [ ] 保存精度1分と表示snapを混同せず、moveはdurationを保持し、resizeは意図した端点だけを変更する。
+- [ ] view / date / zoom / snap、前回calendar・category・duration、filter、selectionを必要な範囲で保持し、失敗・retry・Undoで失わない。

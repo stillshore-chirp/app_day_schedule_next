@@ -1,32 +1,49 @@
 version: 2
 updates:
-  - package-ecosystem: github-actions
-    directory: /
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
-      interval: monthly
-    open-pull-requests-limit: 2
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - 依存関係更新
+    commit-message:
+      prefix: "依存関係更新"
     groups:
-      github-actions:
-        patterns:
-          - "*"
+      github-actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
-  - package-ecosystem: npm
-    directory: /
+  - package-ecosystem: "npm"
+    directory: "/"
     schedule:
-      interval: monthly
-    open-pull-requests-limit: 2
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - 依存関係更新
+    commit-message:
+      prefix: "依存関係更新"
     groups:
-      frontend-tooling:
-        dependency-type: development
-        patterns:
-          - "*"
+      root-npm-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
-  - package-ecosystem: cargo
-    directory: /apps/desktop/src-tauri
+  - package-ecosystem: "cargo"
+    directory: "/apps/desktop/src-tauri"
     schedule:
-      interval: monthly
-    open-pull-requests-limit: 2
+      interval: "monthly"
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - 依存関係更新
+    commit-message:
+      prefix: "依存関係更新"
     groups:
-      rust-dependencies:
-        patterns:
-          - "*"
+      rust-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"

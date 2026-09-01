@@ -1,50 +1,54 @@
-# Satisfaction and Trust Review
+# 満足感・信頼感レビュー
 
-## Waiting
+## 待機中
 
-- Scope of processing:
-- Existing data remains visible:
-- Can user continue local work:
-- Cancel / retry / expected next state:
+- 進行中であることが分かるか:
+- 不安を増やしていないか:
+- キャンセル/再試行/代替行動:
 
-## Success
+## 成功時
 
-- What completed: local / Google / backup / restore / notification:
-- Target / count / calendar:
-- Undo / details / next action:
+- 何が完了したか:
+- 次にできること:
+- 取り消し/詳細確認:
 
-## Failure
+## 失敗時
 
-- Cause category:
-- Impact:
-- Local data / input retained:
-- Recovery:
-- Tone:
+- 原因:
+- 影響:
+- 回復手段:
+- 入力保持:
+- トーン:
 
-## Dangerous operations
+## 危険操作
 
-- Target:
-- Count:
-- Local / Google / series scope:
-- Undo / backup / rollback:
-- Confirmation:
+- 対象:
+- 件数:
+- 影響範囲:
+- 取り消し可否:
+- 確認導線:
 
-## Permission / lifecycle
+## データ・権限・個人情報
 
-- Notification / keyring / file / browser:
-- Complete exit vs tray:
-- Settings recovery:
+- 保存:
+- 送信:
+- 公開:
+- 削除:
+- 権限:
+- 個人情報:
 
-## Data / privacy
+## 判定
 
-- Stored locally:
-- Sent to Google:
-- Logged / exported:
-- Redaction:
-
-## Decision
-
-- Pass / Fail:
+- Pass/Fail:
 - P0:
 - P1:
 - P2:
+
+## Day Schedule Nextの信頼確認
+
+- local保存とGoogle反映を別々に記録したか:
+- offline / pending / retry / conflict / auth expiredの表示は正確か:
+- notification permission、tray / complete exit、Focus phase、timer再起動の能力差:
+- local / Google / bothのdelete、template replace、restore / importの対象・件数・scope:
+- 入力・選択・local dataの保持とUndo / rollback:
+- native notification、OS permission、sleep / resume、clock jumpの未確認境界:

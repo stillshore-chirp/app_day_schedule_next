@@ -1,7 +1,7 @@
 ---
 description: "GitHub共同作業面とworkflow変更を共有正本へ接続する"
-globs: "{.github/**/*,scripts/verify-workflow-policy.mjs,scripts/security-scan-text.mjs}"
+globs: ".github/**,scripts/validate-governance.mjs,scripts/security-scan-text.mjs"
 alwaysApply: false
 ---
 
-root `AGENTS.md`、`.github/AGENTS.md`、`.agents/skills/github-delivery/SKILL.md`、`.agents/skills/security-publication/SKILL.md` を読んでください。
+root `AGENTS.md`、`.github/AGENTS.md`、`.agents/skills/github-delivery/SKILL.md`、`.agents/skills/security-publication/SKILL.md` を読んで適用してください。このMDCは共有正本へ案内するpath adapterです。

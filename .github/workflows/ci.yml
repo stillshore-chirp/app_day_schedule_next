@@ -14,93 +14,226 @@ permissions:
   contents: read
 
 jobs:
-  quality:
-    name: Quality gate
+  verification_scope:
+    name: Classify verification inputs
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 5
     outputs:
-      native_changed: ${{ steps.scope.outputs.native_changed }}
+      governance: ${{ steps.scope.outputs.governance }}
+      frontend: ${{ steps.scope.outputs.frontend }}
+      native: ${{ steps.scope.outputs.native }}
+      dependency: ${{ steps.scope.outputs.dependency }}
+      classification_ok: ${{ steps.scope.outputs.classification_ok }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Checkout repository history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           persist-credentials: false
+
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "22"
-      - name: Verify bootstrap harness
+
+      - id: scope
+        name: Classify changed paths
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set +e
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            node scripts/classify-verification-inputs.mjs --full --github-output "${GITHUB_OUTPUT}"
+          else
+            node scripts/classify-verification-inputs.mjs --base "${BASE_SHA}" --head "${HEAD_SHA}" --github-output "${GITHUB_OUTPUT}"
+          fi
+          classifier_status=$?
+          echo "classifier_exit=${classifier_status}" >> "${GITHUB_OUTPUT}"
+          exit 0
+
+      - name: Fail closed when classification is incomplete
+        if: ${{ steps.scope.outputs.classification_ok != 'true' }}
+        run: |
+          echo "::error::Verification input classification failed closed; no selected gate may be treated as complete."
+          exit 1
+
+  security_text_scan:
+    name: Security text scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Scan source text for secrets and invisible controls
+        run: node scripts/security-scan-text.mjs
+
+  governance:
+    name: Governance validation
+    needs: verification_scope
+    if: >-
+      ${{
+        needs.verification_scope.result == 'success' &&
+        needs.verification_scope.outputs.classification_ok == 'true' &&
+        needs.verification_scope.outputs.governance == 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Run governance bootstrap checks
         run: npm run verify:bootstrap
+
+  frontend:
+    name: Frontend quality
+    needs: verification_scope
+    if: >-
+      ${{
+        needs.verification_scope.result == 'success' &&
+        needs.verification_scope.outputs.classification_ok == 'true' &&
+        needs.verification_scope.outputs.frontend == 'true'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "22"
       - name: Activate pnpm
         run: |
           corepack enable
           corepack prepare pnpm@11.17.0 --activate
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Verify patched dependency compatibility
-        run: pnpm verify:patched-dependencies
-      - name: Format
+      - name: Verify repository boundaries
+        run: npm run verify:boundaries
+      - name: Verify i18n keys
+        run: npm run verify:i18n
+      - name: Check frontend formatting
         run: pnpm format:check
-      - name: Lint
+      - name: Lint frontend
         run: pnpm lint
-      - name: Typecheck
+      - name: Typecheck frontend
         run: pnpm typecheck
-      - name: Unit and accessibility tests
-        run: |
-          pnpm test
-          pnpm test:a11y
-      - name: Frontend build
+      - name: Test frontend
+        run: pnpm test
+      - name: Test frontend accessibility
+        run: pnpm test:a11y
+      - name: Build frontend
         run: pnpm build
-      - id: scope
-        name: Detect native-impacting changes
-        shell: bash
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "native_changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -Eq '^(apps/desktop/|Cargo\.toml$|Cargo\.lock$|pnpm-lock\.yaml$|package\.json$|rust-toolchain\.toml$|deny\.toml$|\.github/workflows/ci\.yml$)'; then
-            echo "native_changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "native_changed=false" >> "$GITHUB_OUTPUT"
-          fi
 
-  native-smoke:
+  native_smoke:
     name: Native smoke (macOS arm64)
-    needs: quality
-    if: needs.quality.outputs.native_changed == 'true'
+    needs: verification_scope
+    if: >-
+      ${{
+        needs.verification_scope.result == 'success' &&
+        needs.verification_scope.outputs.classification_ok == 'true' &&
+        needs.verification_scope.outputs.native == 'true'
+      }}
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: "22"
       - name: Activate pnpm
-        shell: bash
         run: |
           corepack enable
           corepack prepare pnpm@11.17.0 --activate
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable (Rust 1.89.0)
         with:
           toolchain: 1.89.0
           components: rustfmt, clippy
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Rust format
+      - name: Verify repository boundaries
+        run: npm run verify:boundaries
+      - name: Check Rust formatting
         run: cargo fmt --all -- --check
-      - name: Rust clippy
+      - name: Run Rust lint
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-      - name: Rust tests
+      - name: Run Rust tests
         run: cargo test --workspace --all-features
-      - name: Build normal Tauri application without installer
+      - name: Build normal Tauri application without bundle
         run: pnpm --dir apps/desktop tauri build --debug --no-bundle
+
+  dependency_audit:
+    name: Dependency audit (selected)
+    needs: verification_scope
+    if: >-
+      ${{
+        needs.verification_scope.result == 'success' &&
+        needs.verification_scope.outputs.classification_ok == 'true' &&
+        needs.verification_scope.outputs.dependency == 'true'
+      }}
+    uses: ./.github/workflows/dependency-audit.yml
+    permissions:
+      contents: read
+
+  quality_gate:
+    name: Quality gate
+    if: ${{ always() }}
+    needs:
+      - verification_scope
+      - security_text_scan
+      - governance
+      - frontend
+      - native_smoke
+      - dependency_audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLASSIFIER_RESULT: ${{ needs.verification_scope.result }}
+      CLASSIFICATION_OK: ${{ needs.verification_scope.outputs.classification_ok }}
+      SECURITY_RESULT: ${{ needs.security_text_scan.result }}
+      GOVERNANCE_SELECTED: ${{ needs.verification_scope.outputs.governance }}
+      GOVERNANCE_RESULT: ${{ needs.governance.result }}
+      FRONTEND_SELECTED: ${{ needs.verification_scope.outputs.frontend }}
+      FRONTEND_RESULT: ${{ needs.frontend.result }}
+      NATIVE_SELECTED: ${{ needs.verification_scope.outputs.native }}
+      NATIVE_RESULT: ${{ needs.native_smoke.result }}
+      DEPENDENCY_SELECTED: ${{ needs.verification_scope.outputs.dependency }}
+      DEPENDENCY_RESULT: ${{ needs.dependency_audit.result }}
+    steps:
+      - name: Verify selected outcomes
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${CLASSIFIER_RESULT}" == "success" ]] || { echo "::error::verification_scope did not complete successfully"; exit 1; }
+          [[ "${CLASSIFICATION_OK}" == "true" ]] || { echo "::error::verification_scope did not classify inputs successfully"; exit 1; }
+          [[ "${SECURITY_RESULT}" == "success" ]] || { echo "::error::security_text_scan failed"; exit 1; }
+
+          check_selected() {
+            local label="$1"
+            local selected="$2"
+            local result="$3"
+            if [[ "${selected}" == "true" ]]; then
+              [[ "${result}" == "success" ]] || { echo "::error::${label} was selected but ended as ${result}"; exit 1; }
+            else
+              [[ "${result}" == "skipped" ]] || { echo "::error::${label} was not selected but ended as ${result}"; exit 1; }
+            fi
+          }
+
+          check_selected governance "${GOVERNANCE_SELECTED}" "${GOVERNANCE_RESULT}"
+          check_selected frontend "${FRONTEND_SELECTED}" "${FRONTEND_RESULT}"
+          check_selected native_smoke "${NATIVE_SELECTED}" "${NATIVE_RESULT}"
+          check_selected dependency_audit "${DEPENDENCY_SELECTED}" "${DEPENDENCY_RESULT}"

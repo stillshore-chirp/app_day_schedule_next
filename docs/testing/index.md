@@ -57,7 +57,7 @@ pnpm tauri:build:debug
 git diff --check
 ```
 
-`npm run verify:bootstrap` は agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎます。`pnpm verify:patched-dependencies` は、脆弱な `brace-expansion` 1.x / 2.x を修正版 5.0.8 へ統一するpatchが、利用中の全 `minimatch` majorでCommonJS / ESMのbrace展開互換性を保つことを確認します。
+`npm run verify:bootstrap` は中央governance validatorを起点に、agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎ、classifierの変更範囲別Quality gate選択とfail-closed条件を検証します。`pnpm verify:patched-dependencies` は、脆弱な `brace-expansion` 1.x / 2.x を修正版 5.0.8 へ統一するpatchが、利用中の全 `minimatch` majorでCommonJS / ESMのbrace展開互換性を保つことを確認します。
 
 この一括command群はlane S / R、release、横断変更、CI failureのlocal再現に使います。lane G / U / Nへ常に全commandを要求しません。
 
@@ -179,7 +179,7 @@ warm profile は未計測の1回で事前起動後に同じsynthetic profileを3
 | sleep / resume / clock jump | release manual | risk-based | release manual |
 | high DPI / multi-monitor / uninstall | risk-based | risk-based | risk-based |
 
-全PRでharness / frontend quality gateは自動実行します。private repositoryの個人利用ではbranch protectionを利用できない場合があるため、merge前にPRの`Quality gate`と、native変更時の`Native smoke (macOS arm64)`を人が確認します。Build successだけでは実機権限とOS lifecycleを検証したことになりません。release判定では手動workflow URL、artifact、実機観測者、日付を記録します。
+PR CIは`verification_scope`で変更pathをclassifier分類し、fail-closed判定後に該当する governance / frontend / native / dependency gateだけを実行します。`Security text scan`と集約`Quality gate`は全PRで実行します。private repositoryの個人利用ではbranch protectionを利用できない場合があるため、merge前にPRの`Quality gate`と、native変更時の`Native smoke (macOS arm64)`を人が確認します。Build successだけでは実機権限とOS lifecycleを検証したことになりません。release判定では手動workflow URL、artifact、実機観測者、日付を記録します。
 
 ## 11. Evidence
 

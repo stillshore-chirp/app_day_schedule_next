@@ -8,9 +8,9 @@ paths:
   - "docs/agent-harness.md"
   - "docs/agent-principles.md"
   - "docs/ai-governance/**/*"
-  - "scripts/verify-agent-harness.mjs"
+  - "scripts/validate-governance.mjs"
   - ".github/ISSUE_TEMPLATE/**/*"
   - ".github/pull_request_template.md"
 ---
 
-エージェントルールを変更する前に、root `AGENTS.md`、`docs/agent-harness.md`、`docs/ai-governance/13-maintenance-policy.md`、`docs/ai-governance/15-agent-harness-compatibility.md` を読んでください。このruleはpath routerであり、品質基準の正本ではありません。
+エージェントルール、Skill、adapter、検証scriptを変更する前に、`docs/agent-harness.md` と `docs/ai-governance/13-maintenance-policy.md` を読み、Codex・Claude Code・Cursorの到達性、instruction budget、正本とadapterの分離を確認します。形式・参照・budgetの検証には `scripts/validate-governance.mjs` を使います。

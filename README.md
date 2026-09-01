@@ -35,6 +35,7 @@ pnpm --dir apps/desktop tauri dev
 変更範囲に応じて [`docs/testing/index.md`](docs/testing/index.md) のrisk laneから最小十分な組合せを選びます。次は横断変更・release・CI failure再現で使う一括候補であり、通常変更ですべてをlocal実行する必須listではありません。
 
 ```bash
+node scripts/validate-governance.mjs
 npm run verify:bootstrap
 pnpm format:check
 pnpm lint
@@ -57,7 +58,7 @@ VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --feature
 pnpm test:e2e
 ```
 
-個人利用向けに、PR CI は harness / frontend と、native 影響時の macOS arm64 Rust test・通常 Tauri no-bundle build に絞っています。詳細は [`docs/testing/index.md`](docs/testing/index.md) にあります。
+個人利用向けに、PR CIは変更pathをclassifierで分類し、該当する governance / frontend / native / dependency Quality gateを選択して実行します。security text scanと集約Quality gateは全PRで実行し、native影響時はmacOS arm64 Rust test・通常Tauri no-bundle buildを追加します。詳細は [`docs/testing/index.md`](docs/testing/index.md) にあります。
 
 ## データとセキュリティ
 

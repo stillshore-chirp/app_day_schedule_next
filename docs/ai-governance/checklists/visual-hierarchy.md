@@ -1,15 +1,23 @@
-# Visual Hierarchy Checklist
+# 視覚階層チェックリスト
 
-- [ ] Screen purpose, date and primary action are clear in 3 seconds.
-- [ ] Current / next / remaining have appropriate prominence.
-- [ ] Selected schedule and operation scope are clear.
-- [ ] Overview and detail roles are distinct and consistent.
-- [ ] Primary / secondary / destructive actions have correct strength.
-- [ ] Routine pending sync is not over-alarming.
-- [ ] Conflict / corruption / restore impact is not under-emphasized.
-- [ ] Related information and actions are grouped.
-- [ ] Search / filter / count / calendar scope is visible.
-- [ ] Density supports expert use without hiding targets / focus.
-- [ ] Long Japanese title / time / duration remains readable.
-- [ ] Overlap / current line / Compact Window do not hide selected item.
-- [ ] Narrow / 200% text / high DPI / light-mild-dark hierarchy holds.
+- [ ] 3秒で画面目的が分かる。
+- [ ] 3秒で主操作が分かる。
+- [ ] 主操作と副操作の強弱が明確。
+- [ ] 危険操作が不用意に強調されていない。
+- [ ] 見出し、本文、補助情報、操作が階層化されている。
+- [ ] 関連する情報と操作が近くにある。
+- [ ] 操作対象の範囲が分かる。
+- [ ] 検索、タブ、フィルタ、件数の対象範囲が分かる。
+- [ ] 余白がまとまりを示している。
+- [ ] 情報密度が高すぎない。
+- [ ] 情報密度が低すぎて効率を落としていない。
+- [ ] 長文、日本語、数値、日時、件数が読みやすい。
+- [ ] 狭幅や文字拡大で階層が崩れない。
+
+## Day Schedule Next
+
+- [ ] Todayの日付、表示範囲、current / next、予定作成が最初に見える。
+- [ ] overviewとdetail timelineが同じentity・selection・stateを異なる密度で示す。
+- [ ] current-time line、overlap、free time、conflict、sync stateが色だけでなく形・文言・位置でも分かる。
+- [ ] Compact / Now Dockはcurrent / next / remainingを優先し、main windowの主操作を奪わない。
+- [ ] 23:59、日跨ぎ、複数current、500件、長い日本語、狭幅、200% textで主操作と重大状態が埋もれない。
