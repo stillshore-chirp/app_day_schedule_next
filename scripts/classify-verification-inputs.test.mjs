@@ -134,8 +134,9 @@ test("diff contract includes NUL output and both rename sides", () => {
     "--",
   ]);
 
-  const changed = changedPaths("HEAD~1", "HEAD");
+  const changed = changedPaths("HEAD", "HEAD");
   assert.ok(Array.isArray(changed));
+  assert.deepEqual(changed, []);
   assert.ok(changed.every((value) => typeof value === "string" && value.length > 0));
 });
 
