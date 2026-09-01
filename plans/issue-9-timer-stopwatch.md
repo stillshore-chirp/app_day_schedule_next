@@ -58,14 +58,14 @@
 ## 最小スモーク
 
 ```bash
-node scripts/verify-agent-harness.mjs
+node scripts/validate-governance.mjs
 ```
 
 ## 検証記録
 
 | Command / check | Result | Evidence |
 |---|---|---|
-| `node scripts/verify-agent-harness.mjs` | Pass | 80 required files、5 skills |
+| 旧harness検証（履歴） | Pass | 実行時点の旧構成: 80 required files、5 skills。現行の再検証は最小スモークの中央validatorを使用 |
 | `pnpm format:check && pnpm lint && pnpm typecheck` | Pass | formatting、ESLint、TypeScript |
 | `pnpm test && pnpm test:a11y` | Pass | 35 unit / component tests、5 axe tests、statement coverage 92.13% |
 | `cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings` | Pass | formatter / warnings gate |

@@ -49,22 +49,22 @@
 
 - Current state: 実装、unit/component/a11y、macOS native E2E、変更前後証跡を完了。全repository検証と公開尾を実施中。
 - Last completed slice: 狭幅・200% textを含むmacOS native 16 testsとToday visual regression。
-- Next smallest action: frontend / Rust / harnessの全検証を実行し、commit / push / PRへ進む。
+- Next smallest action: 変更範囲に応じたfrontend / Rust / governance検証を実行し、commit / push / PRへ進む。
 - Blocking fact: なし。
 - Resume command: `git status --short --branch`
 
 ## 最小スモーク
 
 ```bash
-npm run verify:bootstrap
+node scripts/validate-governance.mjs
 ```
 
 ## 検証記録
 
 | Command / check                         | Result | Evidence                                                  |
 | --------------------------------------- | ------ | --------------------------------------------------------- |
-| `node scripts/verify-agent-harness.mjs` | Pass   | 81 required files / 5 skills                              |
-| `npm run verify:bootstrap`              | Pass   | harness / docs / security / boundaries / i18n / workflows |
+| 旧harness検証（履歴）                  | Pass   | 実行時点の旧構成: 81 required files / 5 skills            |
+| 旧bootstrap検証（履歴）                | Pass   | 実行時点のharness / docs / security / boundaries / i18n / workflows |
 | focused frontend tests                  | Pass   | 5 files / 26 tests                                        |
 | frontend full suite                     | Pass   | 16 files / 91 tests、statements 92.41%、branches 85.13%   |
 | format / lint / typecheck / build       | Pass   | Prettier、ESLint 0 warnings、`tsc -b`、Vite 511 modules   |
@@ -73,7 +73,7 @@ npm run verify:bootstrap
 | Tauri debug build                       | Pass   | macOS arm64 app / DMG                                     |
 | macOS native E2E                        | Pass   | 3 specs / 16 tests                                        |
 | Today visual regression                 | Pass   | mismatch 0.000% / limit 4.000%                            |
-| final repository scripts                | Pass   | 113 links、227 text files、boundaries、i18n、workflows    |
+| final repository scripts（実行時点）    | Pass   | 113 links、227 text files、boundaries、i18n、workflows    |
 
 ## 未実行と残リスク
 

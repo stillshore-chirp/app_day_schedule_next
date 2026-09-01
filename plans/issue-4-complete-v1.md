@@ -58,7 +58,7 @@
 ## 最小スモーク
 
 ```bash
-node scripts/verify-agent-harness.mjs
+node scripts/validate-governance.mjs
 node scripts/verify-doc-links.mjs
 node scripts/security-scan-text.mjs
 node scripts/check-repository-boundaries.mjs

@@ -53,14 +53,14 @@
 ## 最小スモーク
 
 ```bash
-node scripts/verify-agent-harness.mjs
+node scripts/validate-governance.mjs
 ```
 
 ## 検証記録
 
 | Command / check | Result | Evidence |
 |---|---|---|
-| `node scripts/verify-agent-harness.mjs` | Pass | 81 required files / 5 skills |
+| 旧harness検証（履歴） | Pass | 実行時点の旧構成: 81 required files / 5 skills |
 | frontend unit / coverage | Pass | 16 files / 99 tests、coverage 89.48% statements |
 | frontend a11y | Pass | 3 files / 7 tests |
 | Rust all features | Pass | 120 lib + 1 provisioning test、Google localhost mockを許可付きで実行 |

@@ -58,7 +58,7 @@ VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --feature
 pnpm test:e2e
 ```
 
-個人利用向けに、PR CI は harness / frontend と、native 影響時の macOS arm64 Rust test・通常 Tauri no-bundle build に絞っています。詳細は [`docs/testing/index.md`](docs/testing/index.md) にあります。
+個人利用向けに、PR CIは変更pathをclassifierで分類し、該当する governance / frontend / native / dependency Quality gateを選択して実行します。security text scanと集約Quality gateは全PRで実行し、native影響時はmacOS arm64 Rust test・通常Tauri no-bundle buildを追加します。詳細は [`docs/testing/index.md`](docs/testing/index.md) にあります。
 
 ## データとセキュリティ
 
