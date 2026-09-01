@@ -191,3 +191,16 @@ test("workflow YAML parser rejects an invalidly indented sequence fixture", () =
   ].join("\n");
   fails(() => parseWorkflowYaml(invalidFixture, "invalid-workflow.yml"), /indentation|sequence/);
 });
+
+for (const [name, value] of [
+  ["duplicate flow mapping keys", "{a:1,a:2}"],
+  ["empty flow sequence item", "[a,,b]"],
+  ["nested empty flow sequence item", "[a,[,],b]"],
+]) {
+  test(`workflow YAML parser rejects ${name}`, () => {
+    fails(
+      () => parseWorkflowYaml(`value: ${value}\n`, `${name}.yml`),
+      /YAML flow mapping\/sequence syntax is unsupported/,
+    );
+  });
+}

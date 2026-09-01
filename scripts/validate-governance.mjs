@@ -930,41 +930,8 @@ function quotedScalar(value, label) {
   return literal.slice(1, -1).replaceAll("''", "'");
 }
 
-function flowScalar(value, label) {
-  const stack = [];
-  let quote = null;
-  let end = -1;
-  for (let index = 0; index < value.length; index += 1) {
-    const character = value[index];
-    if (quote === '"') {
-      if (character === "\\") index += 1;
-      else if (character === '"') quote = null;
-      continue;
-    }
-    if (quote === "'") {
-      if (character === "'" && value[index + 1] === "'") index += 1;
-      else if (character === "'") quote = null;
-      continue;
-    }
-    if (character === '"' || character === "'") {
-      quote = character;
-      continue;
-    }
-    if (character === '[' || character === '{') {
-      stack.push(character);
-    } else if (character === ']' || character === '}') {
-      const expected = character === ']' ? '[' : '{';
-      if (stack.pop() !== expected) fail(`${label}: mismatched YAML flow collection delimiter`);
-      if (stack.length === 0) {
-        end = index;
-        break;
-      }
-    }
-  }
-  if (quote) fail(`${label}: unterminated quoted YAML scalar`);
-  if (stack.length) fail(`${label}: unterminated YAML flow collection`);
-  if (end < 0 || value.slice(end + 1).trim()) fail(`${label}: invalid YAML flow collection`);
-  return value;
+function flowScalar(_value, label) {
+  fail(`${label}: YAML flow mapping/sequence syntax is unsupported`);
 }
 
 function blockScalarIndicator(value) {
