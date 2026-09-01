@@ -1,6 +1,8 @@
 ---
 name: calendar-sync-review
-description: "Google Calendar / Tasks同期レビューを共有正本へ接続する。"
+description: "Google Calendar / Tasks同期レビューの共有SkillをClaude Codeから呼び出す。"
 ---
 
-`../../../.agents/skills/calendar-sync-review/SKILL.md` が唯一の手順正本です。内容を複製せず、同fileを読んで実行してください。
+# calendar-sync-review adapter
+
+このファイルはClaude Code向けの薄いadapterです。実行時はリポジトリルートの [`.agents/skills/calendar-sync-review/SKILL.md`](../../../.agents/skills/calendar-sync-review/SKILL.md) を読み、そちらを唯一の手順正本として適用してください。このadapterへ手順本文を複製しません。

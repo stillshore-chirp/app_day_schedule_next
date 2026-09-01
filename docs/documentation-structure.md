@@ -69,7 +69,7 @@
 - root、nested rule、Skill、詳細docs、tool adapterで同じ長文を正本化しない。
 - rootは常時必要な共通核、nested ruleはpath固有差分、Skillはtaskの実行順、docsは判断基準を持つ。
 - `.claude/` と `.cursor/` は正本への接続だけを行い、新しい品質基準を持たない。
-- machine判定できるfile存在、size、frontmatter、禁止patternは `scripts/verify-agent-harness.mjs` へ置く。
+- machine判定できるfile存在、size、frontmatter、禁止patternは `scripts/validate-governance.mjs` へ置く。
 - 配置判断の詳細は `docs/agent-harness.md` に従う。
 
 ## 5. 一般的なDRY

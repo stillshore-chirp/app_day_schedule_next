@@ -1,6 +1,8 @@
 ---
 name: time-notification-review
-description: "時刻・通知・Focusレビューを共有正本へ接続する。"
+description: "時刻・通知・Focusレビューの共有SkillをClaude Codeから呼び出す。"
 ---
 
-`../../../.agents/skills/time-notification-review/SKILL.md` が唯一の手順正本です。内容を複製せず、同fileを読んで実行してください。
+# time-notification-review adapter
+
+このファイルはClaude Code向けの薄いadapterです。実行時はリポジトリルートの [`.agents/skills/time-notification-review/SKILL.md`](../../../.agents/skills/time-notification-review/SKILL.md) を読み、そちらを唯一の手順正本として適用してください。このadapterへ手順本文を複製しません。

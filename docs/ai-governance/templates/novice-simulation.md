@@ -1,43 +1,41 @@
-# Novice Simulation
+# 初見シミュレーション
 
-## Preconditions
+## 前提
 
-- Target user:
-- Context:
-- Goal:
-- Allowed prior knowledge:
-- Disallowed prior knowledge:
-- OS / window / data state:
+- 対象ユーザー:
+- 利用文脈:
+- ユーザー目的:
+- 事前知識として許可するもの:
+- 事前知識として許可しないもの:
 
-## 3-second check
+## 3秒確認
 
-- What screen / date is this:
-- Where is current time:
-- What is current / next:
-- First meaningful action:
-- Selected target / scope:
-- Unknowns:
+- 何の画面か:
+- 今どこか:
+- 最初に何をすべきか:
+- 主操作はどれか:
+- 不明点:
 
-## Task walkthrough
+## タスク試行
 
-| Step | User prediction | Found UI | Action | Understood result | Confusion / risk |
-|---:|---|---|---|---|---|
+| ステップ | ユーザーの予測 | 見つけたUI | 実行する操作 | 結果理解 | 迷い |
+|---|---|---|---|---|---|
 | 1 |  |  |  |  |  |
 | 2 |  |  |  |  |  |
 
-## Recovery attempt
+## 判定
 
-- Intentional mistake:
-- Error understanding:
-- Input retained:
-- Recovery found:
-- Return path:
-
-## Decision
-
-- Pass / Fail:
+- Pass/Fail:
 - P0:
 - P1:
 - P2:
-- Fix:
-- Limitation: AI simulation / real user observation:
+- 修正案:
+
+## Day Schedule Nextの初見入力
+
+- 日付、表示範囲、現在時刻、current / next:
+- 予定作成の主操作と最初の有意味な行動:
+- overviewとdetail timelineの役割:
+- local保存、Google同期、offline時の結果:
+- Template / Quick Blockの適用先・件数・Undo:
+- Compact / Focus / notificationの現在状態:

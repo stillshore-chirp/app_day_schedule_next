@@ -1,60 +1,144 @@
-# Canonical Sources
+# 参照する標準・研究・実務知見
 
-外部資料は名前を並べるだけで終わらず、画面上の観察点、Pass / Fail、evidence、fix に変換します。URL と内容は使用時に最新の公式ページで再確認します。
+この文書は、UI/UXガバナンスの背景となる参照先を整理します。
 
-## Accessibility
+AIエージェントは、参照先の名前を並べるだけでレビューを終えてはいけません。参照した知見は、画面上の観察点、Pass/Fail条件、証跡、修正案へ変換してください。
 
-- W3C WCAG 2.2: https://www.w3.org/TR/WCAG22/
-- W3C Cognitive and Learning Disabilities guidance: https://www.w3.org/TR/coga-usable/
-- WAI Keyboard Accessible: https://www.w3.org/WAI/WCAG22/Understanding/keyboard-accessible
-- WAI Dragging Movements: https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements
+## 1. アクセシビリティ標準
 
-用途: keyboard、focus、drag alternative、name / role / value、contrast、target size、status、error identification。
+- W3C Web Content Accessibility Guidelines (WCAG) 2.2
+  https://www.w3.org/TR/WCAG22/
 
-## HCI / Japanese UI
+用途:
 
-- Nielsen Norman Group usability heuristics: https://www.nngroup.com/articles/ten-usability-heuristics/
-- Digital Agency Design System: https://design.digital.go.jp/
+- キーボード操作
+- フォーカス
+- コントラスト
+- ターゲットサイズ
+- 名前・役割・値
+- エラー識別
+- ステータスメッセージ
+- リフロー
+- 入力支援
 
-用途: system status、recognition、consistency、error prevention / recovery、Japanese typography。
+## 2. 認知アクセシビリティ
 
-## Tauri
+- W3C Making Content Usable for People with Cognitive and Learning Disabilities
+  https://www.w3.org/TR/coga-usable/
 
-- Tauri 2 docs: https://v2.tauri.app/
-- CSP: https://v2.tauri.app/security/csp/
-- Capabilities: https://v2.tauri.app/security/capabilities/
-- Plugins: https://v2.tauri.app/plugin/
-- WebDriver testing: https://v2.tauri.app/develop/tests/webdriver/
+用途:
 
-用途: WebView security、permission、window、native test、distribution。
+- 明確な目的
+- 見つけやすい重要タスク
+- 理解しやすい言葉
+- 記憶に頼らない設計
+- ミスの予防と回復
+- 集中しやすい構造
 
-## Google OAuth / Calendar
+## 3. HCI・ユーザビリティ原則
 
-- OAuth for desktop apps: https://developers.google.com/identity/protocols/oauth2/native-app
-- Calendar incremental sync: https://developers.google.com/workspace/calendar/api/guides/sync
-- Calendar errors: https://developers.google.com/workspace/calendar/api/guides/errors
-- Events resource: https://developers.google.com/workspace/calendar/api/v3/reference/events
-- Events / recurrence concepts: https://developers.google.com/workspace/calendar/api/concepts/events-calendars
+- Nielsen Norman Group: 10 Usability Heuristics for User Interface Design
+  https://www.nngroup.com/articles/ten-usability-heuristics/
 
-用途: PKCE、loopback、scope、token、nextSyncToken、410、recurrence、event fields。
+- Nielsen Norman Group: Usability 101
+  https://www.nngroup.com/articles/usability-101-introduction-to-usability/
 
-## Time / recurrence
+用途:
 
+- システム状態の可視化
+- 現実世界との対応
+- ユーザー制御と自由
+- 一貫性
+- エラー予防
+- 記憶より認識
+- 効率性
+- 最小限で意味のある設計
+- エラー回復
+- ヘルプ
+- useful = utility + usability の考え方
+
+## 4. 日本語UIとタイポグラフィ
+
+- デジタル庁デザインシステム: タイポグラフィ（アクセシビリティ）
+  https://design.digital.go.jp/dads/foundations/typography/accessibility/
+
+用途:
+
+- 日本語長文の読みやすさ
+- 行高
+- 行長
+- 文字拡大
+- 文字画像の回避
+- フォント変更への耐性
+
+## 5. AIエージェント運用
+
+- OpenAI Codex: Custom instructions with AGENTS.md
+  https://developers.openai.com/codex/guides/agents-md
+
+- OpenAI Codex: Agent Skills
+  https://developers.openai.com/codex/skills
+
+- Claude Code: Memory / CLAUDE.md
+  https://code.claude.com/docs/en/memory
+
+用途:
+
+- `AGENTS.md` を起点にしたルール設計
+- Skillによる重い作業手順の分離
+- `CLAUDE.md` から `AGENTS.md` を参照する設計
+
+## 6. 最新研究の扱い
+
+最新研究は重要ですが、単発研究をただちにP0ルールへ昇格させてはいけません。
+
+取り込み手順:
+
+1. 研究が扱う対象ユーザー、タスク、環境を確認する。
+2. 既存標準・HCI原則・認知アクセシビリティ指針と矛盾しないか確認する。
+3. 画面上の観察点へ変換する。
+4. Pass/Fail条件へ変換できるか確認する。
+5. 強制ルール、推奨ルール、検証仮説のどれに置くか判断する。
+
+## 7. 採用しない参照の扱い
+
+次は採用根拠として弱いです。
+
+- 出典不明のブログ記事
+- 根拠のないSNS投稿
+- 対象条件が極端に限定された単発実験
+- デザインの流行だけを根拠にした記事
+- 実装ツール固有の都合だけで作られた規約
+
+採用する場合は、補助観点として扱い、P0化しないでください。
+
+## Day Schedule Nextの製品・プラットフォーム正本
+
+製品固有の判断では、外部資料より先にrepository内の現行契約を確認します。以下は仕様の正本そのものではなく、実装とレビューを照合する入口です。
+
+- Day Schedule Next product invariants: [docs/product-invariants.md](../../product-invariants.md)
+- Architecture boundaries: [docs/architecture-boundaries.md](../../architecture-boundaries.md)
+- Testing and risk lanes: [docs/testing/index.md](../../testing/index.md)
+- Tauri 2 documentation: https://v2.tauri.app/
+- Tauri CSP: https://v2.tauri.app/security/csp/
+- Tauri capabilities: https://v2.tauri.app/security/capabilities/
+- Tauri WebDriver testing: https://v2.tauri.app/develop/tests/webdriver/
+- Google OAuth for desktop applications: https://developers.google.com/identity/protocols/oauth2/native-app
+- Google Calendar incremental sync: https://developers.google.com/workspace/calendar/api/guides/sync
+- Google Calendar errors: https://developers.google.com/workspace/calendar/api/guides/errors
+- Google Calendar events resource: https://developers.google.com/workspace/calendar/api/v3/reference/events
+- Google Calendar recurrence concepts: https://developers.google.com/workspace/calendar/api/concepts/events-calendars
 - RFC 5545: https://www.rfc-editor.org/rfc/rfc5545
 - IANA Time Zone Database: https://www.iana.org/time-zones
 
-用途: recurrence、all-day、timezone、DST。
+用途: TauriのWebView security、window / command capability、native test、PKCE、loopback、scope、nextSyncToken、410、recurrence、all-day、timezone、DST、local-first、backup / restore、notificationの確認。
 
-## AI agents
+追加の標準参照:
 
-- OpenAI Codex AGENTS.md guide: https://developers.openai.com/codex/guides/agents-md
-- OpenAI Codex Skills: https://developers.openai.com/codex/skills
-- Claude Code memory: https://docs.anthropic.com/en/docs/claude-code/memory
+- W3C WAI-ARIA Authoring Practices: Keyboard Interface / Patterns
+  https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/
+  https://www.w3.org/WAI/ARIA/apg/patterns/
+- W3C CSS Color Adjustment Module Level 1: https://www.w3.org/TR/css-color-adjust-1/
+- W3C Media Queries Level 5 (`prefers-reduced-motion`): https://www.w3.org/TR/mediaqueries-5/
 
-用途: root / scoped instructions、Skill separation、tool redirect。
-
-## Reference application
-
-- Behavior reference only: https://github.com/stillshore-chirp/app_day_schedule
-
-参照コード、UI、画像、音源、文言はコピーしません。抽象化された互換契約は `docs/product-invariants.md` を正本とします。
+参照アプリの挙動を扱う場合も、コード、UI、画像、音源、文言をコピーせず、抽象化された互換契約を [docs/product-invariants.md](../../product-invariants.md) で確認します。

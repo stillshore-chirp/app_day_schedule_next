@@ -35,6 +35,7 @@ pnpm --dir apps/desktop tauri dev
 変更範囲に応じて [`docs/testing/index.md`](docs/testing/index.md) のrisk laneから最小十分な組合せを選びます。次は横断変更・release・CI failure再現で使う一括候補であり、通常変更ですべてをlocal実行する必須listではありません。
 
 ```bash
+node scripts/validate-governance.mjs
 npm run verify:bootstrap
 pnpm format:check
 pnpm lint

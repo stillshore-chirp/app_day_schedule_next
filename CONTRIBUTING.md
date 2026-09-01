@@ -19,4 +19,4 @@ Day Schedule Next は個人利用を主目的とするプロジェクトです�
 
 ## 品質
 
-変更領域に応じて `pnpm verify`、Rust checks、native E2E、macOS / Windows build を実行します。未実行項目は理由と残リスクを PR に記載してください。
+変更領域に応じて `node scripts/validate-governance.mjs`、`npm run verify:bootstrap`、Rust checks、native E2E、macOS / Windows build を実行します。未実行項目は理由と残リスクを PR に記載してください。

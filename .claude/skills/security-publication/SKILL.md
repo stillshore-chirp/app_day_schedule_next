@@ -1,6 +1,8 @@
 ---
 name: security-publication
-description: "公開安全性レビューを共有正本へ接続する。"
+description: "公開安全性レビューの共有SkillをClaude Codeから呼び出す。"
 ---
 
-`../../../.agents/skills/security-publication/SKILL.md` が唯一の手順正本です。内容を複製せず、同fileを読んで実行してください。
+# security-publication adapter
+
+このファイルはClaude Code向けの薄いadapterです。実行時はリポジトリルートの [`.agents/skills/security-publication/SKILL.md`](../../../.agents/skills/security-publication/SKILL.md) を読み、そちらを唯一の手順正本として適用してください。このadapterへ手順本文を複製しません。

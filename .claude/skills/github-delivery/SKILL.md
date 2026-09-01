@@ -1,6 +1,8 @@
 ---
 name: github-delivery
-description: "IssueからPR・CI・reviewまでの配送手順を共有正本へ接続する。"
+description: "Issue、PR、CI、reviewの共有配送SkillをClaude Codeから呼び出す。"
 ---
 
-`../../../.agents/skills/github-delivery/SKILL.md` が唯一の手順正本です。内容を複製せず、同fileを読んで実行してください。
+# github-delivery adapter
+
+このファイルはClaude Code向けの薄いadapterです。実行時はリポジトリルートの [`.agents/skills/github-delivery/SKILL.md`](../../../.agents/skills/github-delivery/SKILL.md) を読み、そちらを唯一の手順正本として適用してください。このadapterへ手順本文を複製しません。

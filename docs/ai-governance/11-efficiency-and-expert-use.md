@@ -1,69 +1,100 @@
-# Efficiency and Expert Use
+# 熟練者効率と反復利用
 
-## 1. 主要反復タスク
+初見に優しいUIは重要です。しかし、慣れたユーザーを毎回遅くするUIは、長期的なUXを損ねます。
 
-- 今日の予定を作る。
-- start / end / duration を調整する。
-- schedule を複製 / 移動 /翌日へ繰越す。
-- template / Quick Block を適用する。
-- category / tag / calendar を再選択する。
-- Focus start / pause / resume。
-- sync retry / conflict resolve。
+## 1. 基本方針
 
-## 2. 手数
+- 初心者には文脈を与える。
+- 熟練者には近道を与える。
+- 説明は必要な時に参照できるようにする。
+- 反復作業では、再入力・再選択・再確認を減らす。
+- 安全性のための確認と、無駄な確認を区別する。
 
-各タスクの pointer steps と keyboard steps を数えます。
+## 2. 主要反復タスクの特定
 
-- create は空き時間からの direct action を持つか。
-- move / resize 後に毎回 modal save を要求しないか。
-- same calendar / category / duration を再入力させないか。
-- multi-select / bulk move が必要な volume か。
-- successful action 後に次の schedule edit へ移れるか。
+UI変更時には、次を特定します。
 
-## 3. State persistence
+- ユーザーが何度も行う操作は何か。
+- 1日に複数回行う可能性がある操作は何か。
+- 失敗後に再実行する操作は何か。
+- 一括で処理したい対象は何か。
+- 前回設定を再利用したい場面は何か。
 
-必要に応じて保持:
+## 3. 手数の確認
 
-- selected view / date / zoom / snap。
-- last calendar / category / duration。
-- filter / sort / search scope。
-- Inspector open state / Compact size。
-- Focus preference。
+確認事項:
 
-privacy / surprise を考慮し、すべてを無条件保持しません。
+- 主要タスク完了までに何ステップ必要か。
+- 同じ情報を何度も入力させていないか。
+- 同じ選択を毎回やり直させていないか。
+- 戻った時に入力や状態が失われていないか。
+- 成功後に次の同種作業へ移れるか。
 
-## 4. Novice help
+## 4. 初心者向け説明の扱い
 
-- first-run だけの説明を毎回表示しない。
-- dismiss / reopen を提供する。
-- help が timeline / current / primary action を押し下げない。
-- shortcut は novice を妨げず expert が発見できる。
+確認事項:
 
-## 5. Accelerators
+- 初回だけ必要な説明が毎回表示されていないか。
+- 説明を閉じる、折りたたむ、再表示する方法があるか。
+- 詳細説明が主操作を押し下げていないか。
+- 初心者向け導線が、熟練者のショートパスを塞いでいないか。
 
-- keyboard shortcuts。
-- duplicate、copy / paste、multi-select。
-- templates / Quick Blocks。
-- saved filters / recent values。
-- command palette（必要性が検証された場合）。
-- direct time entry。
-- Undo / Redo。
+## 5. 近道
 
-## 6. P0
+必要に応じて検討します。
 
-- main repetitive task が不要な confirmation / onboarding / re-entry で恒常的に妨害される。
-- failure 後に入力・selection・date を失い最初からやり直す。
-- frequent action が rare action より見つけにくい。
-- drag-only で precision work に alternative がない。
-- non-destructive edit に過剰 confirmation。
+- キーボードショートカット
+- 一括操作
+- 最近使った項目
+- 前回設定
+- テンプレート
+- 複製
+- 下書き
+- 自動保存
+- 再試行
+- 絞り込み条件の保持
+- 高度な設定の折りたたみ
 
-## 7. Safety balance
+近道は、初心者を混乱させず、熟練者だけが使える形でも構いません。
 
-confirmation が必要:
+## 6. 効率のP0
 
-- remote delete / series change。
-- restore / import commit。
-- disconnect with mapping impact。
-- irreversible purge。
+次はP0です。
 
-confirmation 内でも target、count、scope、Undo / rollback を示し、反復を過度に妨げません。
+- 主要反復タスクが、不要な説明、確認、再入力、再選択によって恒常的に妨害される。
+- 戻る、再試行、保存、復帰ができず、失敗時に作業を最初からやり直す必要がある。
+- よく使う主操作が、まれな操作より見つけにくい。
+- 危険ではない操作に過剰な確認を強制し、反復作業を著しく妨げる。
+
+## 7. 効率のP1
+
+次はP1です。
+
+- 一括操作や前回設定があると明らかに改善するが、現時点では単体操作で完了できる。
+- 説明が少し冗長。
+- 操作手順が1〜2ステップ多い。
+- 反復利用時のショートカットがない。
+
+## 8. 安全性とのバランス
+
+効率を上げるために、安全性を削ってはいけません。
+
+確認を省略しにくい場面:
+
+- 削除
+- 公開
+- 送信
+- 課金
+- 権限変更
+- 個人情報の共有
+- 復元困難な上書き
+
+ただし、確認画面でも対象、影響、取り消し可否が明確で、繰り返し利用を過度に妨げないことが必要です。
+
+## Day Schedule Nextの反復タスク
+
+Day Schedule Nextで優先して確認する反復タスクは、空き時間からの予定作成、start / end / durationの調整、予定の複製・移動・翌日繰越、Template / Quick Blockの適用、category / tag / calendarの再選択、Focusのstart / pause / resume、sync retry / conflict resolveです。
+
+pointer、keyboard、direct inputそれぞれの手数を、変更対象のtaskで比較します。保存精度1分と表示snapを区別し、moveはdurationを保持し、resizeは開始または終了を変えることを、過剰な確認や再入力なしに完了できるか確認します。
+
+selected view / date / zoom / snap、last calendar / category / duration、filter / sort / search scope、Inspector open state、Compact size、Focus preferenceは、privacyとsurpriseを考慮して必要な範囲で再利用します。local edit、retry、Undo、conflict解決で入力・selection・日付を失わず、remote delete、series change、restore / import commit、disconnectなどの危険操作には対象と影響を示す確認を残します。

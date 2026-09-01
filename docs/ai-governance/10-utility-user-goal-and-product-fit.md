@@ -1,85 +1,101 @@
-# Utility, User Goal and Product Fit
+# ユーザー価値・目的適合ゲート
+
+UIが分かりやすくても、ユーザーの目的を助けなければ良いUXではありません。このゲートは「分かりやすいが不要なUI」を防ぐためのものです。
 
 ## 1. 基本質問
 
-すべての UI / feature 変更で答えます。
+すべてのUI/UX変更で、次に答えてください。
 
-1. 誰が使うか。
-2. どの文脈か。
-3. 何を達成したいか。
-4. 予定の理解、判断、行動、回復、継続のどれを助けるか。
-5. この UI がなければどこで困るか。
-6. 既存導線で代替できないか。
-7. 追加情報は意思決定に使われるか。
-8. 削るべき操作 / information はないか。
+1. このUIの対象ユーザーは誰か。
+2. そのユーザーはどの文脈で使うか。
+3. そのユーザーは何を達成したいか。
+4. このUIは、理解、判断、行動、回復、継続のどれを助けるか。
+5. このUIがなければ、ユーザーはどこで困るか。
+6. このUIは、既存の導線や情報で代替できないか。
+7. 追加した情報や操作は、ユーザーの意思決定に必要か。
+8. 削るべき情報や操作はないか。
 
-## 2. Day Schedule Next の Job
+## 2. ユーザー目的の書き方
 
-- 今日の時間配分を短時間で作る。
-- 現在と次を見失わず実行する。
-- 計画変更を分単位で素早く反映する。
-- recurring pattern を再利用する。
-- Google 接続の有無に関わらず計画を保持する。
-- failure から data を失わず回復する。
+悪い例:
 
-screen name を user goal として書きません。
-
-弱い:
-
-```text
+```txt
 ユーザーは設定画面を使う。
 ```
 
-良い:
+良い例:
 
-```text
-ユーザーは通知の頻度と、アプリ終了中に通知できる条件を確認し、自分の作業を妨げず必要な通知だけを受け取りたい。
+```txt
+ユーザーは通知が多すぎる状態を減らすため、受け取る通知の種類と頻度を確認し、自分に必要な通知だけを残したい。
 ```
 
-## 3. Job / Task / Decision / Feedback / Recovery
+ユーザー目的は、画面名ではなく、ユーザーが達成したい結果で書きます。
 
-各画面は最低一つの Task、Decision、Feedback、Recovery を支援します。
+## 3. Job / Task / Decision
 
-例: conflict resolver
+UIが支援するものを分類します。
 
-- Task: conflict item を確認。
-- Decision: local / Google / field merge。
-- Feedback: next sync state。
-- Recovery: resolution retry / reopen。
+- Job: ユーザーが達成したい大きな目的。
+- Task: 画面上で行う具体的な作業。
+- Decision: ユーザーが選ぶ必要のある判断。
+- Feedback: 操作結果を理解するための反応。
+- Recovery: 失敗時に戻るための手段。
 
-## 4. P0
+画面やコンポーネントは、少なくとも1つのTask、Decision、Feedback、Recoveryを明確に助ける必要があります。
 
-- target user / goal を説明できない。
-- primary information が判断に使われない。
-- technical architecture を user value として説明する。
-- schedule planning を妨げる secondary feature を主役にする。
-- Google connection を必須にして local-first value を壊す。
+## 4. 価値のP0
 
-## 5. P1
+次はP0です。
 
-- value はあるが context / scope が曖昧。
-- similar screens が重複。
-- main task より settings / diagnostics が強い。
-- information の一部が decision に使われない。
+- 対象ユーザーを説明できない。
+- ユーザー目的を説明できない。
+- UIが支援する理解・判断・行動を説明できない。
+- 画面上の主要情報が、意思決定や行動に使われない。
+- ユーザーにとって不要な操作を、見た目の都合で追加している。
+- 技術的都合や内部構造を、ユーザー価値のように説明している。
+
+## 5. 価値のP1
+
+次はP1です。
+
+- 価値はあるが、対象ユーザーや利用文脈が曖昧。
+- 情報の一部が意思決定に使われない。
+- 画面の役割が近い別画面と重複している。
+- 主要タスク以外の操作が目立ちすぎている。
 
 ## 6. 削る判断
 
-候補:
+良いUXは、足すだけではありません。削ることも品質です。
 
-- internal ID / debug status。
-- 常時表示の長い onboarding。
-- duplicate create actions。
-- rare advanced setting の primary placement。
-- decorative metrics that do not change action。
+削除候補:
 
-## 7. Success hypotheses
+- ユーザーの判断に使われない件数、ID、内部状態。
+- 常に表示される長い説明。
+- まれな操作なのに主操作と同じ強さで出ている操作。
+- 目的が重複するボタン。
+- ユーザーが理解できない内部用語。
 
-計測していないものは hypothesis と明示します。
+## 7. 成功指標
 
-- schedule create / move / resize completion steps。
-- correction / Undo rate。
-- conflict resolution success。
-- search reset rate。
-- notification permission recovery。
-- help / shortcut usage。
-- time to understand current / next。
+可能なら、次のような成功指標を定義します。
+
+- 主要タスク完了率
+- 主要タスク完了までの手数
+- 入力エラー率
+- 再試行率
+- 離脱率
+- 検索・フィルタのリセット率
+- ヘルプ参照率
+- 誤操作率
+- 取り消し率
+- サポート問い合わせの内容
+
+AIエージェントは、計測できない指標を計測済みとして報告してはいけません。計測仮説として扱います。
+
+## Day Schedule NextのJob
+
+Day Schedule Nextが支援する主なJobは、自分の一日の時間配分を短時間で作ること、現在と次を見失わず実行すること、予定の変更を分単位で反映すること、日次・曜日テンプレートを再利用すること、Google接続の有無に関わらず計画を保持すること、失敗から予定や入力を失わず回復することです。
+
+UI変更では、少なくとも一つのJobに対して、具体的なTask、ユーザーが選ぶDecision、結果を理解するFeedback、失敗から戻るRecoveryを記録します。例えばconflict resolverなら、対象calendar・field・seriesを確認し、端末 / Google / 項目ごとの解決を選び、次回syncの結果を確認し、失敗時に選択を保持して再試行できることが価値です。
+
+Google接続や高度なdiagnosticsを増やす場合も、local-firstの計画作成という基礎価値を損なわないことを確認します。成功指標は実測値と仮説を分け、予定作成・move・resizeの完了手数、Undo / correction、conflict resolution、notification permission recovery、current / next理解時間など、計測していないものを観測済みと表現しません。

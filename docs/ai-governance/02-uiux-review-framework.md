@@ -1,149 +1,248 @@
 # UI/UXレビュー・フレームワーク
 
-この文書は、Day Schedule NextのUI/UXを評価する中心規約です。
+この文書は、AIエージェントがUI/UXをレビューするための中心規約です。
 
-## 1. 対象面と所有境界
+## 1. 適用対象と所有境界
 
-証跡の範囲は、表示場所と、変更対象のUI・操作を誰が制御しているかで決めます。
+証跡の範囲は、表示場所ではなく、変更対象の UI と操作を誰が制御しているかで決めます。
 
-| 対象面 | 例 | repositoryが制御するもの | 適用するreview |
+| 対象面 | 例 | リポジトリが制御するもの | 適用するレビュー |
 |---|---|---|---|
-| アプリ本体UI | Tauri WebView、window、notification、installer内UI | layout、操作、状態、focus、accessibility、copy | 本文書の全経路とnative証跡 |
-| GitHub共同作業面 | Issue / PR template、repository Markdown、workflow説明 | 文言、項目、順序、必須性、Markdown、設定 | 内容・構造・link・公開安全性 |
-| 混在 | app UIとtemplateを同時変更 | 両方 | 一方の証跡で他方を代用しない |
-| N/A | UIや共同作業面を変更しない | なし | 理由を短く記録 |
+| アプリ本体 UI | Web / デスクトップアプリ、製品サイト、GitHub Pages 上の製品画面 | レイアウト、操作、状態、フォーカス、アクセシビリティ、コピー | 本文書の全レビュー経路とアプリ UI 証跡 |
+| GitHub 共同作業面 | Issue / PR テンプレート、Issue / PR 本文、リポジトリ Markdown、workflow の入力・説明 | 文言、項目、順序、必須性、Markdown、設定 | 内容・構造・表示・リンク・公開安全性の範囲に比例したレビュー |
 
-GitHub共同作業面では、GitHubが提供しrepositoryが変更していないlayout、keyboard、focus、loadingまで検査対象を広げません。GitHub Pagesやrepository独自UIはアプリ本体UIとして扱います。
+ブラウザで表示されること自体は、アプリ本体 UI である根拠になりません。GitHub 共同作業面では、GitHub が提供していて変更していないレイアウト、キーボード操作、フォーカス、読み込み状態までリポジトリ変更の検証対象に広げません。一方、GitHub Pages、GitHub App、埋め込み Web UI など、リポジトリ側が独自 UI を実装する場合はアプリ本体 UI として扱います。
 
-## 2. 品質の定義
+GitHub 共同作業面だけの変更でも、リポジトリが制御するコピーの明確さ、入力順、必須項目、送信前に必要な判断材料、Markdown の崩れ、リンク、公開安全性は確認します。対象面が混在する変更は、それぞれ別に判定し、GitHub 側の確認を理由にアプリ本体 UI の検証を省略してはいけません。
 
-対象ユーザーが、一日の予定を把握・設計・実行・回復でき、現在の状態を理解し、失敗から戻れ、慣れれば速く、安心して使えることを評価します。
+## 2. UI/UX品質の定義
 
-評価軸:
+このガバナンスでは、良いUI/UXを次のように定義します。
 
-1. Utility: 一日の把握・設計・実行・回復に役立つか。
-2. Initial comprehension: 今日、現在、選択、主操作が分かるか。
-3. Interaction: 分単位編集を安全・高速に行えるか。
-4. State design: empty / offline / conflict / permission / errorが明確か。
-5. Accessibility: keyboard、focus、drag equivalent、name / role / state。
-6. Visual hierarchy: overview、detail、Now、Inspector、Compactの優先度。
-7. Copy: local / remote / delete / permission / notificationの結果が正確か。
-8. Efficiency: 予定作成・調整・再利用の反復手数。
-9. Trust: データ、同期、backup、notificationの安心と回復。
-10. Evidence: native state、test、screenshot、manual observation。
+> 対象ユーザーが、特定の文脈で、目的を達成できること。
+> その過程が分かりやすく、見やすく、操作しやすく、失敗しても回復でき、慣れれば速く、安心して使えること。
 
-## 3. review pipeline
+したがって、UI/UXレビューは次を同時に扱います。
 
-### 目的・価値
+- ユーザー価値: そもそも役に立つか。
+- 初見理解: 初めて見ても分かるか。
+- 認知負荷: 覚えさせすぎず、判断させすぎないか。
+- 視認性: 重要なものが見えるか。
+- 操作可能性: 迷わず操作できるか。
+- 状態理解: 今何が起きているか分かるか。
+- エラー回復: 失敗しても戻れるか。
+- アクセシビリティ: 多様な利用者・環境で使えるか。
+- 熟練者効率: 慣れた後も速く使えるか。
+- 満足感・信頼感: 安心して使え、嫌な体験になっていないか。
 
-- 対象ユーザーと利用文脈を特定する。
-- 支援する理解、判断、行動、回復を明確にする。
-- 既存UIで目的を達成できる場合、追加UIの必要性を再評価する。
+## 3. レビューの基本質問
 
-### 初見理解
+アプリ本体 UI と、リポジトリが独自に制御する UI の変更では、次に答えてください。GitHub 共同作業面だけの変更では、リポジトリが制御する文言・構造に該当する質問だけを適用します。
 
-短時間で次を判断できるか確認します。
+1. これは誰のためのUIか。
+2. そのユーザーは何を達成したいのか。
+3. このUIは何を理解・判断・実行しやすくするのか。
+4. 初見で何の画面か分かるか。
+5. 今どこにいるか分かるか。
+6. 何ができるか分かるか。
+7. 最初に何をすべきか分かるか。
+8. 操作したら何が起きるか予測できるか。
+9. 待機中、空、失敗、無効、権限不足の時に次の行動が分かるか。
+10. 慣れたユーザーが不要に遅くならないか。
+11. ユーザーに不必要な不安、恥、責任転嫁、混乱を与えないか。
+
+## 4. レビューパイプライン
+
+### 4.1 目的・価値パス
+
+- 対象ユーザーを特定する。
+- ユーザー目的を特定する。
+- このUIが支援する判断・行動・理解を明確にする。
+- UIがなくても困らない場合、なぜ存在するのか再検討する。
+
+### 4.2 初見理解パス
+
+3秒だけ見た前提で、次を判断します。
 
 - 何の画面か。
-- 今日・現在・表示範囲・選択対象は何か。
-- 最初の行動と主操作は何か。
-- 操作結果と回復方法は何か。
+- 今どこか。
+- 最初に何をすべきか。
+- 主操作はどれか。
+- 何が変化したか。
 
-### 状態
+答えられない場合は、見出し、説明、視覚階層、状態表示、ラベルを修正します。
 
-normalだけで判断せず、該当するstate matrixを作ります。
+### 4.3 認知負荷パス
 
-- empty、loading、partial、no result、error、validation、disabled
-- offline、retry、conflict、auth expired
-- permission unknown / denied / granted
-- narrow、200% text、long content、500 items
-- current none / one / multiple、cross-midnight、overlap
+- 覚える必要がある情報をUI上に出しているか。
+- 内部用語を押し付けていないか。
+- 選択肢を一度に出しすぎていないか。
+- 高度な機能は必要な時にだけ出ているか。
+- ユーザーのメンタルモデルと一致しているか。
 
-### 操作とaccessibility
+### 4.4 状態設計パス
 
-- 主要導線をkeyboardだけで完了する。
-- drag、resizeへkeyboardまたは直接入力の等価操作を用意する。
-- focus order、visible focus、restoration、modal escapeを確認する。
-- name / role / state、contrast、target size、reduced motion、live regionを確認する。
-- 色だけでcategory、conflict、sync、priority、currentを表さない。
+アプリ本体 UI では通常状態だけで判断せず、必ずstate matrixを作成または更新します。GitHub 共同作業面では、リポジトリが定義・変更する入力状態だけを確認し、GitHub が所有する未変更のプラットフォーム状態は対象外とします。
 
-### 視覚階層とcopy
+最低限、次を確認します。
 
-- Today、現在、次、主操作が先に見える。
-- overview、detail、Now Dock、Compact、Inspectorが同じ状態を矛盾なく示す。
-- internal termをUIへ出さない。
-- errorは原因、影響、data retention、recoveryを示す。
-- local save、remote sync、delete scope、notification deliveryを正確に表す。
+- 通常
+- 読み込み中
+- 空
+- 検索結果なし
+- 部分データ
+- エラー
+- 入力エラー
+- 無効
+- 権限不足
+- オフラインまたは利用不可
+- 狭幅
+- 文字拡大
+- 長文・大量データ
 
-### 効率と信頼
+### 4.5 視覚階層パス
 
-- 予定作成、複製、時間調整、翌日繰越、template、Focus、sync retryの手数を数える。
-- 前回設定、calendar、filter、duration、viewを必要に応じて保持する。
-- 危険でない操作へ確認dialogを乱発しない。
-- pending、failure、conflict、restoreで入力と予定が消えたように見せない。
+- 一番重要な情報が最初に見えるか。
+- 主操作が自然に目に入るか。
+- 補助情報が主操作を邪魔していないか。
+- グルーピング、余白、整列が理解を助けているか。
+- 文字サイズ、行高、行長、コントラストが読みやすいか。
 
-### 反証
+### 4.6 アクセシビリティパス
 
-- 500件、長い日本語、23:59、日跨ぎ、DSTで崩れないか。
-- pointerだけで成立していないか。
-- current-time line、overlap、Compactでfocusが隠れないか。
-- offlineなのにsync済みに見えないか。
-- local deleteとremote deleteが曖昧でないか。
-- macOS固有の見た目やshortcutをWindows共通仕様としていないか。
-- mock / browser previewだけをnative証跡としていないか。
+- キーボードだけで主要タスクを完了できるか。
+- フォーカスが見えるか。
+- 操作要素に名前があるか。
+- ラベルと名前が一致しているか。
+- 色だけで意味を伝えていないか。
+- ステータスメッセージが支援技術へ伝わるか。
+- コントラスト、ターゲットサイズ、テキスト拡大に問題がないか。
 
-## 4. P0
+### 4.7 コピー・用語パス
 
-次は完了不可です。
+- ユーザーの言葉で書かれているか。
+- ボタンは結果が分かる動詞になっているか。
+- 空状態は次の行動を示すか。
+- エラーは原因・影響・回復手段を示すか。
+- disabledは理由・有効化条件を示すか。
+- ユーザーを責める文言になっていないか。
 
-- 対象ユーザー、user goal、supported actionを説明できない。
-- Today、current date、primary action、selected targetが認識できない。
-- drag-only interactionにkeyboard / direct input equivalentがない。
-- empty、loading、offline、conflict、permission、errorを混同する。
-- local savedとGoogle syncedを同じ表示にする。
-- destructive / remote-impact actionに対象、影響、recoveryがない。
-- keyboard trap、invisible focus、missing accessible name、color-only state、読めないcontrast。
-- current-time line、overlap、Compactで操作対象が隠れる。
-- userを責めるcopy、false reassurance。
-- 対象面に必要なstate matrix、counter-review、evidence、未実行報告がない。
-- data loss、silent overwrite、duplicate、token exposureへつながるUIを残す。
+### 4.8 熟練者効率パス
 
-## 5. P1 / P2
+- 反復タスクの手数は妥当か。
+- 初心者向け説明が毎回の障害にならないか。
+- 入力保持、前回設定、ショートカット、一括操作、再実行、復帰導線を検討したか。
+- よく使う操作が深い階層に隠れていないか。
 
-### P1
+### 4.9 満足感・信頼感パス
 
-原則として同じ変更内で修正します。
+- 待機中に不安を減らしているか。
+- 成功時に何が完了したか分かるか。
+- 失敗時にユーザーを責めていないか。
+- 危険操作の対象、影響、取り消し可否が明確か。
+- 個人情報、権限、送信、公開、削除に関わるUIが信頼できるか。
 
-- label、terminology、shortcutが不統一。
-- empty、success、errorのnext actionが弱い。
-- timeline density、time label、overlap orderingが読みづらい。
-- 反復操作に回避可能な余分な手順がある。
-- previous settingやselectionが不必要に失われる。
-- pending、retry、conflictのscopeが曖昧。
-- macOS / Windowsのcopy、shortcut、menu差が不自然。
+### 4.10 反証レビューパス
 
-### P2
+最後に、実装を落とすつもりでレビューします。
 
-- spacing、animation、microcopyの改善。
-- additional shortcut、bulk action、customization。
-- onboardingの改善。
-- measurementや実ユーザー調査が必要な仮説。
+- 目的が曖昧ではないか。
+- 初見理解が成立していない箇所はないか。
+- 状態が抜けていないか。
+- アクセシビリティの見落としはないか。
+- 熟練者効率を壊していないか。
+- 信頼を損なう表現や挙動はないか。
+- 証跡が不足していないか。
 
-## 6. 画面固有の確認
+### 4.11 証跡駆動フロー監査パス
 
-- **Today**: date、view range、current time、create、current / next / remaining / free time、overlap、cross-midnight。
-- **Inspector**: selection scope、time、timezone、calendar、recurrence、notification、validation、unsaved state。
-- **Compact**: actionableなcurrent / next / remaining / Focus、topmost、keyboard access、screen bounds。
-- **Sync / Conflict**: account / calendar scope、local / remote差分、retry、re-auth、merge結果。
-- **Ticket / Kanban**: column scope、priority、archive、dragとkeyboard移動、Schedule linkage、hidden item ordering。
-- **Backup / Restore / Import**: candidate、counts、warnings、overwrite impact、backup、cancel / rollback。
+既存画面または複数ステップの体験監査では、`.agents/skills/ui-ux-review/SKILL.md` のフロー監査レーンで実際のタスクを順に操作します。重要ステップは、ユーザーの判断、入力、画面遷移、主要な状態変化、タスク完了、失敗からの回復を理解するために必要な地点です。装飾だけが変わる中間frameを機械的に増やしません。
 
-## 7. 証跡の強さ
+各重要ステップについて、次を一つの監査記録として扱います。
 
-1. affected OSのnative E2E / manual observation
-2. deterministic integration / component test
-3. screenshot / video / trace
-4. static code inspection
-5. reasoning only
+- ステップ番号、ユーザーの行動、到達した画面・状態
+- 現在の監査実行で取得し、保存後に検査したscreenshot、または取得不能の具体的なblocker。過去の画像は比較資料に限り、現在の証跡を代替しない
+- 操作中に観測したnavigation、focus、loading、validation、error recovery、empty state、motion
+- 次の行動と結果をユーザーが理解できるか
 
-低い層の証跡だけで、高い層のnative behaviorや実ユーザー観察を確認済みにしません。
+screenshotは視覚階層、表示copy、見えている状態の根拠にできます。semantic structure、accessible name、contrast比、focus順序、keyboard完走、支援技術への通知、時間変化、操作後の回復は、DOM、test、計測、手動操作、支援技術など該当する証跡で確認します。静止画から確認できない項目は未確認範囲として残し、適合や正常動作を推定しません。
+
+findingは、ステップ番号または採用screenshot、観測事実、ユーザー影響、推奨対応、証跡上の限界を含め、本文書のP0 / P1 / P2だけで分類します。フローを完走できない、重要ステップを取得・保存・検査できない、または必要な主張を静止画や他の実行証跡で支えられない場合は、監査範囲とblockerを明示します。取得手段・環境のblockerは証跡の状態であり、製品findingのseverityとは分けます。間接資料だけで実際のフローを監査済みと扱いません。
+
+## 5. P0 / P1 / P2
+
+### P0: 完了不可
+
+- ユーザー価値を説明できない。
+- 初見で画面目的、現在地、対象範囲、最初の行動が分からない。
+- 主操作が埋もれている、またはアイコン単独。
+- 主要状態が混ざっている。
+- エラーに原因、影響、回復手段がない。
+- disabledの理由がない。
+- キーボード操作、フォーカス、ラベル、コントラスト、ターゲットサイズ、セマンティック構造が最低基準を満たさない。
+- 危険操作やデータ損失に対する確認・回復導線がない。
+- 初心者向け導線が反復利用を恒常的に妨害している。
+- UIがユーザーに不必要な不安や責任転嫁を与える。
+- 対象面の分類に基づく必須証跡がない。
+- フロー監査の重要ステップまたはfindingを現在の監査実行の証跡へ追跡できない。
+- screenshotだけでは確認できないaccessibilityや動的挙動を確認済みと断定している。
+- 未実行検証を成功扱いしている。
+
+### P1: 原則として同じ変更内で修正
+
+- 検索、タブ、フィルタ、件数のスコープが曖昧。
+- 表示優先度と視覚的強調がズレている。
+- 用語やラベルが揺れている。
+- 空状態や成功状態の次アクションが弱い。
+- 反復作業の手数が多いが、回避策はある。
+- 警告や説明が冗長で、信頼感や効率を少し損ねる。
+
+### P2: Issue化可
+
+- 微細な余白、文言、順序の改善。
+- 将来的なショートカットや一括操作。
+- より良い空状態のイラストや補助説明。
+- 追加のユーザー調査や計測が必要な改善仮説。
+
+## 6. 数値基準の目安
+
+技術・デザインシステム固有の基準がある場合はそれを優先します。ない場合は次を最低目安にします。
+
+- 通常本文は原則16px以上。
+- 14pxは補助情報など限定用途のみ。
+- 14px未満は原則避ける。
+- 長文の行高は1.5以上を目安にする。
+- 日本語長文の行長は全角40字前後を目安にする。
+- 通常テキストのコントラストは4.5:1以上を目安にする。
+- 大きい文字や非テキストUI部品のコントラストは3:1以上を目安にする。
+- Web上の最小操作対象は少なくとも24×24 CSS pxを目安にし、タッチ中心ではより大きくする。
+- フォーカス表示は明確に見え、隠れず、操作順序が自然であること。
+
+## 7. AIレビューの限界
+
+AIによる初見シミュレーションは有用ですが、実ユーザーテストそのものではありません。
+
+したがって、AIエージェントは次を守ります。
+
+- 実ユーザーから得ていない反応を「ユーザーがそう感じた」と書かない。
+- ユーザーテスト未実施なら未実施と明記する。
+- AIレビューで見つけやすい問題と、実利用でしか分かりにくい問題を分ける。
+- 迷い、価値、満足感に関わる重大仮説は、必要に応じて今後の検証事項として残す。
+
+## 8. Day Schedule Nextのレビュー対象
+
+Day Schedule Nextの対象ユーザーは、自分一人の一日を分単位で設計し、計画と実行状況を素早く把握したい利用者です。製品目的、不変条件、明示的な対象外は [docs/product-invariants.md](../product-invariants.md) を正本とします。
+
+| アプリ本体のsurface | 主な目的 | 代表的な確認状態・証跡 |
+|---|---|---|
+| Today / Week / Month / List | 日付、全体像、予定の分布を把握する | 予定0件、通常、重複、日跨ぎ、current / next、検索結果なし |
+| detail timeline / Inspector | 分単位で作成、編集、移動、resizeする | preview、keyboard / direct input、Esc取消、validation、Undo、保存失敗 |
+| Template / Quick Block | 一日の型や一時ブロックを再利用する | preview、適用、置換範囲、cancel、1 action Undo |
+| Compact Window / Now Dock | 現在、次、残り、Focusを実行中に確認する | topmost、狭幅、複数current、window restore、通知 |
+| Ticket / Kanban | 完了対象と予定を分けて管理する | 列移動、並べ替え、Schedule link、Done / Omit、keyboard |
+| Sync / Conflict / Settings | Google接続、同期、通知、権限を判断する | disconnected、offline、retry、auth expired、conflict、permission |
+| Data / Diagnostics | export、backup、restore、importを安全に行う | preview、warning、cancel、backup、rollback、redaction |
+
+アプリ本体UIでは、画面の見た目だけでなく、local-first、UTC instant + IANA timezone、Outbox、通知重複抑止、migration / restoreなどの製品不変条件へ影響する表示・操作を確認します。実装境界は [docs/architecture-boundaries.md](../architecture-boundaries.md)、変更範囲に応じた検証とnative handoffは [docs/testing/index.md](../testing/index.md) を参照し、手順本文をこの文書へ複製しません。
+
+GitHub共同作業面の変更では、上表のアプリ状態を証跡として要求しません。Issue / PR template、repository Markdown、workflow説明などrepositoryが制御する文言、構造、入力順、必須性、link、公開安全性だけを、変更範囲に比例して確認します。

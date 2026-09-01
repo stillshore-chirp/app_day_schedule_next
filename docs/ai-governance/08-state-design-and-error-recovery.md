@@ -1,94 +1,129 @@
-# State Design and Error Recovery
+# 状態設計とエラー回復
 
-## 1. 状態を混同しない
+UIは通常状態だけで成立してはいけません。ユーザーが困るのは、多くの場合、読み込み中、空、失敗、無効、権限不足、部分データの時です。
 
-- first-use empty。
-- date has no schedules。
-- search / filter no result。
-- loading / stale / partial data。
-- local saved / sync pending / syncing / synced。
-- offline / retry wait / auth required / calendar access removed。
-- conflict。
-- validation / permission / corruption / migration / restore error。
-- disabled。
+## 1. 状態を混ぜない
 
-すべてを「データがありません」「エラー」で済ませません。
+次の状態は区別してください。
 
-## 2. State contract
+- 初回の空
+- 検索結果なし
+- フィルタ結果なし
+- 読み込み中
+- 部分データ
+- 通信エラー
+- 権限不足
+- 入力エラー
+- 無効
+- メンテナンスまたは利用不可
+- オフライン
 
-各 state で次を定義します。
+これらをすべて「データがありません」で済ませるのは禁止です。
 
-- visible information。
-- user understanding。
-- allowed next action。
-- recovery。
-- accessibility announcement。
-- persistence / retry semantics。
-- evidence。
+## 2. state matrix
 
-## 3. Loading / stale / partial
+各状態で次を記録します。
 
-- loading scope を示す。
-- existing schedules を blank にして消失したように見せない。
-- stale data を利用可能にする場合は timestamp / status を示す。
-- long operation（backup / restore / full sync / import）は stage、cancelability、result を示す。
+- ユーザーが見るもの
+- ユーザーが理解できること
+- 次にできる行動
+- 回復手段
+- アクセシビリティ上の通知
+- 証跡
+- 判定
 
-## 4. Offline
+## 3. 読み込み中
 
-- local edit 可否を明示する。
-- `この端末には保存済み` と `Google 未反映` を区別する。
-- retry schedule と manual retry。
-- offline 中に conflict を予測して user を脅さず、sync 後に必要な時だけ解決を求める。
+確認事項:
 
-## 5. Conflict
+- 読み込み中であることが分かるか。
+- どの領域が読み込み中か分かるか。
+- 既存データを消して不安を与えていないか。
+- 長い待機では進行状況や代替行動を示しているか。
+- 再試行やキャンセルが必要な場合に提供されているか。
 
-- affected item / series / calendar / field。
-- base / local / remote difference。
-- selected resolution と result。
-- unresolved conflict を synced と表示しない。
-- resolution failure でも previous choices を保持する。
+## 4. 空状態
 
-## 6. Permission
+確認事項:
 
-- notification / file / keyring / browser open の permission / availability。
-- request purpose、denied impact、OS settings path。
-- unsupported / unavailable と user denial を区別する。
+- 初回利用の空か、条件による空か分かるか。
+- 次に何をすればよいか分かるか。
+- 主操作があるか。
+- サンプル、説明、作成導線が必要か。
+- 空状態がエラーや権限不足を隠していないか。
 
-## 7. Validation
+## 5. 検索結果なし
 
-- field near error。
-- invalid local time / DST ambiguity を具体的に説明する。
-- input を保持する。
-- multi-error は summary + field associations。
+確認事項:
 
-## 8. Dangerous operations
+- 検索語やフィルタ条件が表示されているか。
+- 条件をリセットできるか。
+- 検索対象範囲が分かるか。
+- スペル、表記ゆれ、条件過多の可能性を示すべきか。
 
-対象:
+## 6. エラー
 
-- delete local / delete Google / both。
-- template apply replacing schedules。
-- disconnect / revoke。
-- restore / import commit。
-- purge history / backup。
+エラーには次を含めます。
 
-明示:
+- 何が起きたか。
+- 何に影響するか。
+- 入力や作業内容は保持されているか。
+- ユーザーができる回復手段。
+- 再試行、戻る、保存、問い合わせ、詳細確認などの導線。
 
-- target、count、scope、remote impact、Undo / rollback、backup state。
+## 7. 入力エラー
 
-## 9. Recovery patterns
+確認事項:
 
-- Undo snackbar / history。
-- retry with idempotency。
-- re-auth without local data loss。
-- conflict resolver。
-- backup restore rollback。
-- export diagnostics / copy safe error code。
+- エラー箇所が分かるか。
+- エラー内容が入力欄の近くにあるか。
+- 修正例や条件が分かるか。
+- 送信後に入力内容が消えないか。
+- 複数エラー時に全体と個別の両方で把握できるか。
 
-## 10. P0 examples
+## 8. disabled
 
-- error で input が消える。
-- offline edit が保存されたか分からない。
-- delete scope が local / Google で曖昧。
-- restore が current DB を backup せず上書き。
-- auth error を empty calendar として表示。
-- disabled control の理由と recovery がない。
+disabledは慎重に使います。
+
+確認事項:
+
+- 押せない理由が分かるか。
+- どうすれば有効になるか分かるか。
+- ツールチップだけに依存していないか。
+- キーボードやタッチで理由を確認できるか。
+- そもそもdisabledより、押下後に具体的理由を出す方がよくないか。
+
+## 9. 権限不足
+
+確認事項:
+
+- 権限がないことが分かるか。
+- 何をする権限が不足しているか分かるか。
+- 誰に依頼すればよいか、またはどこで設定するか分かるか。
+- セキュリティ上見せてはいけない情報を漏らしていないか。
+
+## 10. 危険操作と回復
+
+削除、送信、公開、課金、権限変更、データ上書きでは、次を確認します。
+
+- 対象が明確か。
+- 件数や範囲が明確か。
+- 影響が明確か。
+- 取り消し可否が明確か。
+- 確認が過剰でも不足でもないか。
+- 成功後に結果が分かるか。
+
+## Day Schedule Nextの状態契約
+
+アプリ本体UIのstate matrixでは、次の状態をsurfaceに応じて分け、表示・理解・次の操作・回復・a11y通知・永続化 / retry semantics・evidenceを記録します。
+
+| 領域 | 状態の例 | 必ず示す判断材料・回復 |
+|---|---|---|
+| Today / timeline | 予定0件、通常、overlap、日跨ぎ、current 0 / 1 / 複数、500件 | 日付・対象範囲・作成導線、selection、free time、keyboard / direct edit |
+| Sync / Conflict | disconnected、connecting、syncing、offline、retry、auth expired、conflict | local保存、remote未反映、対象calendar / field、再接続・再試行・解決 |
+| Template / Quick Block | preview、適用、置換、cancel、Undo | 対象日・件数・既存予定への影響、rollback / one-action Undo |
+| Notification / Focus | permission unknown / denied / granted、delivery成功 / 失敗、Idle / Working / Paused / Break / WaitingNext | 用途、OS設定導線、phase、sound以外の視覚・status |
+| Data | export、backup、restore preview / stage、import warning / error | candidate、counts、warnings、現DB退避、cancel、rollback |
+| Ticket | Inbox等の列、Done / Omit、Schedule link、stale version | 列の意味、完了境界、関連の独立、再試行・競合回復 |
+
+offlineでもlocal editと保存結果を明示し、auth errorを空のcalendarとして、permission denialを単なる利用不可として表示しません。復元・import・削除など到達可能なデータ影響がある操作では、対象とscopeを確認し、現在データを先に退避する契約をUIへ反映します。

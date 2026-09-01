@@ -1,6 +1,8 @@
 ---
 name: ui-ux-review
-description: "Day Schedule NextのUI/UXレビューを共有正本へ接続する。"
+description: "Day Schedule NextのUI/UXレビューの共有SkillをClaude Codeから呼び出す。"
 ---
 
-`../../../.agents/skills/ui-ux-review/SKILL.md` が唯一の手順正本です。内容を複製せず、同fileを読んで実行してください。
+# ui-ux-review adapter
+
+このファイルはClaude Code向けの薄いadapterです。実行時はリポジトリルートの [`.agents/skills/ui-ux-review/SKILL.md`](../../../.agents/skills/ui-ux-review/SKILL.md) を読み、そちらを唯一の手順正本として適用してください。このadapterへ手順本文を複製しません。

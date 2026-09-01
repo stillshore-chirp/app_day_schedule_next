@@ -1,12 +1,20 @@
-# User Utility Checklist
+# ユーザー価値チェックリスト
 
-- [ ] Target user and context are explicit.
-- [ ] Goal is written as an achieved result, not a screen name.
-- [ ] Supported understanding / decision / action / recovery is explained.
-- [ ] The UI solves a real planning / execution / recovery problem.
-- [ ] Google connection does not obscure local-first use.
-- [ ] Added information changes a decision or action.
-- [ ] Added action is necessary for the goal.
-- [ ] Internal architecture is not presented as user value.
-- [ ] Duplicate UI / explanation / diagnostics is removed or justified.
-- [ ] Hypothesis or success signal is stated honestly.
+- [ ] 対象ユーザーを説明できる。
+- [ ] 利用文脈を説明できる。
+- [ ] ユーザー目的を画面名ではなく達成結果で説明できる。
+- [ ] このUIが助ける理解、判断、行動、回復を説明できる。
+- [ ] このUIがなければユーザーが困る点を説明できる。
+- [ ] 追加情報が意思決定に必要である。
+- [ ] 追加操作がユーザーの目的達成に必要である。
+- [ ] 内部構造や実装都合をユーザー価値として扱っていない。
+- [ ] 削れる情報、操作、説明を検討した。
+- [ ] 成功指標または検証仮説を明示した。
+
+## Day Schedule Next
+
+- [ ] 対象ユーザーを、自分の一日を分単位で設計・実行する利用者として説明できる。
+- [ ] UIが予定の把握、作成・調整、current / nextの実行、再利用、回復のどれを支援するか明示した。
+- [ ] Google接続の有無に関わらずlocal-firstの計画価値を維持している。
+- [ ] Ticket（何を完了させるか）とSchedule（いつ作業するか）の役割を混同していない。
+- [ ] 実測値と、未計測の成功指標・検証仮説を分けて記録した。

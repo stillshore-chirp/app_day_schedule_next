@@ -1,78 +1,132 @@
-# Satisfaction, Trust and Emotional UX
+# 満足感・信頼感・感情面のUX
 
-## 1. Trust model
+UXは、操作が成功するだけでは不十分です。ユーザーが安心して使え、信頼でき、不要に不快にならないことも品質です。
 
-Day Schedule Next では、装飾より次が trust を作ります。
+## 1. 基本方針
 
-- 操作結果が分かる。
-- local data が保持される。
-- Google sync state が正直。
-- failure から戻れる。
-- notification / Focus が予測可能。
-- destructive action の scope が明確。
-- app が user を責めない。
+- ユーザーを責めない。
+- 不要な不安を煽らない。
+- 何が起きたかを曖昧にしない。
+- データの安全性と影響範囲を明確にする。
+- 待機、成功、失敗、危険操作に適切なフィードバックを返す。
+- 誠実なトーンを保つ。
 
-## 2. Waiting
+## 2. 待機中の安心感
 
-- どの処理が進行中か。
-- schedule data が消えたように見えないか。
-- local edit が続けられるか。
-- full sync / backup / restore の stage と cancelability。
-- retry / background continuation の見通し。
+確認事項:
 
-## 3. Success
+- 処理中であることが分かるか。
+- どの領域が処理中か分かるか。
+- 入力内容や既存データが消えたように見えないか。
+- 長い処理で、ユーザーが放置されたと感じないか。
+- キャンセル、再試行、別操作が必要な場合に示されているか。
 
-- local save / Google sync / backup / restore の何が完了したか。
-- affected item / count / calendar。
-- Undo / details / next action。
-- success notification が短すぎず、作業を遮りすぎない。
+## 3. 成功時の安心感
 
-## 4. Failure
+確認事項:
 
-- cause category、impact、data retention、recovery。
-- input / local change を保持する。
-- re-auth / retry / restore / diagnostics の導線。
-- raw technical error で user を放置しない。
+- 何が完了したか分かるか。
+- データが保存、送信、公開、削除、更新されたか分かるか。
+- 次にできる行動が分かるか。
+- 必要な場合、取り消しや詳細確認ができるか。
+- 成功通知がすぐ消えすぎないか。
 
-## 5. Dangerous actions
+## 4. 失敗時の信頼感
 
-- local delete、remote delete、both。
-- recurrence series scope。
-- template replace。
-- restore / import。
-- disconnect / revoke。
-- history / backup purge。
+確認事項:
 
-対象、count、scope、irreversibility、backup / Undo を示します。
+- ユーザーを責める言い方になっていないか。
+- 原因、影響、回復手段が分かるか。
+- 入力内容が保持されるか。
+- 再試行できるか。
+- サポートや詳細確認が必要な場合、導線があるか。
 
-## 6. Notification / Focus
+悪い例:
 
-- sudden sound / modal で作業を破壊しない。
-- sound only に依存しない。
-- app exit / tray / permission の制約を正直にする。
-- Focus auto transition の設定と current state を見えるようにする。
+```txt
+入力が間違っています。
+```
 
-## 7. Tone
+良い例:
+
+```txt
+日付の形式が正しくありません。2026/06/06 の形式で入力してください。
+```
+
+## 5. 危険操作の信頼感
+
+削除、公開、送信、課金、権限変更、個人情報共有では、次を明確にします。
+
+- 対象
+- 件数
+- 影響範囲
+- 取り消し可否
+- 実行後に起きること
+- 必要な確認
+
+危険操作が小さなアイコンだけで置かれている場合はP0です。
+
+## 6. トーン
 
 禁止:
 
-- user blame。
-- `簡単`, `当然`。
-- data safety の根拠ない assurance。
-- routine pending を危険障害のように見せる。
-- conflict / restore risk を弱く見せる。
+- ユーザーのせいにする。
+- 「当然」「簡単」など、できない人を責める含みを持つ表現。
+- 不必要に怖い警告。
+- 何も保証できないのに安心させる表現。
+- 成功か失敗か曖昧な通知。
 
 推奨:
 
-- fact、impact、recovery。
-- preserved work を明示。
-- destructive scope を具体化。
-- next action を一つ主にする。
+- 事実を明確に言う。
+- 次の行動を示す。
+- データが安全なら安全と示す。
+- 危険なら影響を具体的に示す。
+- ユーザーの作業を尊重する。
 
-## 8. P0
+## 7. 信頼感のP0
 
-- success / failure が不明。
-- user input / data が消えたか分からない。
-- delete / restore / sync conflict の impact が不明。
-- false reassurance / unnecessary fear / blame。
-- notification が重複・暴発し、制御手段がない。
+次はP0です。
+
+- 危険操作の対象や影響が不明。
+- 削除、公開、送信、課金、権限変更、個人情報共有で取り消し可否が分からない。
+- エラー時に入力内容が消える、または消えたかどうか分からない。
+- 成功したか失敗したか分からない。
+- UIがユーザーを責める。
+- 誤解を招く安心表現、または過剰な恐怖表現がある。
+
+## 8. 信頼感のP1
+
+次はP1です。
+
+- 成功メッセージが弱い。
+- 待機中の説明が不足している。
+- エラー文は回復可能だが、少し冷たい。
+- 取り消し導線や詳細確認があるとより安心できる。
+- 警告の強さがやや過剰または不足している。
+
+## 9. 満足感は装飾ではない
+
+満足感はアニメーションや美麗なビジュアルだけではありません。
+
+このガバナンスでは、満足感を次で扱います。
+
+- 操作結果が分かる。
+- 待たされても不安になりにくい。
+- 失敗しても戻れる。
+- 自分が責められていると感じない。
+- 操作が軽く、妥当な手数で終わる。
+- 画面が一貫していて信頼できる。
+
+## Day Schedule Nextの信頼モデル
+
+Day Schedule Nextで信頼を支えるのは、装飾よりも「何が完了し、どこに保存され、何がまだremoteへ反映されず、どう戻れるか」が一貫して分かることです。
+
+- local save、Google sync、backup、restoreの完了範囲を混同しない。
+- offline、pending、retry、conflict、auth expiredを成功済みとして表示しない。
+- 予定、Ticket、Focus履歴、通知deliveryのデータ保持とscopeを示す。
+- current / next / remaining、Focus phase、notification permissionの状態を予測可能にする。
+- local delete、Google delete、both、template replace、restore / import、disconnect / revokeの対象・件数・影響・Undo / rollbackを示す。
+- 予定が消えたように見えるloading、restore、sync中のblankを避け、失敗しても入力・選択・local dataを保持する。
+
+native desktop上での通知、tray、window restore、OS permission、sleep / resume、clock jumpは、静的文書やAI simulationだけでは確認できません。未実行項目を明示し、実施したtest、manual observation、screenshotの範囲だけを信頼性の根拠にします。

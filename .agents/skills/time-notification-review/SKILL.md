@@ -1,100 +1,42 @@
 ---
 name: time-notification-review
-description: "時刻、timezone、DST、日跨ぎ、再発、現在進行、通知、Focus/Pomodoro、sleep/resume、clock jump を deterministic にレビューする。"
+description: "時刻、timezone、DST、日跨ぎ、再発、現在進行、通知、Focus、sleep/resume、clock jumpをdeterministicにレビューする。"
 ---
 
 # Time / Notification Review Skill
 
 ## 1. 発動条件
 
-- date / time / duration / timezone / all-day / recurrence。
-- timeline position、overlap、current / next / remaining / free time。
-- notification rule / delivery / permission / sound。
-- Focus / Pomodoro state machine。
-- sleep、resume、system clock / timezone change、app lifecycle。
+- date / time / duration / timezone / all-day / recurrence
+- timeline position、overlap、current / next / remaining / free time
+- notification rule / delivery / permission / sound
+- Focus / Pomodoro、timer / stopwatch state machine
+- sleep、resume、system clock / timezone change、app lifecycle
 
-## 2. 必読
+## 2. 必読の正本
 
-- `AGENTS.md`
-- `docs/product-invariants.md`
-- `docs/engineering/time-and-recurrence.md`
-- `docs/engineering/notifications-and-focus.md`
-- UI 変更なら UI/UX Skill
-- schema 変更なら data-migration Skill
+- rootと変更対象に最も近い `AGENTS.md`
+- [`docs/product-invariants.md`](../../../docs/product-invariants.md)
+- [`docs/architecture-boundaries.md`](../../../docs/architecture-boundaries.md)
+- [`docs/engineering/time-and-recurrence.md`](../../../docs/engineering/time-and-recurrence.md)
+- [`docs/engineering/notifications-and-focus.md`](../../../docs/engineering/notifications-and-focus.md)
+- schema変更なら [`data-migration-review`](../data-migration-review/SKILL.md)、sync変更なら [`calendar-sync-review`](../calendar-sync-review/SKILL.md)、表示変更なら [`ui-ux-review`](../ui-ux-review/SKILL.md)
 
-## 3. clock model
+boundary / transition matrixはengineering docsを正本にし、ここへ複製しません。
 
-- domain logic は injected `Clock` を使う。
-- wall clock と monotonic elapsed time を区別する。
-- concrete schedule は UTC instant + IANA timezone。
-- template / Quick Block / free alarm は wall-clock intent と timezone policy を保持する。
-- interval は `[start, end)`。接する予定を overlap と数えない。
-- duration 0、負、1440 分超、同時刻 start/end の意味を明示する。
+## 3. 手順と必須境界
 
-## 4. timezone / DST
+1. concrete schedule、template / Quick Block / free alarm、recurrence、timeline、notification、Focusの影響面を分類する。
+2. injected Clock、UTC instant + IANA timezone、wall-clock intent、monotonic elapsed、`[start,end)`を確認する。
+3. DST gapを黙って移動せず、overlapのoffset選択を保持し、all-dayをdate rangeとして扱うことを確認する。
+4. current / next / overlap / cross-midnight / recurrence scopeを同一clock snapshotから再現する。
+5. ruleとdelivery ledger、occurrence/phase単位のkey、restart/resume/callback dedup、grace / bounded replay、permission failureを確認する。
+6. Focusの許可transition、persisted timestamp、working集計、restart recoveryを確認し、engineering docの必要matrixを実行する。
 
-- DST gap: 存在しない local time を黙って次時刻へ移さない。
-- DST overlap: どちらの offset かを明示・保持する。
-- timezone change: instant を維持するか wall-clock intent を維持するか entity type ごとに定義する。
-- calendar timezone と system timezone の差を表示・変換する。
-- all-day は date range として扱い、UTC midnight へ単純変換しない。
+## 4. 停止条件と証跡
 
-## 5. recurrence
+- naive datetime、silent DST correction、duplicate delivery、unbounded replay、clock jumpでelapsedが逆行する実装はP0。
+- permission denied、OS muted、native failureを通知成功として表示しない。
+- boundary case、fixed-clock / property test、state transition、必要なnative observation、未実行範囲、残るriskを対象commitに記録する。
 
-- RFC 5545 rule、exception、exdate、moved occurrence、cancelled occurrence を区別する。
-- 月末、うるう日、週開始、count / until、timezone change を test する。
-- template repeat と calendar recurrence を混同しない。
-- occurrence edit の対象が単体 / future / series のどれかを UI で明示する。
-
-## 6. timeline calculations
-
-- overview と detail の overlap algorithm を別契約として test する。
-- cross-midnight を day segment に分割しても同一 entity identity を保持する。
-- current、elapsed、remaining、next は同じ clock snapshot から計算する。
-- 複数 current item、hidden Quick Block、cancelled / completed item の扱いを定義する。
-- current-time line と countdown は必要以上の再render / screen reader announcement を発生させない。
-
-## 7. notification delivery
-
-- rule と delivery ledger を分離する。
-- delivery key は event / rule / occurrence / phase を一意にする。
-- 同一 delivery を restart、resume、multiple timer callback で重複送信しない。
-- late delivery grace window と最大遡及件数を定義する。
-- sleep が長い場合に通知を一斉発火しない。
-- permission denied、OS muted、native API failure を「通知済み」と誤表示しない。
-- schedule start / end、free alarm、Focus phase を識別可能な通知とする。
-- complete exit と tray residency の能力差を UserManual に記載する。
-
-## 8. Focus state machine
-
-最低状態:
-
-- `Idle`
-- `Working`
-- `Paused`
-- `Break`
-- `WaitingNext`
-
-各 transition で guard、timestamp、accumulated duration、notification、persistence、restart recovery を定義する。二重 start、pause 中の timer advance、break skip、stop、crash recovery を test する。
-
-## 9. 必須テスト
-
-- 23:59→00:00、cross-midnight、24h duration。
-- DST spring gap / fall overlap、system timezone change。
-- leap day、month end、year end、locale / week start。
-- adjacent vs positive overlap、5分互換 threshold、multiple overlap。
-- system sleep 30秒 / 10分 / 8時間、resume、clock backward / forward。
-- duplicate callback、app restart、permission denied、native failure。
-- Focus all transitions、pause / resume repeated、restart in each state。
-- fake clock / property test で nondeterminism がないこと。
-
-## 10. evidence and output
-
-- state transition table。
-- boundary case table。
-- fake clock test results。
-- native notification manual results on affected OS。
-- UI state / copy / permission evidence。
-- P0 / P1 / P2、未実行、残リスク。
-
-naive datetime、silent DST correction、unbounded missed-notification replay、duplicate delivery が残る場合は P0 です。
+実機notification、sleep/resume、OS permissionを実行していない場合は、そのまま未確認と報告します。
