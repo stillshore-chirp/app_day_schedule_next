@@ -3417,13 +3417,29 @@ tbody tr:focus {
 
 .block-editor {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr)) repeat(4, 36px);
-  gap: 8px;
-  align-items: end;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  align-items: start;
   padding: 10px;
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+}
+
+.block-editor > legend {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding-inline: 5px;
+  font-weight: 750;
+}
+
+.block-editor__actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .template-visual-editor {
@@ -3485,39 +3501,61 @@ tbody tr:focus {
   font-size: var(--app-font-0-65, 0.65rem);
 }
 
-.template-detail-timeline {
+.template-block-time {
   display: grid;
-  gap: 8px;
-}
-
-.template-detail-timeline > h3,
-.template-detail-timeline > p {
-  margin: 0;
-}
-
-.template-range-editor {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-column: 1 / -1;
   gap: 10px;
   padding: 9px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
 
-.template-range-editor legend {
-  padding-inline: 5px;
-  font-weight: 750;
+.template-minute-control {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
 }
 
-.template-range-editor label {
-  display: grid;
-  gap: 4px;
+.template-minute-control__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   color: var(--text-muted);
   font-size: var(--app-font-0-75, 0.75rem);
 }
 
-.template-range-editor input[type="range"] {
+.template-minute-control__heading label {
+  display: block;
+  min-width: 0;
+}
+
+.template-minute-control__heading output {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+}
+
+.template-minute-control__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.template-minute-control__controls input[type="range"] {
   width: 100%;
+  min-height: 32px;
+}
+
+.template-minute-control__controls input[type="time"] {
+  min-width: 7.5rem;
+}
+
+.template-block-time__help {
+  grid-column: 1 / -1;
 }
 
 .inline-form {
@@ -3633,8 +3671,13 @@ tbody tr:focus {
     grid-template-columns: 1fr;
   }
 
-  .block-editor {
-    grid-template-columns: 1fr 1fr;
+  .block-editor,
+  .template-block-time {
+    grid-template-columns: 1fr;
+  }
+
+  .template-minute-control__controls {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -4650,6 +4693,8 @@ tbody tr:focus {
 :root[data-text-scale-level="extra"] .carry-control,
 :root[data-text-scale-level="extra"] .library-layout,
 :root[data-text-scale-level="extra"] .block-editor,
+:root[data-text-scale-level="extra"] .template-block-time,
+:root[data-text-scale-level="extra"] .template-minute-control__controls,
 :root[data-text-scale-level="extra"] .reference-time-control {
   grid-template-columns: 1fr;
 }
