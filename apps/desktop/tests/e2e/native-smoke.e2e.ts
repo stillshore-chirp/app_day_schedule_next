@@ -776,13 +776,58 @@ describe("Day Schedule Next native smoke", () => {
   });
 
   it("persists template, Quick Block, alarm, and Focus workflows through native IPC", async () => {
+    await persistFixtureTheme("light");
     await setLogicalWindowSize(1180, 820);
     const suffix = Date.now();
     const templateName = `E2Eテンプレート-${suffix}`;
     const quickName = `E2E Quick-${suffix}`;
     const alarmName = `E2Eアラーム-${suffix}`;
 
+    const templateBlock = () =>
+      $(
+        '//section[@aria-labelledby="template-editor-title"]//fieldset[contains(@class,"block-editor")][1]',
+      );
+    const templateTimeInput = (boundary: "開始" | "終了") =>
+      templateBlock().$(
+        `.//input[@id="template-block-0-${boundary === "開始" ? "start-time" : "end-time"}"]`,
+      );
+    const templateRangeInput = (boundary: "開始" | "終了") =>
+      templateBlock().$(
+        `.//input[@id="template-block-0-${boundary === "開始" ? "start-range" : "end-range"}"]`,
+      );
+    const focusTemplateRange = async (boundary: "開始" | "終了") => {
+      const rangeId = `template-block-0-${boundary === "開始" ? "start-range" : "end-range"}`;
+      await browser.execute((targetBoundary) => {
+        const range = document.getElementById(targetBoundary);
+        if (!(range instanceof HTMLInputElement)) {
+          throw new Error(`template range was not found: ${targetBoundary}`);
+        }
+        range.focus();
+      }, rangeId);
+      expect(await browser.execute(() => document.activeElement?.id)).toBe(rangeId);
+    };
+    const setTemplateTime = async (boundary: "開始" | "終了", value: string) => {
+      const inputId = `template-block-0-${boundary === "開始" ? "start-time" : "end-time"}`;
+      await browser.execute(
+        ({ inputId, value }) => {
+          const input = document.getElementById(inputId);
+          if (!(input instanceof HTMLInputElement)) {
+            throw new Error(`template time input was not found: ${inputId}`);
+          }
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+            input,
+            value,
+          );
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+        { inputId, value },
+      );
+      await expect(templateTimeInput(boundary)).toHaveValue(value);
+    };
+
     await $('//aside[@aria-label="主要画面"]//button[contains(., "テンプレート")]').click();
+    await $('//main//h1[normalize-space(.)="テンプレート"]').waitForDisplayed();
     await $(
       '//section[@aria-labelledby="template-list-title"]//button[contains(., "新規")]',
     ).click();
@@ -794,12 +839,35 @@ describe("Day Schedule Next native smoke", () => {
     await $(
       '//section[@aria-labelledby="template-editor-title"]//button[contains(., "ブロック")]',
     ).click();
-    const blockTitleInput = $(
-      '//div[contains(@class,"block-editor")]//label[contains(., "タイトル")]/input',
-    );
+    const blockTitleInput = templateBlock().$('.//label[contains(., "タイトル")]/input');
     await blockTitleInput.waitForDisplayed();
     await blockTitleInput.setValue("E2Eブロック");
     await expect(blockTitleInput).toHaveValue("E2Eブロック");
+    await templateBlock().waitForDisplayed();
+    await setTemplateTime("開始", "10:07");
+    await expect(templateTimeInput("終了")).toHaveValue("10:37");
+    await focusTemplateRange("開始");
+    await browser.keys("ArrowRight");
+    await expect(templateTimeInput("開始")).toHaveValue("10:17");
+    await expect(templateTimeInput("終了")).toHaveValue("10:47");
+    await setTemplateTime("開始", "10:07");
+    await setTemplateTime("終了", "10:45");
+    await focusTemplateRange("終了");
+    await browser.keys("ArrowRight");
+    await expect(templateTimeInput("終了")).toHaveValue("10:55");
+    await setTemplateTime("終了", "10:45");
+    await expect(templateTimeInput("開始")).toHaveValue("10:07");
+    await expect(templateTimeInput("終了")).toHaveValue("10:45");
+    await expect(templateTimeInput("開始")).toHaveAttribute("step", "60");
+    await expect(templateTimeInput("終了")).toHaveAttribute("step", "60");
+    await expect(templateRangeInput("開始")).toHaveAttribute("step", "10");
+    await expect(templateRangeInput("終了")).toHaveAttribute("step", "10");
+    await expect(
+      templateBlock().$('.//div[contains(@class,"template-minute-control")][1]//output'),
+    ).toHaveText("当日 10:07");
+    await expect(
+      templateBlock().$('.//div[contains(@class,"template-minute-control")][2]//output'),
+    ).toHaveText("当日 10:45");
     await $(
       '//section[@aria-labelledby="template-editor-title"]//button[contains(., "テンプレートを保存")]',
     ).click();
@@ -807,21 +875,103 @@ describe("Day Schedule Next native smoke", () => {
       async () => {
         const persisted = (await browser.tauri.execute(({ core }) =>
           core.invoke("template_list"),
-        )) as Array<{ name: string }>;
-        return persisted.some((template) => template.name === templateName);
+        )) as Array<{
+          name: string;
+          blocks: Array<{ title: string; startMinute: number; durationMinutes: number }>;
+        }>;
+        return persisted.some(
+          (template) =>
+            template.name === templateName &&
+            template.blocks.some(
+              (block) =>
+                block.title === "E2Eブロック" &&
+                block.startMinute === 607 &&
+                block.durationMinutes === 38,
+            ),
+        );
       },
-      { timeoutMsg: "template was not persisted through native IPC" },
+      { timeoutMsg: "template time values were not persisted through native IPC" },
     );
+    const persistedTemplates = (await browser.tauri.execute(({ core }) =>
+      core.invoke("template_list"),
+    )) as Array<{
+      name: string;
+      blocks: Array<{ title: string; startMinute: number; durationMinutes: number }>;
+    }>;
+    const persistedBlock = persistedTemplates
+      .find((template) => template.name === templateName)
+      ?.blocks.find((block) => block.title === "E2Eブロック");
+    expect(persistedBlock).toMatchObject({ startMinute: 607, durationMinutes: 38 });
     const templateCard = $(
       `//section[@aria-labelledby="template-list-title"]//*[normalize-space(.)="${templateName}"]`,
     );
     await templateCard.waitForExist();
     await templateCard.scrollIntoView({ block: "center" });
     await expect(templateCard).toBeDisplayed();
-    await browser.execute(() =>
-      document.querySelector(".template-visual-editor")?.scrollIntoView({ block: "start" }),
-    );
+    await setExactLogicalViewportSize(1180, 684);
+    await templateBlock().scrollIntoView({ block: "center" });
     await browser.saveScreenshot("./test-results/native-template-editor.png");
+    try {
+      await persistTextScale(250);
+      await setLogicalWindowSize(720, 720);
+      await templateBlock().waitForDisplayed();
+      const narrowGeometry = await browser.execute(() => {
+        const main = document.querySelector<HTMLElement>("main.secondary-view");
+        const card = document.querySelector<HTMLElement>("fieldset.block-editor");
+        const controls = card
+          ? Array.from(
+              card.querySelectorAll<HTMLInputElement>('input[type="range"], input[type="time"]'),
+            )
+          : [];
+        if (!main || !card || controls.length !== 4) {
+          throw new Error("narrow template block controls were not rendered");
+        }
+        const viewportWidth = document.documentElement.clientWidth;
+        const viewportHeight = document.documentElement.clientHeight;
+        const controlsReachable = controls.map((control) => {
+          control.scrollIntoView({ block: "center", inline: "nearest" });
+          const rect = control.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+          const hit =
+            centerX >= 0 && centerX < viewportWidth && centerY >= 0 && centerY < viewportHeight
+              ? document.elementFromPoint(centerX, centerY)
+              : null;
+          return {
+            height: rect.height,
+            inViewport:
+              rect.left >= 0 &&
+              rect.right <= viewportWidth + 1 &&
+              rect.top >= 0 &&
+              rect.bottom <= viewportHeight + 1,
+            reachable: hit === control || (hit instanceof Node && control.contains(hit)),
+            width: rect.width,
+          };
+        });
+        card.scrollIntoView({ block: "center", inline: "nearest" });
+        return {
+          cardHorizontalOverflow: card.scrollWidth - card.clientWidth,
+          controlsReachable: controlsReachable.every(
+            ({ height, inViewport, reachable, width }) =>
+              inViewport && reachable && width > 0 && height > 0,
+          ),
+          controlCount: controls.length,
+          documentHorizontalOverflow:
+            document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          mainHorizontalOverflow: main.scrollWidth - main.clientWidth,
+        };
+      });
+      expect(narrowGeometry.controlCount).toBe(4);
+      expect(narrowGeometry.controlsReachable).toBe(true);
+      expect(narrowGeometry.documentHorizontalOverflow).toBeLessThanOrEqual(1);
+      expect(narrowGeometry.mainHorizontalOverflow).toBeLessThanOrEqual(1);
+      expect(narrowGeometry.cardHorizontalOverflow).toBeLessThanOrEqual(1);
+      await templateBlock().scrollIntoView({ block: "center" });
+      await browser.saveScreenshot("./test-results/native-template-editor-text-250-narrow.png");
+    } finally {
+      await persistTextScale(100);
+      await setLogicalWindowSize(1180, 820);
+    }
     await $(
       '//section[@aria-labelledby="quick-block-title"]//label[contains(., "タイトル")]/input',
     ).setValue(quickName);

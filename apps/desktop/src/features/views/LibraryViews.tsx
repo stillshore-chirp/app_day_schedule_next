@@ -474,123 +474,11 @@ export function TemplatesView({
           {draft.blocks.length === 0 ? (
             <p className="field-help">{translate("features.views.LibraryViews.045")}</p>
           ) : (
-            <TemplateVisualEditor draft={draft} setDraft={setDraft} />
+            <>
+              <TemplateVisualEditor draft={draft} />
+              <TemplateBlockEditor draft={draft} setDraft={setDraft} />
+            </>
           )}
-          <div className="block-editor-list">
-            {draft.blocks.map((block, index) => (
-              <div className="block-editor" key={`${index}-${block.startMinute}`}>
-                <label>
-                  {translate("features.views.LibraryViews.046")}
-                  <input
-                    value={block.title}
-                    onChange={(event) =>
-                      updateBlock(draft, setDraft, index, { title: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  {translate("features.views.LibraryViews.047")}
-                  <input
-                    type="time"
-                    value={minuteToTime(block.startMinute)}
-                    onChange={(event) =>
-                      updateBlock(draft, setDraft, index, {
-                        startMinute: timeToMinute(event.target.value),
-                      })
-                    }
-                  />
-                </label>
-                <label>
-                  {translate("features.views.LibraryViews.048")}
-                  <input
-                    type="number"
-                    min={1}
-                    max={1440}
-                    value={block.durationMinutes}
-                    onChange={(event) =>
-                      updateBlock(draft, setDraft, index, {
-                        durationMinutes: Number(event.target.value),
-                      })
-                    }
-                  />
-                </label>
-                <label>
-                  {translate("features.views.LibraryViews.049")}
-                  <input
-                    type="color"
-                    value={block.color}
-                    onChange={(event) =>
-                      updateBlock(draft, setDraft, index, { color: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  {translate("features.views.LibraryViews.050")}
-                  <input
-                    value={block.project}
-                    onChange={(event) =>
-                      updateBlock(draft, setDraft, index, { project: event.target.value })
-                    }
-                  />
-                </label>
-                <label>
-                  {translate("features.views.LibraryViews.051")}
-                  <input
-                    value={block.category}
-                    onChange={(event) =>
-                      updateBlock(draft, setDraft, index, { category: event.target.value })
-                    }
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="icon-button"
-                  disabled={index === 0}
-                  aria-label={translate("features.views.LibraryViews.052", [block.title])}
-                  onClick={() => setDraft({ ...draft, blocks: moveAt(draft.blocks, index, -1) })}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  disabled={index === draft.blocks.length - 1}
-                  aria-label={translate("features.views.LibraryViews.053", [block.title])}
-                  onClick={() => setDraft({ ...draft, blocks: moveAt(draft.blocks, index, 1) })}
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={translate("features.views.LibraryViews.054", [block.title])}
-                  onClick={() => {
-                    const blocks = [...draft.blocks];
-                    blocks.splice(index + 1, 0, {
-                      ...block,
-                      title: translate("features.views.LibraryViews.055", [block.title]),
-                    });
-                    setDraft({ ...draft, blocks });
-                  }}
-                >
-                  ⧉
-                </button>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label={translate("features.views.LibraryViews.056", [block.title])}
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      blocks: draft.blocks.filter((_, itemIndex) => itemIndex !== index),
-                    })
-                  }
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
           <div className="button-row">
             <button
               className="button button--primary"
@@ -1065,13 +953,7 @@ function toTemplateDraft(template: DayTemplate): DayTemplateDraft {
   };
 }
 
-function TemplateVisualEditor({
-  draft,
-  setDraft,
-}: {
-  draft: DayTemplateDraft;
-  setDraft: (value: DayTemplateDraft) => void;
-}) {
+function TemplateVisualEditor({ draft }: { draft: DayTemplateDraft }) {
   return (
     <section className="template-visual-editor" aria-labelledby="template-strip-title">
       <div className="section-heading section-heading--compact">
@@ -1096,7 +978,7 @@ function TemplateVisualEditor({
           const todayMinutes = Math.min(block.durationMinutes, 1440 - block.startMinute);
           const nextDayMinutes = Math.max(0, block.durationMinutes - todayMinutes);
           return (
-            <div className="template-strip-row" role="listitem" key={`${block.title}-${index}`}>
+            <div className="template-strip-row" role="listitem" key={`template-strip-${index}`}>
               <button
                 type="button"
                 className="template-strip-block"
@@ -1110,7 +992,9 @@ function TemplateVisualEditor({
                   minuteToTime(block.startMinute),
                   block.durationMinutes,
                 ])}
-                onClick={() => document.getElementById(`template-block-${index}`)?.focus()}
+                onClick={() =>
+                  document.getElementById(`template-block-${index}-start-time`)?.focus()
+                }
               >
                 {block.title}
               </button>
@@ -1125,59 +1009,353 @@ function TemplateVisualEditor({
           );
         })}
       </div>
-      <div className="template-detail-timeline" aria-labelledby="template-detail-title">
-        <h3 id="template-detail-title">{translate("features.views.LibraryViews.137")}</h3>
-        <p className="field-help">{translate("features.views.LibraryViews.138")}</p>
-        {draft.blocks.map((block, index) => {
-          const endMinute = block.startMinute + block.durationMinutes;
-          return (
-            <fieldset className="template-range-editor" key={`${block.title}-${index}`}>
-              <legend>{block.title}</legend>
-              <label>
-                {translate("features.views.LibraryViews.139")}
-                {minuteToTime(block.startMinute)}
-                <input
-                  id={`template-block-${index}`}
-                  type="range"
-                  min={0}
-                  max={1439}
-                  step={1}
-                  value={block.startMinute}
-                  onChange={(event) =>
-                    updateBlock(draft, setDraft, index, {
-                      startMinute: Number(event.target.value),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                {translate("features.views.LibraryViews.140")}
-                {formatTemplateEnd(endMinute)}
-                <input
-                  type="range"
-                  min={block.startMinute + 1}
-                  max={block.startMinute + 1440}
-                  step={1}
-                  value={endMinute}
-                  onChange={(event) =>
-                    updateBlock(draft, setDraft, index, {
-                      durationMinutes: Number(event.target.value) - block.startMinute,
-                    })
-                  }
-                />
-              </label>
-            </fieldset>
-          );
-        })}
-      </div>
     </section>
   );
 }
 
-function formatTemplateEnd(value: number): string {
-  const day = Math.floor(value / 1440);
+function TemplateBlockEditor({
+  draft,
+  setDraft,
+}: {
+  draft: DayTemplateDraft;
+  setDraft: (value: DayTemplateDraft) => void;
+}) {
+  const blockKeysRef = useRef<string[]>([]);
+  const nextBlockKeyRef = useRef(0);
+  while (blockKeysRef.current.length < draft.blocks.length) {
+    blockKeysRef.current.push(`template-block-key-${nextBlockKeyRef.current}`);
+    nextBlockKeyRef.current += 1;
+  }
+  if (blockKeysRef.current.length > draft.blocks.length) {
+    blockKeysRef.current.splice(draft.blocks.length);
+  }
+
+  const reorderBlocks = (index: number, direction: -1 | 1) => {
+    const blockKey = blockKeysRef.current[index];
+    if (!blockKey) return;
+    blockKeysRef.current = moveAt(blockKeysRef.current, index, direction);
+    setDraft({ ...draft, blocks: moveAt(draft.blocks, index, direction) });
+    restoreTemplateActionFocus(blockKey, direction);
+  };
+
+  const removeBlock = (index: number) => {
+    blockKeysRef.current.splice(index, 1);
+    setDraft({
+      ...draft,
+      blocks: draft.blocks.filter((_, itemIndex) => itemIndex !== index),
+    });
+  };
+
+  return (
+    <div className="block-editor-list">
+      {draft.blocks.map((block, index) => {
+        const startMinute = block.startMinute;
+        const endMinute = startMinute + block.durationMinutes;
+        const blockId = `template-block-${index}`;
+        const blockKey = blockKeysRef.current[index]!;
+        const moveUpId = `${blockKey}-move-up`;
+        const moveDownId = `${blockKey}-move-down`;
+        const timeHelpId = `${blockId}-time-help`;
+        const startInputId = `${blockId}-start-time`;
+        const endInputId = `${blockId}-end-time`;
+        const startRangeId = `${blockId}-start-range`;
+        const endRangeId = `${blockId}-end-range`;
+        const blockLabel = translate("features.views.LibraryViews.154", [index + 1, block.title]);
+        return (
+          <fieldset className="block-editor" key={blockKey}>
+            <legend>{blockLabel}</legend>
+            <label>
+              {translate("features.views.LibraryViews.046")}
+              <input
+                value={block.title}
+                onChange={(event) =>
+                  updateBlock(draft, setDraft, index, { title: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              {translate("features.views.LibraryViews.049")}
+              <input
+                type="color"
+                value={block.color}
+                onChange={(event) =>
+                  updateBlock(draft, setDraft, index, { color: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              {translate("features.views.LibraryViews.050")}
+              <input
+                value={block.project}
+                onChange={(event) =>
+                  updateBlock(draft, setDraft, index, { project: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              {translate("features.views.LibraryViews.051")}
+              <input
+                value={block.category}
+                onChange={(event) =>
+                  updateBlock(draft, setDraft, index, { category: event.target.value })
+                }
+              />
+            </label>
+            <div className="template-block-time" aria-describedby={timeHelpId}>
+              <TemplateMinuteControl
+                title={blockLabel}
+                label={translate("features.views.LibraryViews.047")}
+                rangeLabel={translate("features.views.LibraryViews.156", [blockLabel])}
+                inputId={startInputId}
+                rangeId={startRangeId}
+                value={startMinute}
+                rangeMin={0}
+                rangeMax={1439}
+                describedBy={timeHelpId}
+                onDirectChange={(value) => {
+                  const minute = parseClockMinute(value);
+                  if (minute === null) return;
+                  updateBlock(draft, setDraft, index, { startMinute: minute });
+                }}
+                onRangeChange={(value) => {
+                  updateBlock(draft, setDraft, index, { startMinute: value });
+                }}
+              />
+              <TemplateMinuteControl
+                title={blockLabel}
+                label={translate("features.views.LibraryViews.048")}
+                rangeLabel={translate("features.views.LibraryViews.157", [blockLabel])}
+                inputId={endInputId}
+                rangeId={endRangeId}
+                value={endMinute}
+                displayValue={endMinute % 1440}
+                rangeMin={startMinute + 1}
+                rangeMax={startMinute + 1440}
+                describedBy={timeHelpId}
+                onDirectChange={(value) => {
+                  const minute = parseClockMinute(value);
+                  if (minute === null) return;
+                  const nextEnd = minute > startMinute ? minute : minute + 1440;
+                  updateBlock(draft, setDraft, index, {
+                    durationMinutes: nextEnd - startMinute,
+                  });
+                }}
+                onRangeChange={(value) => {
+                  updateBlock(draft, setDraft, index, {
+                    durationMinutes: value - startMinute,
+                  });
+                }}
+              />
+              <p id={timeHelpId} className="field-help template-block-time__help">
+                {translate("features.views.LibraryViews.158", [
+                  formatTemplateBoundary(startMinute),
+                  formatTemplateBoundary(endMinute),
+                ])}
+              </p>
+            </div>
+            <div
+              className="block-editor__actions"
+              aria-label={translate("features.views.LibraryViews.031", [block.title])}
+            >
+              <button
+                type="button"
+                className="icon-button"
+                id={moveUpId}
+                disabled={index === 0}
+                aria-label={translate("features.views.LibraryViews.052", [block.title])}
+                onClick={() => reorderBlocks(index, -1)}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                id={moveDownId}
+                disabled={index === draft.blocks.length - 1}
+                aria-label={translate("features.views.LibraryViews.053", [block.title])}
+                onClick={() => reorderBlocks(index, 1)}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={translate("features.views.LibraryViews.054", [block.title])}
+                onClick={() => {
+                  const blocks = [...draft.blocks];
+                  blocks.splice(index + 1, 0, {
+                    ...block,
+                    title: translate("features.views.LibraryViews.055", [block.title]),
+                  });
+                  blockKeysRef.current.splice(
+                    index + 1,
+                    0,
+                    `template-block-key-${nextBlockKeyRef.current}`,
+                  );
+                  nextBlockKeyRef.current += 1;
+                  setDraft({ ...draft, blocks });
+                }}
+              >
+                ⧉
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label={translate("features.views.LibraryViews.056", [block.title])}
+                onClick={() => removeBlock(index)}
+              >
+                ×
+              </button>
+            </div>
+          </fieldset>
+        );
+      })}
+    </div>
+  );
+}
+
+function TemplateMinuteControl({
+  title,
+  label,
+  rangeLabel,
+  inputId,
+  rangeId,
+  value,
+  displayValue = value,
+  rangeMin,
+  rangeMax,
+  describedBy,
+  onDirectChange,
+  onRangeChange,
+}: {
+  title: string;
+  label: string;
+  rangeLabel: string;
+  inputId: string;
+  rangeId: string;
+  value: number;
+  displayValue?: number;
+  rangeMin: number;
+  rangeMax: number;
+  describedBy: string;
+  onDirectChange: (value: string) => void;
+  onRangeChange: (value: number) => void;
+}) {
+  const boundary = formatTemplateBoundary(value);
+  const rangeBounds = templateRangeBounds(value, rangeMin, rangeMax);
+  return (
+    <div className="template-minute-control">
+      <div className="template-minute-control__heading">
+        <label htmlFor={inputId}>{label}</label>
+        <output htmlFor={inputId}>{boundary}</output>
+      </div>
+      <div className="template-minute-control__controls">
+        <label className="sr-only" htmlFor={rangeId}>
+          {rangeLabel}
+        </label>
+        <input
+          id={rangeId}
+          type="range"
+          min={rangeBounds.min}
+          max={rangeBounds.max}
+          step={10}
+          value={value}
+          aria-label={rangeLabel}
+          aria-valuetext={boundary}
+          aria-describedby={describedBy}
+          onChange={(event) => {
+            const nextValue = Number(event.target.value);
+            if (
+              !Number.isInteger(nextValue) ||
+              nextValue < rangeBounds.min ||
+              nextValue > rangeBounds.max ||
+              (nextValue - rangeBounds.min) % 10 !== 0
+            ) {
+              return;
+            }
+            onRangeChange(nextValue);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+            event.preventDefault();
+            const delta = event.key === "ArrowRight" ? 10 : -10;
+            const nextValue = Math.min(rangeBounds.max, Math.max(rangeBounds.min, value + delta));
+            if (
+              Number.isInteger(nextValue) &&
+              nextValue >= rangeBounds.min &&
+              nextValue <= rangeBounds.max &&
+              (nextValue - rangeBounds.min) % 10 === 0 &&
+              nextValue !== value
+            ) {
+              onRangeChange(nextValue);
+            }
+          }}
+        />
+        <input
+          id={inputId}
+          type="time"
+          step={60}
+          value={minuteToTime(displayValue)}
+          aria-label={translate("features.views.LibraryViews.155", [title, label.trim()])}
+          aria-describedby={describedBy}
+          onChange={(event) => onDirectChange(event.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function parseClockMinute(value: string): number | null {
+  const match = /^(?<hour>\d{2}):(?<minute>\d{2})$/.exec(value);
+  if (!match?.groups) return null;
+  const hour = Number(match.groups.hour);
+  const minute = Number(match.groups.minute);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function templateRangeBounds(
+  value: number,
+  min: number,
+  max: number,
+): {
+  min: number;
+  max: number;
+} {
+  const remainder = ((value % 10) + 10) % 10;
+  const lowerRemainder = ((min % 10) + 10) % 10;
+  const upperRemainder = ((max % 10) + 10) % 10;
+  return {
+    min: min + ((remainder - lowerRemainder + 10) % 10),
+    max: max - ((upperRemainder - remainder + 10) % 10),
+  };
+}
+
+function restoreTemplateActionFocus(blockKey: string, direction: -1 | 1): void {
+  const preferredSuffix = direction === -1 ? "move-up" : "move-down";
+  const fallbackSuffix = direction === -1 ? "move-down" : "move-up";
+  const restore = () => {
+    const preferred = document.getElementById(
+      `${blockKey}-${preferredSuffix}`,
+    ) as HTMLButtonElement | null;
+    const fallback = document.getElementById(
+      `${blockKey}-${fallbackSuffix}`,
+    ) as HTMLButtonElement | null;
+    const target = preferred && !preferred.disabled ? preferred : fallback;
+    target?.focus();
+  };
+  if (typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(restore);
+  } else {
+    window.setTimeout(restore, 0);
+  }
+}
+
+function formatTemplateBoundary(value: number): string {
   const time = minuteToTime(value % 1440);
-  return day > 0 ? translate("features.views.LibraryViews.141", [time]) : time;
+  return value >= 1440
+    ? translate("features.views.LibraryViews.141", [time])
+    : translate("features.views.LibraryViews.163", [time]);
 }
 
 function updateBlock(

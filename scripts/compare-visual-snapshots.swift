@@ -43,6 +43,7 @@ let canonicalSnapshotSizes: [String: (width: Int, height: Int)] = [
     // product-owned rect (32px on local Retina, 28px on CI 1x). Compare only the
     // logical client area and exclude that trailing native decoration.
     "native-today.png": (1024, 640),
+    "native-template-editor.png": (1180, 684),
     "native-compact.png": (420, 640),
 ]
 
