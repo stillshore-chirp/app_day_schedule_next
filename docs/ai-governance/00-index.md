@@ -2,7 +2,7 @@
 
 このディレクトリは、Day Schedule NextのUI/UX品質、Issue品質、証跡、完了条件を扱う詳細正本です。企業全体のAI統制、法務、倫理審査、モデル監査を意味しません。
 
-3製品のルール配置、読者、委任、task-state、static検査は [`docs/agent-harness.md`](../agent-harness.md) を正本とします。
+repository 固有のrule routingと静的検査の配置は [`docs/agent-harness.md`](../agent-harness.md) を参照します。Codex共通の作業規則はローカルのCodex `AGENTS.md` が正本です。
 
 ## 読み方
 
@@ -18,7 +18,7 @@
 
 | 文書 | 責務 |
 |---|---|
-| [`../agent-harness.md`](../agent-harness.md) | 3製品の到達性、checkpoint、委任、証跡再利用、instruction budget |
+| [`../agent-harness.md`](../agent-harness.md) | repository の正本、path routing、adapter、静的検査の配置 |
 | [`01-agent-operating-contract.md`](01-agent-operating-contract.md) | UI / GitHub共同作業面の基本契約 |
 | [`02-uiux-review-framework.md`](02-uiux-review-framework.md) | 対象面、品質定義、P0 / P1 / P2、レビュー観点 |
 | [`03-evidence-and-completion-gates.md`](03-evidence-and-completion-gates.md) | 対象面別の証跡、closure、完了ゲート |
@@ -41,7 +41,7 @@
 
 ## テンプレートとチェックリスト
 
-- [`templates/agent-task-prompt.md`](templates/agent-task-prompt.md)、[`templates/completion-gate-report.md`](templates/completion-gate-report.md)、[`templates/task-state.json`](templates/task-state.json)
+- [`templates/agent-task-prompt.md`](templates/agent-task-prompt.md)、[`templates/completion-gate-report.md`](templates/completion-gate-report.md)
 - [`templates/uiux-review-report.md`](templates/uiux-review-report.md)、[`templates/state-matrix.md`](templates/state-matrix.md)、[`templates/counter-review.md`](templates/counter-review.md)
 - [`templates/user-goal-assessment.md`](templates/user-goal-assessment.md)、[`templates/novice-simulation.md`](templates/novice-simulation.md)、[`templates/efficiency-review.md`](templates/efficiency-review.md)、[`templates/trust-satisfaction-review.md`](templates/trust-satisfaction-review.md)
 - `checklists/p0-p1-p2.md`、`checklists/accessibility.md`、`checklists/cognitive-walkthrough.md`、`checklists/visual-hierarchy.md`

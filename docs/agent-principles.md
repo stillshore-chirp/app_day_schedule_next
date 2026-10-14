@@ -1,6 +1,6 @@
 # Agent Principles
 
-この文書は、Day Schedule Nextの設計・実装判断に使うheuristicだけを定めます。hard gateと権限境界はroot [`AGENTS.md`](../AGENTS.md)、委任・証跡・task-stateは [`docs/agent-harness.md`](agent-harness.md)、実行手順は該当Skillを優先します。数値だけでFailにせず、要件、既存構造、変更容易性、誤用リスク、検証可能性を比較します。
+この文書は、Day Schedule Nextの設計・実装判断に使うheuristicだけを定めます。製品固有のhard gateはroot [`AGENTS.md`](../AGENTS.md)、製品 domain の実行手順は該当Skillを正本とします。Codex共通の作業規則はローカルのCodex `AGENTS.md`を参照してください。数値だけでFailにせず、要件、既存構造、変更容易性、誤用リスク、検証可能性を比較します。
 
 ## KISSとYAGNI
 

@@ -1,7 +1,7 @@
 ---
-description: "GitHub共同作業面とworkflow変更を共有正本へ接続する"
+description: "GitHub workflowとIssue / PR本文のrepository正本へ接続する"
 globs: ".github/**,scripts/validate-governance.mjs,scripts/security-scan-text.mjs"
 alwaysApply: false
 ---
 
-root `AGENTS.md`、`.github/AGENTS.md`、`.agents/skills/github-delivery/SKILL.md`、`.agents/skills/security-publication/SKILL.md` を読んで適用してください。このMDCは共有正本へ案内するpath adapterです。
+workflow / settings は root `AGENTS.md` と `.github/AGENTS.md` を参照してください。Issue / PR本文では `.agents/skills/github-delivery/SKILL.md`、公開内容では `.agents/skills/security-publication/SKILL.md` を参照してください。このMDCは共有正本へ案内するpath adapterです。

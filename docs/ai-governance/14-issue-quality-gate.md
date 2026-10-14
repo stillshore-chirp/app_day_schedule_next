@@ -4,7 +4,7 @@ Issueは「何を変えるか」だけの作業メモではなく、第三者が
 
 ## 1. 適用範囲
 
-repository変更に先立って新規Issueを作成する場合と、既存Issueを主Issueとして採用する場合に適用します。Issueを省略できる条件はroot `AGENTS.md` とGitHub配送Skillを優先します。
+Day Schedule Next の Issue の内容を作成・更新・参照するときに適用します。この文書は Issue の品質基準を定め、作成時期や GitHub 上の作業手順は定めません。
 
 ## 2. 必須内容
 
@@ -51,7 +51,7 @@ repository変更に先立って新規Issueを作成する場合と、既存Issue
 
 ## 6. 既存Issueと公開安全性
 
-既存Issueの必須内容が不足する場合は実装前に本文を更新するか、理由・根拠・成果・非対象・acceptance・verification・riskをコメントへまとめます。実装中にscope、判断、確認済み事実、未確認事項が変わった場合もIssueを更新し、重要な判断をPRだけへ閉じ込めません。
+Issue に理由、根拠、成果、非対象、acceptance、verification、risk を記載するときは、公開可能な事実だけを使い、重要な判断の根拠が追跡できるようにします。scope や確認済み事実が変わった場合は、該当する公開記録も整合させます。
 
 Issueは公開文書として扱います。secret、credential、個人予定、raw DB / backup / log、ユーザー入力全文、完全なpath、追跡可能なIDを貼りません。公開できない根拠は、証跡の種別、公開可能な観測事実、判断への影響、非公開範囲、次の確認へ要約します。詳細は `docs/security-publication-checklist.md` とsecurity-publication Skillを使います。
 

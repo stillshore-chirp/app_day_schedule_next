@@ -83,7 +83,6 @@ title: "[Investigation]: "
 
 - [ ] 結果、根拠、未確認、残るriskをIssue commentまたはPRへ残す。
 - [ ] 後続implementation / bug Issueの要否を判断する。
-- [ ] Repository changeはPRと `Refs #...` / `Closes #...` を持つ。
 
 ## 検証方針
 

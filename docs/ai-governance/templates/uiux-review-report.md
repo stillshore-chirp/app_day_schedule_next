@@ -18,10 +18,8 @@
 | Target snapshot / ref |  |
 | Base ref / SHA |  |
 | Head ref / SHA |  |
-| Commit / staged・unstaged diff |  |
-| Diff identifier | `staged=<patch hash|empty>; unstaged=<patch hash|empty>; paths=<sorted changed path set>`。hash方式・取得時点も記録 |
 | 追加側・削除側 |  |
-| 変更意図（Issue / PR / commit） |  |
+| 変更意図（Issue / PR） |  |
 | Expanded surfaces | 直接consumer、parent、route、state、代表surface |
 | Coverage / 未確認consumer / 除外理由 |  |
 <!-- agent-harness:uiux-report-scope:end -->
