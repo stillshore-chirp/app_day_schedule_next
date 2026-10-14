@@ -1,6 +1,6 @@
 # AIエージェント運用契約
 
-この文書は、アプリ本体UIとGitHub共同作業面を扱う時の基本契約です。共通の作業契約はルート `AGENTS.md`、実行手順は `.agents/skills/ui-ux-review/SKILL.md` を優先します。
+この文書は、アプリ本体UIとGitHub共同作業面の品質確認を扱います。Codexの共通作業規則はローカルのCodex `AGENTS.md`、製品固有の実行手順は `.agents/skills/ui-ux-review/SKILL.md` と近接する製品正本を参照します。
 
 ## 作業前
 

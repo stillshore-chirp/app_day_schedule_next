@@ -5,4 +5,4 @@ paths:
   - "scripts/security-scan-text.mjs"
 ---
 
-GitHub共同作業面またはworkflowを変更する前に、root `AGENTS.md`、`.github/AGENTS.md`、GitHub配送Skill、公開安全性Skillを読んで適用します。このruleは共有正本へ案内するpath routerです。
+GitHub workflow / settings は root `AGENTS.md` と `.github/AGENTS.md` を読みます。Issue / PR本文では [GitHub共同作業面 Skill](../../.agents/skills/github-delivery/SKILL.md)、公開内容では [公開安全性 Skill](../../.agents/skills/security-publication/SKILL.md) を参照します。このruleは正本へ案内するpath routerです。

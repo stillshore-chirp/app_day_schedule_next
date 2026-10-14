@@ -11,8 +11,6 @@ import {
   parseFrontmatter,
   parseWorkflowYaml,
   renderedMarkdownLinks,
-  taskPathsOverlap,
-  validateTaskStateDocument,
   validateWorkflowInventory,
   validateWorkflowActions,
   WORKFLOW_PATHS,
@@ -23,35 +21,6 @@ function fails(callback, pattern) {
     assert.match(String(error?.message ?? error), pattern);
     return true;
   });
-}
-
-function makeTaskState(overrides = {}) {
-  return {
-    schema: "task-state/v1",
-    status: "complete",
-    goal: "validate governance",
-    acceptance: ["central gate passes"],
-    snapshot: { base: "base-sha", head: "head-sha", phase: "verification" },
-    lane: { id: "governance", owner: "agent", owned_paths: ["scripts/"] },
-    completed_evidence: [
-      {
-        gate: "governance",
-        summary: "focused tests pass",
-        result: "pass",
-        artifact_reference: "test-output.txt",
-      },
-    ],
-    input_closure: {
-      paths: ["scripts/validate-governance.mjs"],
-      config: ["package.json"],
-      artifacts: ["test-output.txt"],
-      conditions: ["node >= 22"],
-    },
-    invalidated_gates: [],
-    remaining_work: [],
-    risks_blockers: { risks: [], blockers: [] },
-    ...overrides,
-  };
 }
 
 test("frontmatter rejects duplicate keys and preserves YAML scalar types", () => {
@@ -108,39 +77,6 @@ test("rendered Markdown links omit images, code, fences, indented code, and comm
   assert.deepEqual(new Set(links.map((link) => link.target)), new Set(["ok.md", "referenced.md"]));
   assert.equal(links.some((link) => link.image), false);
   assert.equal(renderedMarkdownLinks(source, { includeImages: true }).some((link) => link.image), true);
-});
-
-test("task-state/v1 enforces closure and terminal state contracts", () => {
-  validateTaskStateDocument(makeTaskState());
-  validateTaskStateDocument({
-    ...makeTaskState(),
-    status: "blocked",
-    remaining_work: ["wait for review"],
-    risks_blockers: { risks: [], blockers: ["review pending"] },
-  });
-  fails(
-    () => validateTaskStateDocument({ ...makeTaskState(), remaining_work: ["unfinished"] }),
-    /complete state must have no remaining/,
-  );
-  fails(
-    () => validateTaskStateDocument({ ...makeTaskState(), input_closure: { ...makeTaskState().input_closure, artifacts: [] } }),
-    /outside input closure/,
-  );
-  fails(
-    () => validateTaskStateDocument({ ...makeTaskState(), status: "blocked", risks_blockers: { risks: [], blockers: [] } }),
-    /blocked state requires a blocker/,
-  );
-  fails(
-    () => validateTaskStateDocument({
-      ...makeTaskState(),
-      publication: { gate: "publication", annotation_paths: ["reports/"] },
-      measurement: { gate: "measurement", input_paths: ["reports/result.json"] },
-    }),
-    /paths overlap/,
-  );
-  assert.equal(taskPathsOverlap("reports/result.json", "reports/*.json"), true);
-  assert.equal(taskPathsOverlap("reports/result.json", "artifacts/result.json"), false);
-  assert.equal(taskPathsOverlap("../outside", "artifacts/result.json"), true);
 });
 
 test("workflow Actions require lowercase full SHA pins and version comments", () => {

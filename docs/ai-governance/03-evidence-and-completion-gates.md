@@ -22,11 +22,9 @@
 
 | 項目 | 記録 |
 |---|---|
-| Target snapshot / ref | working tree、commit range、branch、PR等のレビュー対象 |
+| Target snapshot / ref | working tree、base / head ref、PR等のレビュー対象 |
 | Base / Head ref・SHA | 比較に使ったbaseとhead |
-| Commit / diff | 対象commit数、staged / unstaged、追加側・削除側 |
-| Diff identifier | `staged=<patch hash|empty>; unstaged=<patch hash|empty>; paths=<sorted changed path set>` |
-| Intent | Issue、PR、commit message、受け入れ条件から確認した変更意図 |
+| 変更内容 | 追加側・削除側と、Issue / PR / 受け入れ条件から確認した意図 |
 | Expanded surfaces | changed fileの直接consumer、parent、route、state、代表surface |
 | Coverage / unknowns | 確認したsurface、未確認consumer、除外と理由 |
 
@@ -47,7 +45,7 @@ changed fileは入口であり、直接変更箇所だけにレビューを限�
 
 visual / layout / copyが変わるアプリ本体UIでは、同じviewport、OS、synthetic fixtureでbefore / afterを比較し、base / head、state、runtime条件、artifact参照を記録します。表示差分を持たないnative interaction、data contract、内部状態変更は、focused test、accessibility tree、native observation、保存結果を優先し、意味のないscreenshotや全state matrixを要求しません。
 
-実装中・review中のafterは`provisional`です。review収束後のlatest HEADで取得したものだけを`final`として採用します。head、base、所有path、finding / fix、runtime条件が変われば失効させます。必須証跡を取得できない場合は、理由、代替証跡、残るrisk、次の確認を記録し、受け入れ条件上必須なら完了扱いにしません。
+UIの受け入れ判断に使うafterは、確認対象の変更が反映されたheadから取得します。対象surfaceへ影響する変更やruntime条件が変われば取り直します。必須証跡を取得できない場合は、理由、代替証跡、残るrisk、次の確認を記録し、受け入れ条件上必須なら完了扱いにしません。
 
 ### native evidenceとruntime
 
@@ -56,7 +54,7 @@ visual / layout / copyが変わるアプリ本体UIでは、同じviewport、OS�
 - screenshotをsemantic structure、keyboard / accessibility、data recovery、時間変化の代替にしない。
 - build、install、launch、permission確認は別の状態として記録する。
 
-runtime / dev serverを使う場合は、owner、PID、process group、port、readiness、cleanupを起動前に固定し、終了後にprocess group終了とport解放を確認します。既存processの再利用も同じ条件が必要です。不明なowner、port衝突、readiness未確認、cleanup未確認の実行はcurrent-run証跡へ採用しません。runtimeを使わない場合は不要な実行記録を作りません。
+runtimeを証跡に使う場合は、実際に観察した環境、対象surface、状態、結果を記録します。静的確認やbrowser previewだけでnative desktop、OS permission、実アカウントの挙動を確認済みとしません。
 
 ## 4. フロー監査の証跡
 
@@ -80,33 +78,18 @@ IntroducedとRegressionは今回のfindingとしてseverity、修正状態、証
 
 Issue / PR template、repository Markdown、workflowの入力・説明では、変更した文言・項目・順序・必須性、Markdown / YAML / frontmatter / glob、link・command・移動先、公開安全性、preview要否、未実行検証とriskを確認します。GitHubが所有し、リポジトリが変更していないlayout、keyboard、focus、loading、permission stateへ、アプリ本体UIと同じstate matrixやnative screenshotを要求しません。
 
-## 7. 配送checkpointとevidence再利用
-
-配送は [`docs/agent-harness.md`](../agent-harness.md) の `implementation → focused_verification → code_freeze → measurement → publication_freeze → external_gate → review_fix → accepted` に従います。stable evidence（HEAD / base、path、closure、条件、結果、artifact）とvolatile delivery state（CI、review / thread、mergeability、待機status）を分け、path・関連config・生成artifact・条件と交差したgateだけを失効させます。
-
-代表的なgate選択は次のとおりです。
-
-| scenario | focused gate | high-cost / external gate | 失効・再取得 |
-|---|---|---|---|
-| governance / docs | Markdown、link、公開安全性、`validate_governance` | closureが必要とするgovernance gate | 交差したpath、config、artifact、条件だけ |
-| UI / application | component、state、a11y、flow | 選択したnative / E2E / visual gate | 影響surfaceとcurrent-run証跡だけ |
-| data / sync / time | contract、migration、対象domain test | closureが交差するfull gate | API、schema、clock、config、runtime条件だけ |
-| workflow | YAML、classifier、workflow contract | latest-head CI / mergeability | workflow、trigger、base依存入力だけ |
-
-測定は同じchange type、snapshot、runner、条件でgate実行数、wall-clock、status照会数、output bytesを比較します。tokenは実telemetryがある場合だけ観測値とし、source-size estimateを代用しません。
-
-## 8. 完了ゲート
+## 7. 完了ゲート
 
 ### 共通
 
 - 依頼の成果と受け入れ条件を満たし、P0が残っていない。
 - 対象面の証跡、実行済み検証と結果、未実行検証と理由、残るriskを示す。
-- 未実施の確認を成功扱いせず、公開安全性と無関係差分の不在を確認する。
+- 未実施の確認を成功扱いせず、公開安全性を確認する。
 
 ### アプリ本体UI
 
 - ユーザー価値、初見理解、主要state、accessibility、visual hierarchy、copy、efficiency、trust、counter-reviewを確認する。
-- visual差分がある場合は必要なbefore / afterを、runtimeを使った場合はowner、PID、process group、port、readiness、cleanupを確認する。
+- visual差分がある場合は必要なbefore / afterを確認する。runtimeを使った場合は実際に観察した環境と挙動を証跡へ結び付ける。
 - time / sync / migration / platformへ影響する場合は該当Skillのmatrixを満たす。
 - desktop runtime変更では [`docs/engineering/desktop-platform-and-release.md`](../engineering/desktop-platform-and-release.md) のlatest app handoffに従い、checksum、復旧可能なinstall、launch証跡を残す。
 
@@ -120,10 +103,6 @@ Issue / PR template、repository Markdown、workflowの入力・説明では、�
 - 文言、構造、必須性、link、公開安全性を変更範囲に比例して確認する。
 - アプリ本体UI用のscreenshot、runtime、native evidenceを要求しない。
 
-### Pull Request
+## 8. 製品検証と報告
 
-PRをreadyまたはmerge可能として報告する場合は、latest HEADのCI、latest meaningful changeの利用可能なreview、actionableな未解決thread、mergeabilityを同一snapshotで確認します。reviewが提供されない場合は代替自己reviewと未確認範囲を記録します。同じheadでclean reviewを複数回集めず、詳細な回数契約は [`docs/agent-harness.md`](../agent-harness.md) を参照します。mergeやcloseは別の明示指示がある場合だけ行います。
-
-## 9. 推奨検証と報告
-
-変更範囲に応じてlint、format、typecheck、Unit / Integration / contract、native E2E、axe-core、keyboard、visual diff、content stress、Markdown / YAML / frontmatter / link検査を選びます。利用できない検証は存在しない成果物として捏造せず、理由と残るriskを [`templates/completion-gate-report.md`](templates/completion-gate-report.md) または同等のPR記録へ残します。
+アプリとdomainの検証範囲は [`docs/testing/index.md`](../testing/index.md) と該当 Skill を参照します。UI / UX または GitHub共同作業面の結果は、実行した確認、未確認範囲、残るriskを [`templates/completion-gate-report.md`](templates/completion-gate-report.md) または同等の記録へまとめます。

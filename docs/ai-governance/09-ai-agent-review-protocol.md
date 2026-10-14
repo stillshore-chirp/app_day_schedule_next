@@ -12,7 +12,7 @@ AIエージェントに「良さそう」と判断させるのではなく、観
 
 ### 2.1 Scope評価者
 
-UI変更レビューで差分を扱う場合は、target snapshot / ref、base / head ref / SHA、追加・削除差分、Issue / PR / commit messageの変更意図、直接consumerと代表surfaceのcoverageを確定します。shared primitive、global token、common componentの変更は代表surfaceへ展開し、findingをIntroduced / Regression / Pre-existingへ分類します。Pre-existingは通常の変更起因件数・責任から分離して記録しますが、変更目的または安全性を阻害するP0/P1等のblocking findingは完了可否と判定理由へ残し、scopeと完了判断を見直します。
+UI変更レビューで差分を扱う場合は、target snapshot / ref、base / head ref / SHA、追加・削除差分、Issue / PRと受け入れ条件から読み取った変更意図、直接consumerと代表surfaceのcoverageを確定します。shared primitive、global token、common componentの変更は代表surfaceへ展開し、findingをIntroduced / Regression / Pre-existingへ分類します。Pre-existingは通常の変更起因件数・責任から分離して記録しますが、変更目的または安全性を阻害するP0/P1等のblocking findingは完了可否と判定理由へ残し、scopeと完了判断を見直します。
 
 ### 2.2 実装者
 

@@ -58,20 +58,8 @@ export const CURSOR_RULES = Object.freeze([
   ".cursor/rules/github.mdc",
 ]);
 
-export const TASK_STATE_TEMPLATE = "docs/ai-governance/templates/task-state.json";
-export const TASK_STATE_SCHEMA = "task-state/v1";
-export const TASK_STATE_STATUSES = Object.freeze(
-  new Set(["planned", "running", "partial", "blocked", "complete"]),
-);
-export const TASK_STATE_RESULTS = Object.freeze(
-  new Set(["pass", "fail", "partial", "unverified"]),
-);
-export const TASK_STATE_LIMITS = Object.freeze({
-  bytes: 16 * 1024,
-  items: 50,
-  string: 1000,
-  summary: 500,
-});
+const MAX_VALIDATED_STRING_LENGTH = 1000;
+const MAX_VALIDATED_LIST_ITEMS = 50;
 
 const REQUIRED_FILES = Object.freeze([
   "AGENTS.md",
@@ -130,7 +118,6 @@ const REQUIRED_FILES = Object.freeze([
   "docs/ai-governance/templates/efficiency-review.md",
   "docs/ai-governance/templates/novice-simulation.md",
   "docs/ai-governance/templates/state-matrix.md",
-  TASK_STATE_TEMPLATE,
   "docs/ai-governance/templates/trust-satisfaction-review.md",
   "docs/ai-governance/templates/uiux-review-report.md",
   "docs/ai-governance/templates/user-goal-assessment.md",
@@ -159,8 +146,6 @@ const REQUIRED_FILES = Object.freeze([
 
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MARKER_CONTRACTS = Object.freeze([
-  ["docs/agent-harness.md", "DSN-COMPREHENSIVE-REVIEW-ROUNDS"],
-  ["docs/ai-governance/13-maintenance-policy.md", "DSN-WORDPACK-OVERLAY"],
   ["docs/testing/index.md", "DSN-RISK-BASED-DELIVERY"],
   ["docs/engineering/desktop-platform-and-release.md", "DSN-LATEST-APP-HANDOFF"],
 ]);
@@ -392,7 +377,7 @@ export function parseFrontmatter(source, label = "frontmatter") {
   return data;
 }
 
-function nonEmptyString(value, label, max = TASK_STATE_LIMITS.string) {
+function nonEmptyString(value, label, max = MAX_VALIDATED_STRING_LENGTH) {
   if (typeof value !== "string" || !value.trim()) fail(`${label} must be a non-empty string`);
   if (value.length > max) fail(`${label} exceeds ${max} characters`);
 }
@@ -401,193 +386,8 @@ function stringList(value, label, { required = false } = {}) {
   if (!Array.isArray(value) || (required && value.length === 0)) {
     fail(`${label} must be a${required ? " non-empty" : ""} string list`);
   }
-  if (value.length > TASK_STATE_LIMITS.items) fail(`${label} exceeds ${TASK_STATE_LIMITS.items} items`);
+  if (value.length > MAX_VALIDATED_LIST_ITEMS) fail(`${label} exceeds ${MAX_VALIDATED_LIST_ITEMS} items`);
   value.forEach((item, index) => nonEmptyString(item, `${label}[${index}]`));
-}
-
-function exactObject(value, keys, label) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} must be an object`);
-  const actual = Object.keys(value);
-  const expected = new Set(keys);
-  const missing = keys.filter((key) => !Object.hasOwn(value, key));
-  const unknown = actual.filter((key) => !expected.has(key));
-  if (missing.length || unknown.length) {
-    fail(`${label} keys invalid: missing=${missing.join(",")} unknown=${unknown.join(",")}`);
-  }
-}
-
-function canonicalTaskPath(value) {
-  if (typeof value !== "string" || value !== value.trim() || value.startsWith("/") || value.includes("\\")) return null;
-  const parts = value.split("/");
-  if (!value || parts.some((part) => !part || part === "." || part === "..")) return null;
-  return value;
-}
-
-function globToRegExp(pattern) {
-  let expression = "^";
-  for (let index = 0; index < pattern.length; index += 1) {
-    const character = pattern[index];
-    if (character === "*") {
-      expression += pattern[index + 1] === "*" ? ".*" : "[^/]*";
-      if (pattern[index + 1] === "*") index += 1;
-    } else if (character === "?") {
-      expression += "[^/]";
-    } else if (character === "[") {
-      const end = pattern.indexOf("]", index + 1);
-      if (end < 0) expression += "\\[";
-      else {
-        const content = pattern.slice(index + 1, end);
-        expression += `[${content.replaceAll("\\", "\\\\")}]`;
-        index = end;
-      }
-    } else {
-      expression += character.replace(/[\\^$+{}()|.]/g, "\\$&");
-    }
-  }
-  return new RegExp(`${expression}$`);
-}
-
-export function taskPathsOverlap(left, right) {
-  const leftPath = canonicalTaskPath(left);
-  const rightPath = canonicalTaskPath(right);
-  if (!leftPath || !rightPath) return true;
-  const magic = /[*?[]/;
-  const leftGlob = magic.test(leftPath);
-  const rightGlob = magic.test(rightPath);
-  if (leftGlob && rightGlob) return true;
-  if (!leftGlob && !rightGlob) return leftPath === rightPath;
-  return leftGlob ? globToRegExp(leftPath).test(rightPath) : globToRegExp(rightPath).test(leftPath);
-}
-
-function validateTaskStateShape(state, label) {
-  exactObject(
-    state,
-    [
-      "schema",
-      "status",
-      "goal",
-      "acceptance",
-      "snapshot",
-      "lane",
-      "completed_evidence",
-      "input_closure",
-      "invalidated_gates",
-      "remaining_work",
-      "risks_blockers",
-      "measurement",
-      "publication",
-    ].filter((key) => Object.hasOwn(state, key) || !["measurement", "publication"].includes(key)),
-    label,
-  );
-  nonEmptyString(state.schema, `${label}.schema`);
-  nonEmptyString(state.status, `${label}.status`);
-  nonEmptyString(state.goal, `${label}.goal`);
-  stringList(state.acceptance, `${label}.acceptance`, { required: true });
-
-  exactObject(state.snapshot, ["base", "head", "phase"], `${label}.snapshot`);
-  for (const key of ["base", "head", "phase"]) nonEmptyString(state.snapshot[key], `${label}.snapshot.${key}`);
-  exactObject(state.lane, ["id", "owner", "owned_paths"], `${label}.lane`);
-  nonEmptyString(state.lane.id, `${label}.lane.id`);
-  nonEmptyString(state.lane.owner, `${label}.lane.owner`);
-  stringList(state.lane.owned_paths, `${label}.lane.owned_paths`);
-
-  if (!Array.isArray(state.completed_evidence)) fail(`${label}.completed_evidence must be a list`);
-  if (state.completed_evidence.length > TASK_STATE_LIMITS.items) fail(`${label}.completed_evidence exceeds item bound`);
-  state.completed_evidence.forEach((entry, index) => {
-    const entryLabel = `${label}.completed_evidence[${index}]`;
-    exactObject(entry, ["gate", "summary", "result", "artifact_reference"], entryLabel);
-    nonEmptyString(entry.gate, `${entryLabel}.gate`);
-    nonEmptyString(entry.summary, `${entryLabel}.summary`, TASK_STATE_LIMITS.summary);
-    nonEmptyString(entry.result, `${entryLabel}.result`);
-    if (entry.artifact_reference !== null) nonEmptyString(entry.artifact_reference, `${entryLabel}.artifact_reference`);
-  });
-
-  exactObject(state.input_closure, ["paths", "config", "artifacts", "conditions"], `${label}.input_closure`);
-  for (const key of ["paths", "config", "artifacts", "conditions"]) stringList(state.input_closure[key], `${label}.input_closure.${key}`);
-
-  if (!Array.isArray(state.invalidated_gates)) fail(`${label}.invalidated_gates must be a list`);
-  if (state.invalidated_gates.length > TASK_STATE_LIMITS.items) fail(`${label}.invalidated_gates exceeds item bound`);
-  state.invalidated_gates.forEach((entry, index) => {
-    const entryLabel = `${label}.invalidated_gates[${index}]`;
-    exactObject(entry, ["gate", "reason", "reacquire_scope"], entryLabel);
-    nonEmptyString(entry.gate, `${entryLabel}.gate`);
-    nonEmptyString(entry.reason, `${entryLabel}.reason`);
-    stringList(entry.reacquire_scope, `${entryLabel}.reacquire_scope`, { required: true });
-  });
-  stringList(state.remaining_work, `${label}.remaining_work`);
-  exactObject(state.risks_blockers, ["risks", "blockers"], `${label}.risks_blockers`);
-  stringList(state.risks_blockers.risks, `${label}.risks_blockers.risks`);
-  stringList(state.risks_blockers.blockers, `${label}.risks_blockers.blockers`);
-
-  for (const [key, childKeys, listKey] of [
-    ["measurement", ["gate", "input_paths"], "input_paths"],
-    ["publication", ["gate", "annotation_paths"], "annotation_paths"],
-  ]) {
-    if (!Object.hasOwn(state, key)) continue;
-    exactObject(state[key], childKeys, `${label}.${key}`);
-    nonEmptyString(state[key].gate, `${label}.${key}.gate`);
-    stringList(state[key][listKey], `${label}.${key}.${listKey}`, { required: true });
-  }
-}
-
-export function validateTaskStateDocument(state, label = "task-state") {
-  if (!state || typeof state !== "object" || Array.isArray(state)) fail(`${label} must be an object`);
-  validateTaskStateShape(state, label);
-  if (state.schema !== TASK_STATE_SCHEMA) fail(`${label}.schema must be ${TASK_STATE_SCHEMA}`);
-  if (!TASK_STATE_STATUSES.has(state.status)) fail(`${label}.status is unknown`);
-  for (const entry of state.completed_evidence) {
-    if (!TASK_STATE_RESULTS.has(entry.result)) fail(`${label}: unknown evidence result ${entry.result}`);
-  }
-  if (state.measurement && state.publication) {
-    for (const measurementPath of state.measurement.input_paths) {
-      for (const annotationPath of state.publication.annotation_paths) {
-        if (taskPathsOverlap(measurementPath, annotationPath)) {
-          fail(`${label}: measurement/publication paths overlap (${measurementPath}, ${annotationPath})`);
-        }
-      }
-    }
-  }
-  if (state.completed_evidence.length > 0) {
-    if (state.input_closure.paths.length === 0 || state.input_closure.conditions.length === 0) {
-      fail(`${label}: completed evidence requires input closure paths and conditions`);
-    }
-    for (const entry of state.completed_evidence) {
-      if (entry.artifact_reference !== null && !state.input_closure.artifacts.includes(entry.artifact_reference)) {
-        fail(`${label}: evidence artifact is outside input closure (${entry.artifact_reference})`);
-      }
-    }
-  }
-  const completed = new Set(state.completed_evidence.map((entry) => entry.gate));
-  for (const entry of state.invalidated_gates) {
-    if (completed.has(entry.gate)) fail(`${label}: a gate cannot be both completed and invalidated (${entry.gate})`);
-  }
-  if (["planned", "running", "partial"].includes(state.status) && state.remaining_work.length === 0) {
-    fail(`${label}: active state requires remaining_work`);
-  }
-  if (state.status === "complete") {
-    if (state.remaining_work.length || state.invalidated_gates.length || state.risks_blockers.blockers.length) {
-      fail(`${label}: complete state must have no remaining work, invalidations, or blockers`);
-    }
-    if (state.completed_evidence.length === 0 || state.completed_evidence.some((entry) => entry.result !== "pass")) {
-      fail(`${label}: complete state requires passing evidence`);
-    }
-  }
-  if (state.status === "blocked" && state.risks_blockers.blockers.length === 0) {
-    fail(`${label}: blocked state requires a blocker`);
-  }
-  return state;
-}
-
-export function validateTaskStateFile(file, root = path.dirname(file)) {
-  const raw = fs.readFileSync(file);
-  if (raw.byteLength > TASK_STATE_LIMITS.bytes) fail(`${rel(file, root)} task-state exceeds ${TASK_STATE_LIMITS.bytes} bytes`);
-  let state;
-  try {
-    state = JSON.parse(raw.toString("utf8"));
-  } catch (error) {
-    fail(`${rel(file, root)} task-state is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  return validateTaskStateDocument(state, rel(file, root));
 }
 
 function validateSkillFrontmatter(file, root) {
@@ -1494,16 +1294,6 @@ function validateMarkers(root) {
   }
 }
 
-function optionalTaskStateFiles(root) {
-  const template = path.join(root, TASK_STATE_TEMPLATE);
-  const files = isFile(template) ? [template] : [];
-  const governance = path.join(root, "docs/ai-governance");
-  for (const file of walkFiles(governance, { extensions: new Set([".json"]) })) {
-    if (/task-state(?:[-.]|$)/i.test(path.basename(file)) && !files.includes(file)) files.push(file);
-  }
-  return files;
-}
-
 export function validateRepository(root = DEFAULT_ROOT) {
   const resolvedRoot = path.resolve(root);
   const errors = [];
@@ -1537,7 +1327,6 @@ export function validateRepository(root = DEFAULT_ROOT) {
     });
     validateLocalLinks(markdownFiles, resolvedRoot);
   });
-  for (const file of optionalTaskStateFiles(resolvedRoot)) collect(() => validateTaskStateFile(file, resolvedRoot));
   collect(() => validateWorkflowSemantics(resolvedRoot));
 
   if (errors.length) throw new GovernanceError(errors.join("\n"));
