@@ -50,7 +50,7 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
   });
   const date = useMemo(
     () => (bootstrap.data ? localDateFromDateKey(bootstrap.data.today) : null),
-    [bootstrap.data?.today],
+    [bootstrap.data?.today, bootstrap.dataUpdatedAt],
   );
   const range = date ? dayRange(date) : null;
   const schedules = useQuery({
