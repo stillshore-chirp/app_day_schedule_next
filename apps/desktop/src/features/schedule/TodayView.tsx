@@ -1,7 +1,6 @@
 import { translate } from "../../shared/i18n/messages";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fromZonedTime } from "date-fns-tz";
 import type { Bootstrap, Schedule, ScheduleDraft } from "../../shared/contracts";
 import type { AppClient } from "../../shared/ipc/client";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
@@ -13,6 +12,7 @@ import { Timeline } from "./Timeline";
 import { resolveDisplayedTemplate } from "./template-selection";
 import { useScheduleActions, useSchedules } from "./use-schedules";
 import { PriorityTicketDrawer } from "./PriorityTicketDrawer";
+import { quickBlocksAsSchedules } from "./quick-block-schedules";
 
 interface TodayViewProps {
   client: AppClient;
@@ -51,43 +51,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "danger">("success");
   const quickSchedules = useMemo(
-    () =>
-      (quickBlocksQuery.data ?? [])
-        .filter((item) => item.isActive)
-        .map((item): Schedule => {
-          const date = localDateKey(selectedDate);
-          const startUtc = fromZonedTime(
-            `${date}T${minuteToTime(item.startMinute)}:00`,
-            item.timezoneId,
-          );
-          const endUtc = new Date(startUtc.getTime() + item.durationMinutes * 60_000);
-          return {
-            id: item.id,
-            title: item.title,
-            description: "Quick Block",
-            location: "",
-            startUtc: startUtc.toISOString(),
-            endUtc: endUtc.toISOString(),
-            timezoneId: item.timezoneId,
-            allDay: false,
-            allDayStartDate: null,
-            allDayEndDateExclusive: null,
-            status: "scheduled",
-            project: item.project,
-            category: item.category,
-            tags: ["Quick Block"],
-            color: item.color,
-            priority: "normal",
-            recurrenceRule: null,
-            recurrenceSupplementalLines: [],
-            recurrenceExdates: [],
-            startNotificationMinutes: item.startNotificationMinutes,
-            endNotificationMinutes: item.endNotificationMinutes,
-            syncStatus: "local_only",
-            version: item.version,
-            deletedAt: null,
-          };
-        }),
+    () => quickBlocksAsSchedules(quickBlocksQuery.data ?? [], selectedDate),
     [quickBlocksQuery.data, selectedDate],
   );
   const schedules = [...(schedulesQuery.data?.items ?? []), ...quickSchedules];
@@ -323,17 +287,4 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       ) : null}
     </>
   );
-}
-
-function localDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
-    date.getDate(),
-  ).padStart(2, "0")}`;
-}
-
-function minuteToTime(minute: number): string {
-  return `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(
-    2,
-    "0",
-  )}`;
 }

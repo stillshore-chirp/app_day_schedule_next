@@ -119,6 +119,7 @@ pub struct WindowPreferences {
     pub main_always_on_top: bool,
     pub compact_always_on_top: bool,
     pub analog_clock_always_on_top: bool,
+    pub day_overview_always_on_top: bool,
 }
 
 impl AppService {
@@ -189,6 +190,10 @@ impl AppService {
                 analog_clock_always_on_top: self
                     .database
                     .window_always_on_top("analog-clock")
+                    .await?,
+                day_overview_always_on_top: self
+                    .database
+                    .window_always_on_top("day-overview")
                     .await?,
             },
         })

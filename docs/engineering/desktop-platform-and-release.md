@@ -55,7 +55,7 @@ Contract ID: `DSN-LATEST-APP-HANDOFF`
 - production CSP は self / IPC / bundled asset に限定
 - remote script / CDN / iframe / object を禁止
 - Google HTTP、SQLite、keyring、notification adapter は Rust 側
-- frontend plugin permission は main / compact / analog-clock window ごとの最小 capability。analog-clockは保存済みappearanceを即時反映するeventのlisten / unlistenだけを許可し、emit、menu、filesystem、network権限を持たない
+- frontend plugin permission は main / compact / analog-clock / day-overview window ごとの最小 capability。analog-clockは保存済みappearanceを即時反映するeventのlisten / unlistenだけ、day-overviewは設定更新eventのlisten / unlistenだけを許可し、どちらもemit、menu、filesystem、network権限を持たない
 - Ticketのnative context menuはmain windowだけが構築・popupでき、app menuやwindow menuの設定権限を持たない
 - general shell、general filesystem、raw SQL、arbitrary HTTP permission は不使用
 - external browser は OAuth の検証済み Google authorization URL、またはmain windowのMarkdownプレビューで利用者が明示的に実行したHTTP(S) URLだけを開く
@@ -71,7 +71,7 @@ E2E capability は `cfg(feature = "e2e")` の build だけに存在します。
 - Command / Control、tray、close / quit semantics
 - path、installer、scale、multi-monitor work area
 
-window state は logical label で保存し、main / Compact / analog-clock の always-on-top を独立管理します。動的な補助ウィンドウは同じ label を再利用して重複生成せず、表示・復元・focus します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
+window state は logical label で保存し、main / Compact / analog-clock / day-overview の always-on-top を独立管理します。動的な補助ウィンドウは同じ label を再利用して重複生成せず、表示・復元・focus します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
 
 ## 5. unsigned 個人配布
 
