@@ -406,7 +406,7 @@ export function App({
                 type="button"
                 onClick={() => setMainActionError(null)}
               >
-                {translate("app.DayOverview.022")}
+                {translate("features.views.LibraryViews.026")}
               </button>
             }
           />
