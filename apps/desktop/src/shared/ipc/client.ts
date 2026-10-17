@@ -4,6 +4,7 @@ import { emit } from "@tauri-apps/api/event";
 import {
   backupRecordSchema,
   bootstrapSchema,
+  dayOverviewMainActionSchema,
   dayTemplateSchema,
   freeAlarmSchema,
   exportResultSchema,
@@ -54,6 +55,7 @@ import {
   type DeleteRequest,
   type DayTemplate,
   type DayTemplateDraft,
+  type DayOverviewMainAction,
   type FreeAlarm,
   type FreeAlarmDraft,
   type ExportResult,
@@ -203,6 +205,8 @@ export interface AppClient {
   exportDiagnostics(path: string, webview: string): Promise<DiagnosticsExportResult>;
   openCompactWindow(): Promise<void>;
   openAnalogClockWindow(): Promise<void>;
+  openDayOverviewWindow(): Promise<void>;
+  openMainWithDayOverviewAction(action: DayOverviewMainAction): Promise<void>;
   resizeAnalogClockWindow(factor: 1 | 1.5 | 2 | 2.5): Promise<void>;
   showMainWindowWithAction(action: "quick-add" | "focus"): Promise<void>;
   listTemplates(): Promise<DayTemplate[]>;
@@ -220,7 +224,7 @@ export interface AppClient {
   previewTemplate(request: TemplateTarget): Promise<TemplatePreview>;
   applyTemplate(request: TemplateTarget): Promise<ChangeResult>;
   setWindowAlwaysOnTop(
-    label: "main" | "compact" | "analog-clock",
+    label: "main" | "compact" | "analog-clock" | "day-overview",
     alwaysOnTop: boolean,
   ): Promise<void>;
   exportData(path: string, operationId: string): Promise<ExportResult>;
@@ -606,6 +610,15 @@ export class TauriAppClient implements AppClient {
     await call("analog_clock_window_open");
   }
 
+  async openDayOverviewWindow(): Promise<void> {
+    await call("day_overview_window_open");
+  }
+
+  async openMainWithDayOverviewAction(action: DayOverviewMainAction): Promise<void> {
+    const validated = dayOverviewMainActionSchema.parse(action);
+    await call("day_overview_main_action", { action: validated });
+  }
+
   async resizeAnalogClockWindow(factor: 1 | 1.5 | 2 | 2.5): Promise<void> {
     await call("analog_clock_window_resize", { factor });
   }
@@ -674,7 +687,7 @@ export class TauriAppClient implements AppClient {
   }
 
   async setWindowAlwaysOnTop(
-    label: "main" | "compact" | "analog-clock",
+    label: "main" | "compact" | "analog-clock" | "day-overview",
     alwaysOnTop: boolean,
   ): Promise<void> {
     await call("window_always_on_top_set", { request: { label, alwaysOnTop } });
@@ -1002,6 +1015,12 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   openAnalogClockWindow(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+  openDayOverviewWindow(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+  openMainWithDayOverviewAction(): Promise<void> {
     return Promise.reject(this.unavailable());
   }
   resizeAnalogClockWindow(): Promise<void> {

@@ -262,6 +262,20 @@ pub struct WindowPreferenceRequest {
     always_on_top: bool,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum DayOverviewMainAction {
+    #[serde(rename_all = "camelCase")]
+    EditSchedule {
+        schedule_id: Uuid,
+        date: NaiveDate,
+    },
+    CreateSchedule {
+        date: NaiveDate,
+    },
+    OpenTemplates,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportCommitRequest {
@@ -1312,6 +1326,36 @@ pub async fn analog_clock_window_open(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn day_overview_window_open(
+    app: AppHandle,
+    service: State<'_, AppService>,
+) -> CommandResult<()> {
+    if let Some(window) = app.get_webview_window("day-overview") {
+        window.show().map_err(|_| window_error())?;
+        window.unminimize().map_err(|_| window_error())?;
+        window.set_focus().map_err(|_| window_error())?;
+        return Ok(());
+    }
+    let always_on_top = service
+        .window_always_on_top("day-overview")
+        .await
+        .map_err(UserSafeError::from)?;
+    WebviewWindowBuilder::new(
+        &app,
+        "day-overview",
+        WebviewUrl::App("index.html?window=day-overview".into()),
+    )
+    .title("Day Schedule Next — 一日の分布")
+    .inner_size(1440.0, 420.0)
+    .min_inner_size(680.0, 280.0)
+    .resizable(true)
+    .always_on_top(always_on_top)
+    .build()
+    .map_err(|_| window_error())?;
+    Ok(())
+}
+
 #[cfg(feature = "e2e")]
 #[tauri::command]
 pub async fn e2e_analog_clock_square_constraint_get(app: AppHandle) -> CommandResult<bool> {
@@ -1358,6 +1402,10 @@ pub fn analog_clock_window_resize(app: AppHandle, factor: f64) -> CommandResult<
 
 #[tauri::command]
 pub fn main_window_show(app: AppHandle) -> CommandResult<()> {
+    show_main_window(&app)
+}
+
+fn show_main_window(app: &AppHandle) -> CommandResult<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Err(window_error());
     };
@@ -1365,6 +1413,16 @@ pub fn main_window_show(app: AppHandle) -> CommandResult<()> {
     window.unminimize().map_err(|_| window_error())?;
     window.set_focus().map_err(|_| window_error())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn day_overview_main_action(
+    app: AppHandle,
+    action: DayOverviewMainAction,
+) -> CommandResult<()> {
+    show_main_window(&app)?;
+    app.emit_to("main", "day-overview-action", action)
+        .map_err(|_| window_error())
 }
 
 #[derive(Debug)]
@@ -1400,7 +1458,10 @@ pub async fn window_always_on_top_set(
     service: State<'_, AppService>,
     request: WindowPreferenceRequest,
 ) -> CommandResult<()> {
-    if !matches!(request.label.as_str(), "main" | "compact" | "analog-clock") {
+    if !matches!(
+        request.label.as_str(),
+        "main" | "compact" | "analog-clock" | "day-overview"
+    ) {
         return Err(UserSafeError {
             code: "validation",
             message: "対象ウィンドウが正しくありません。".into(),

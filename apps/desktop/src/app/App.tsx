@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { addDays } from "date-fns";
 import type { AppClient } from "../shared/ipc/client";
@@ -15,11 +15,13 @@ import { StopwatchView } from "../features/stopwatch/StopwatchView";
 import { KanbanView } from "../features/tickets/KanbanView";
 import { AnalogClockLauncher } from "../features/analog-clock/AnalogClockLauncher";
 import { applyAppAppearance } from "../shared/appearance";
-import type { Settings } from "../shared/contracts";
+import { dayOverviewMainActionSchema, type Settings } from "../shared/contracts";
+import { dayRange } from "../shared/time";
 import { Tooltip } from "../shared/ui/Tooltip";
 import { useUiStore, type AppView } from "./ui-store";
 import { NotificationRuntime } from "./NotificationRuntime";
 import { SyncRuntime } from "./SyncRuntime";
+import { FloatingDayOverviewLauncher } from "../features/schedule/FloatingDayOverviewLauncher";
 
 const navItems: Array<{ view: AppView; label: string; symbol: string }> = [
   { view: "today", label: messages.navigation.today, symbol: "●" },
@@ -51,6 +53,8 @@ export function App({
   const [previewTextScalePercent, setPreviewTextScalePercent] = useState<
     Settings["textScalePercent"] | null
   >(null);
+  const [mainActionError, setMainActionError] = useState<"load" | "missing" | null>(null);
+  const queryClient = useQueryClient();
   const previewTextScalePercentRef = useRef<Settings["textScalePercent"] | null>(null);
   const bootstrapQuery = useQuery({ queryKey: ["bootstrap"], queryFn: () => client.bootstrap() });
   const readyReported = useRef(false);
@@ -74,7 +78,45 @@ export function App({
     setSelectedDate,
     setSearch,
     openCreate,
+    openEdit,
   } = useUiStore();
+
+  const handleDayOverviewAction = useCallback(
+    async (action: ReturnType<typeof dayOverviewMainActionSchema.parse>) => {
+      setMainActionError(null);
+      if (action.type === "open-templates") {
+        setActiveView("templates");
+        return;
+      }
+
+      const [year, month, day] = action.date.split("-").map(Number);
+      const date = new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1);
+      setSelectedDate(date);
+      setSearch("");
+      setActiveView("today");
+      if (action.type === "create-schedule") {
+        openCreate();
+        return;
+      }
+
+      const range = dayRange(date);
+      try {
+        const page = await queryClient.fetchQuery({
+          queryKey: ["schedules", range.startUtc, range.endUtc, ""],
+          queryFn: () => client.listSchedules({ ...range, search: "", limit: 500 }),
+          staleTime: 0,
+        });
+        if (!page.items.some((schedule) => schedule.id === action.scheduleId)) {
+          setMainActionError("missing");
+          return;
+        }
+        openEdit(action.scheduleId);
+      } catch {
+        setMainActionError("load");
+      }
+    },
+    [client, openCreate, openEdit, queryClient, setActiveView, setSearch, setSelectedDate],
+  );
 
   useEffect(() => {
     if (!bootstrapQuery.data || readyReported.current) return;
@@ -148,6 +190,27 @@ export function App({
       stops.forEach((stop) => stop());
     };
   }, [bootstrapQuery.refetch, openCreate, setActiveView]);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let active = true;
+    let stop: (() => void) | undefined;
+    void listen<unknown>("day-overview-action", ({ payload }) => {
+      const action = dayOverviewMainActionSchema.safeParse(payload);
+      if (action.success) void handleDayOverviewAction(action.data);
+    })
+      .then((unlisten) => {
+        if (active) stop = unlisten;
+        else unlisten();
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      const unlisten = stop;
+      stop = undefined;
+      if (unlisten) unlisten();
+    };
+  }, [handleDayOverviewAction]);
 
   const syncLabel = useMemo(() => {
     const state = bootstrapQuery.data?.sync.state;
@@ -243,6 +306,7 @@ export function App({
             {translate("app.App.011")}
           </button>
           <AnalogClockLauncher client={client} />
+          <FloatingDayOverviewLauncher client={client} />
         </div>
         <div className="topbar__actions">
           {activeView !== "tickets" && (
@@ -330,6 +394,23 @@ export function App({
         </Tooltip>
       </aside>
       <div className="app-content">
+        {mainActionError ? (
+          <StatusMessage
+            tone="danger"
+            title={translate(
+              mainActionError === "missing" ? "app.DayOverview.024" : "app.DayOverview.023",
+            )}
+            action={
+              <button
+                className="link-button"
+                type="button"
+                onClick={() => setMainActionError(null)}
+              >
+                {translate("features.views.LibraryViews.026")}
+              </button>
+            }
+          />
+        ) : null}
         {activeView === "today" ? <TodayView client={client} bootstrap={bootstrap} /> : null}
         {activeView === "week" ? <WeekView client={client} /> : null}
         {activeView === "month" ? <MonthView client={client} /> : null}
