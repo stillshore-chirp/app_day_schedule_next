@@ -1347,7 +1347,7 @@ pub async fn day_overview_window_open(
         WebviewUrl::App("index.html?window=day-overview".into()),
     )
     .title("Day Schedule Next — 一日の分布")
-    .inner_size(980.0, 360.0)
+    .inner_size(1440.0, 420.0)
     .min_inner_size(680.0, 280.0)
     .resizable(true)
     .always_on_top(always_on_top)
