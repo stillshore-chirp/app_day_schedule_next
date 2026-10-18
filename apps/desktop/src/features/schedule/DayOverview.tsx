@@ -52,6 +52,7 @@ interface DayOverviewProps {
   textScalePercent: number;
   visibleLanes?: "both" | "schedule" | "template";
   showStartTimeSlider?: boolean;
+  fillAvailableHeight?: boolean;
 }
 
 function minuteToTime(minute: number): string {
@@ -141,6 +142,37 @@ function blockTop(level: number, levelCount: number, textScaleFactor: number): n
   );
 }
 
+function flexibleBlockGeometry(
+  level: number,
+  levelCount: number,
+  textScaleFactor: number,
+): Pick<CSSProperties, "top" | "height" | "minHeight"> {
+  const visibleLevelCount = Math.min(Math.max(1, levelCount), MAX_VISIBLE_LEVELS);
+  const minHeight = OVERVIEW_BLOCK_HEIGHT * textScaleFactor;
+  if (visibleLevelCount === 1) {
+    return {
+      top: ((OVERVIEW_SINGLE_LEVEL_HEIGHT - OVERVIEW_BLOCK_HEIGHT) / 2) * textScaleFactor,
+      height: `calc(100% - ${(OVERVIEW_SINGLE_LEVEL_HEIGHT - OVERVIEW_BLOCK_HEIGHT) * textScaleFactor}px)`,
+      minHeight,
+    };
+  }
+
+  const topOffset =
+    OVERVIEW_MULTI_LEVEL_PADDING * textScaleFactor +
+    (level * (OVERVIEW_BLOCK_GAP - OVERVIEW_MULTI_LEVEL_PADDING * 2 * textScaleFactor)) /
+      visibleLevelCount;
+  const heightOffset =
+    (OVERVIEW_MULTI_LEVEL_PADDING * 2 * textScaleFactor +
+      (visibleLevelCount - 1) * OVERVIEW_BLOCK_GAP) /
+    visibleLevelCount;
+  const slotPercent = 100 / visibleLevelCount;
+  return {
+    top: `calc(${level * slotPercent}% + ${topOffset}px)`,
+    height: `calc(${slotPercent}% - ${heightOffset}px)`,
+    minHeight,
+  };
+}
+
 export function DayOverview({
   schedules,
   scheduleState,
@@ -162,6 +194,7 @@ export function DayOverview({
   textScalePercent,
   visibleLanes = "both",
   showStartTimeSlider = true,
+  fillAvailableHeight = false,
 }: DayOverviewProps) {
   const centered = overviewMode === "centered";
   const clockConfig = `${overviewMode}:${overviewWindowHours}`;
@@ -302,6 +335,7 @@ export function DayOverview({
       aria-labelledby="overview-title"
       data-overview-mode={overviewMode}
       data-live-centered={centered && liveTick && !clockConfigChanged ? "true" : undefined}
+      data-fill-height={fillAvailableHeight ? "true" : undefined}
     >
       <div className="section-heading section-heading--compact">
         <div>
@@ -333,6 +367,9 @@ export function DayOverview({
           className="overview-lane"
           aria-labelledby="schedule-lane-title"
           hidden={!showScheduleLane}
+          style={
+            fillAvailableHeight ? { flex: "1 0 auto", minHeight: scheduleLaneHeight } : undefined
+          }
         >
           <div className="overview-lane__heading">
             <div>
@@ -348,7 +385,11 @@ export function DayOverview({
               rangeStartLabel,
               rangeEndLabel,
             ])}
-            style={{ ...trackStyle, height: scheduleLaneHeight, minHeight: scheduleLaneHeight }}
+            style={{
+              ...trackStyle,
+              height: fillAvailableHeight ? "100%" : scheduleLaneHeight,
+              minHeight: scheduleLaneHeight,
+            }}
           >
             {scheduleItems
               .filter((item) => item.level < MAX_VISIBLE_LEVELS)
@@ -385,8 +426,12 @@ export function DayOverview({
                       style={{
                         left: `${minuteToPercent(startMinute, windowMinutes)}%`,
                         width: `${Math.max(0.8, minuteToPercent(endMinute, windowMinutes) - minuteToPercent(startMinute, windowMinutes))}%`,
-                        top: blockTop(level, levelCount, textScaleFactor),
-                        height: overviewBlockHeight,
+                        ...(fillAvailableHeight
+                          ? flexibleBlockGeometry(level, scheduleLevelCount, textScaleFactor)
+                          : {
+                              top: blockTop(level, levelCount, textScaleFactor),
+                              height: overviewBlockHeight,
+                            }),
                         zIndex: levelCount - level,
                         backgroundColor: schedule.color,
                       }}
@@ -473,6 +518,9 @@ export function DayOverview({
           className="overview-lane"
           aria-labelledby="template-lane-title"
           hidden={!showTemplateLane}
+          style={
+            fillAvailableHeight ? { flex: "1 0 auto", minHeight: templateLaneHeight } : undefined
+          }
         >
           <div className="overview-lane__heading">
             <div>
@@ -496,7 +544,11 @@ export function DayOverview({
               rangeStartLabel,
               rangeEndLabel,
             ])}
-            style={{ ...trackStyle, height: templateLaneHeight, minHeight: templateLaneHeight }}
+            style={{
+              ...trackStyle,
+              height: fillAvailableHeight ? "100%" : templateLaneHeight,
+              minHeight: templateLaneHeight,
+            }}
           >
             {templateState === "loading" ? (
               <div className="overview-lane__state" role="status">
@@ -563,8 +615,12 @@ export function DayOverview({
                             style={{
                               left: `${minuteToPercent(startMinute, windowMinutes)}%`,
                               width: `${Math.max(0.8, minuteToPercent(endMinute, windowMinutes) - minuteToPercent(startMinute, windowMinutes))}%`,
-                              top: blockTop(level, levelCount, textScaleFactor),
-                              height: overviewBlockHeight,
+                              ...(fillAvailableHeight
+                                ? flexibleBlockGeometry(level, templateLevelCount, textScaleFactor)
+                                : {
+                                    top: blockTop(level, levelCount, textScaleFactor),
+                                    height: overviewBlockHeight,
+                                  }),
                               zIndex: levelCount - level,
                               backgroundColor: block.color,
                             }}
