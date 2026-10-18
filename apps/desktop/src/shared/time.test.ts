@@ -3,6 +3,8 @@ import {
   clampScheduleToDay,
   clampScheduleToDayOverview,
   dateInputValue,
+  dayOverviewCycleDate,
+  dayOverviewDateForSelection,
   dayRange,
   dayOverviewMinuteAt,
   dayOverviewRange,
@@ -60,6 +62,22 @@ describe("time display helpers", () => {
     expect(dayOverviewMinuteAt(new Date(2026, 6, 20, 7, 0), date, 7 * 60)).toBe(0);
     expect(dayOverviewMinuteAt(new Date(2026, 6, 21, 6, 30), date, 7 * 60)).toBe(1410);
     expect(dayOverviewMinuteAt(new Date(2026, 6, 21, 7, 0), date, 7 * 60)).toBeNull();
+  });
+
+  it("keeps the active overview cycle stable overnight and advances at its start boundary", () => {
+    const startMinute = 7 * 60;
+    const beforeMidnight = new Date(2026, 6, 20, 23, 59);
+    const afterMidnight = new Date(2026, 6, 21, 0, 1);
+    const beforeStart = new Date(2026, 6, 21, 6, 59);
+    const atStart = new Date(2026, 6, 21, 7, 0);
+
+    expect(dayOverviewCycleDate(beforeMidnight, startMinute)).toEqual(new Date(2026, 6, 20));
+    expect(dayOverviewCycleDate(afterMidnight, startMinute)).toEqual(new Date(2026, 6, 20));
+    expect(dayOverviewCycleDate(beforeStart, startMinute)).toEqual(new Date(2026, 6, 20));
+    expect(dayOverviewCycleDate(atStart, startMinute)).toEqual(new Date(2026, 6, 21));
+    expect(
+      dayOverviewDateForSelection(new Date(2026, 6, 18), afterMidnight, startMinute, false),
+    ).toEqual(new Date(2026, 6, 18));
   });
 
   it("clips cross-midnight schedules while preserving positive intervals", () => {

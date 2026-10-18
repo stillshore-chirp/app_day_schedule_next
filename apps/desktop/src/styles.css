@@ -1067,12 +1067,21 @@ button:disabled {
 
 .overview > .section-heading--compact > div {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
 }
 
 .overview > .section-heading--compact h2 {
   margin: 0;
+}
+
+.overview-range-caption {
+  flex-basis: 100%;
+  margin: -5px 0 0;
+  color: var(--text-muted);
+  font-size: var(--app-font-0-72, 0.72rem);
+  font-variant-numeric: tabular-nums;
 }
 
 .section-heading {
@@ -1433,7 +1442,7 @@ button:disabled {
 .overview-now {
   position: absolute;
   inset-block: 5px;
-  width: 2px;
+  width: 3px;
   background: var(--danger);
   z-index: 9;
   pointer-events: none;

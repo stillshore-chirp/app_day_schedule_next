@@ -188,6 +188,7 @@ export const jaMessages = {
   "features.schedule.DayOverview.032": "前{0}",
   "features.schedule.DayOverview.033": "翌日 {0}",
   "features.schedule.DayOverview.034": "前日 {0}",
+  "features.schedule.DayOverview.035": "表示範囲 {0} {1}〜{2} {3}",
   "features.schedule.NowDock.001": "現在と次の予定",
   "features.schedule.NowDock.002": "進行中の予定はありません",
   "features.schedule.NowDock.003": " 経過",

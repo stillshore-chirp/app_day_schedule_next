@@ -19,6 +19,22 @@ export function dayOverviewRange(
   return { startUtc: start.toISOString(), endUtc: end.toISOString() };
 }
 
+export function dayOverviewCycleDate(instant: Date, startMinute: number): Date {
+  const today = startOfDay(instant);
+  const cycleStart = new Date(today);
+  cycleStart.setMinutes(startMinute);
+  return instant.getTime() < cycleStart.getTime() ? addDays(today, -1) : today;
+}
+
+export function dayOverviewDateForSelection(
+  selectedDate: Date,
+  instant: Date,
+  startMinute: number,
+  followsToday: boolean,
+): Date {
+  return followsToday ? dayOverviewCycleDate(instant, startMinute) : startOfDay(selectedDate);
+}
+
 export function formatDateHeading(date: Date): string {
   return new Intl.DateTimeFormat(appLocale, {
     year: "numeric",

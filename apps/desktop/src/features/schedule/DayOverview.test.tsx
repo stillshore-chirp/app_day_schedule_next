@@ -59,6 +59,7 @@ function renderOverview(overrides: Partial<React.ComponentProps<typeof DayOvervi
     schedules: [schedule],
     scheduleState: "ready",
     selectedDate: new Date(2026, 6, 20),
+    now: new Date(2026, 6, 20, 9, 30),
     selectedId: null,
     onSelect: vi.fn(),
     onCreateSchedule: vi.fn(),
@@ -356,7 +357,24 @@ describe("DayOverview", () => {
     expect(ticks[0]?.textContent).toBe("07:00");
     expect(ticks.map((tick) => tick.textContent)).toContain("翌00");
     expect(ticks.at(-1)?.textContent).toBe("翌07:00");
+    expect(screen.getByText("表示範囲 7/20 07:00〜7/21 07:00")).toBeVisible();
     expect(scheduleTrack).toHaveAttribute("aria-label", "07:00から翌07:00までの予定");
+  });
+
+  it("moves the now marker with the supplied clock snapshot", () => {
+    const { container, props, rerender } = renderOverview({
+      overviewStartMinute: 7 * 60,
+      now: new Date(2026, 6, 20, 10),
+    });
+    const track = container.querySelector<HTMLElement>(".overview-lane__track");
+    expect(track?.querySelector<HTMLElement>(".overview-now")?.style.left).toBe(
+      `${(180 / 1440) * 100}%`,
+    );
+
+    rerender(<DayOverview {...props} now={new Date(2026, 6, 20, 11)} />);
+    expect(track?.querySelector<HTMLElement>(".overview-now")?.style.left).toBe(
+      `${(240 / 1440) * 100}%`,
+    );
   });
 
   it("aligns the axis with whole hours and keeps nearby boundary labels distinct", () => {

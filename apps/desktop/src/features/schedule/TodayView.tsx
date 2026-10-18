@@ -1,5 +1,5 @@
 import { translate } from "../../shared/i18n/messages";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Bootstrap, Schedule, ScheduleDraft } from "../../shared/contracts";
 import type { AppClient } from "../../shared/ipc/client";
@@ -13,16 +13,25 @@ import { resolveDisplayedTemplate } from "./template-selection";
 import { useScheduleActions, useSchedules } from "./use-schedules";
 import { PriorityTicketDrawer } from "./PriorityTicketDrawer";
 import { quickBlocksAsSchedules, quickBlocksForDayOverview } from "./quick-block-schedules";
-import { dayOverviewRange } from "../../shared/time";
+import { dateInputValue, dayOverviewDateForSelection, dayOverviewRange } from "../../shared/time";
+import { useOverviewClock } from "./use-overview-clock";
 
 interface TodayViewProps {
   client: AppClient;
   bootstrap: Bootstrap;
 }
 
+interface EditorSnapshot {
+  mode: "create" | "edit";
+  scheduleId: string | null;
+  schedule: Schedule | null;
+  selectedDate: Date;
+}
+
 export function TodayView({ client, bootstrap }: TodayViewProps) {
   const {
     selectedDate,
+    selectedDateFollowsToday,
     selectedScheduleId,
     editorMode,
     search,
@@ -33,10 +42,23 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     createRange,
     dayOverviewStartMinute,
     setDayOverviewStartMinute,
+    syncFollowingTodayDate,
     setActiveView,
   } = useUiStore();
+  const now = useOverviewClock();
+  useEffect(() => {
+    if (selectedDateFollowsToday && dateInputValue(selectedDate) !== dateInputValue(now)) {
+      syncFollowingTodayDate(now);
+    }
+  }, [now, selectedDate, selectedDateFollowsToday, syncFollowingTodayDate]);
+  const overviewDate = dayOverviewDateForSelection(
+    selectedDate,
+    now,
+    dayOverviewStartMinute,
+    selectedDateFollowsToday,
+  );
   const schedulesQuery = useSchedules(client, selectedDate, search);
-  const overviewRange = dayOverviewRange(selectedDate, dayOverviewStartMinute);
+  const overviewRange = dayOverviewRange(overviewDate, dayOverviewStartMinute);
   const overviewSchedulesQuery = useQuery({
     queryKey: ["schedules", overviewRange.startUtc, overviewRange.endUtc, search],
     queryFn: () => client.listSchedules({ ...overviewRange, search, limit: 500 }),
@@ -57,13 +79,14 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
   const actions = useScheduleActions(client);
   const [status, setStatus] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"success" | "danger">("success");
+  const [editorSnapshot, setEditorSnapshot] = useState<EditorSnapshot | null>(null);
   const quickSchedules = useMemo(
     () => quickBlocksAsSchedules(quickBlocksQuery.data ?? [], selectedDate),
     [quickBlocksQuery.data, selectedDate],
   );
   const overviewQuickSchedules = useMemo(
-    () => quickBlocksForDayOverview(quickBlocksQuery.data ?? [], selectedDate),
-    [quickBlocksQuery.data, selectedDate],
+    () => quickBlocksForDayOverview(quickBlocksQuery.data ?? [], overviewDate),
+    [quickBlocksQuery.data, overviewDate],
   );
   const schedules = [...(schedulesQuery.data?.items ?? []), ...quickSchedules];
   const overviewSchedules = [
@@ -75,10 +98,45 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     bootstrap.settings.lastTemplateId,
   );
   const quickBlockIds = new Set((quickBlocksQuery.data ?? []).map((item) => item.id));
-  const selected =
+  const queriedSelection =
     schedules.find((item) => item.id === selectedScheduleId) ??
     overviewSchedules.find((item) => item.id === selectedScheduleId) ??
     null;
+  useEffect(() => {
+    if (editorMode === "closed") {
+      setEditorSnapshot(null);
+      return;
+    }
+    if (
+      editorSnapshot?.mode === editorMode &&
+      (editorMode === "create" || editorSnapshot.scheduleId === selectedScheduleId)
+    ) {
+      return;
+    }
+    if (editorMode === "edit" && (!selectedScheduleId || !queriedSelection)) return;
+    setEditorSnapshot({
+      mode: editorMode,
+      scheduleId: editorMode === "edit" ? selectedScheduleId : null,
+      schedule: editorMode === "edit" ? queriedSelection : null,
+      selectedDate: new Date(selectedDate),
+    });
+  }, [
+    editorMode,
+    editorSnapshot?.mode,
+    editorSnapshot?.scheduleId,
+    queriedSelection,
+    selectedDate,
+    selectedScheduleId,
+  ]);
+  const snapshotMatchesEditor =
+    editorSnapshot?.mode === editorMode &&
+    (editorMode === "create" || editorSnapshot.scheduleId === selectedScheduleId);
+  const selected =
+    editorMode === "edit" && snapshotMatchesEditor && editorSnapshot
+      ? editorSnapshot.schedule
+      : queriedSelection;
+  const editorSelectedDate =
+    snapshotMatchesEditor && editorSnapshot ? editorSnapshot.selectedDate : selectedDate;
   const busy = actions.create.isPending || actions.update.isPending || actions.remove.isPending;
 
   const choose = (schedule: Schedule) => {
@@ -86,8 +144,19 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       setActiveView("templates");
       return;
     }
+    setEditorSnapshot({
+      mode: "edit",
+      scheduleId: schedule.id,
+      schedule,
+      selectedDate: new Date(selectedDate),
+    });
     selectSchedule(schedule.id);
     openEdit(schedule.id);
+  };
+
+  const closeEditorSession = () => {
+    setEditorSnapshot(null);
+    closeEditor();
   };
 
   const save = async (
@@ -113,7 +182,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       setStatusTone("success");
       setStatus(translate("features.schedule.TodayView.002"));
     }
-    closeEditor();
+    closeEditorSession();
   };
 
   const remove = async (recurrence?: {
@@ -133,7 +202,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     });
     setStatusTone("success");
     setStatus(translate("features.schedule.TodayView.003"));
-    closeEditor();
+    closeEditorSession();
     selectSchedule(null);
   };
 
@@ -163,7 +232,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     });
     setStatusTone("success");
     setStatus(translate("features.schedule.TodayView.005"));
-    closeEditor();
+    closeEditorSession();
     selectSchedule(null);
   };
 
@@ -237,7 +306,8 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
                   : "ready"
             }
             onRetrySchedules={() => void overviewSchedulesQuery.refetch()}
-            selectedDate={selectedDate}
+            selectedDate={overviewDate}
+            now={now}
             selectedId={selectedScheduleId}
             onSelect={choose}
             onCreateSchedule={() => openCreate()}
@@ -270,7 +340,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
         <ScheduleEditor
           client={client}
           schedule={selected}
-          selectedDate={selectedDate}
+          selectedDate={editorSelectedDate}
           timezoneId={bootstrap.timezoneId}
           snapMinutes={bootstrap.settings.snapMinutes}
           mode={editorMode}
@@ -278,7 +348,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
           onSave={save}
           {...(editorMode === "edit" ? { onDelete: remove } : {})}
           {...(editorMode === "edit" ? { onDuplicate: duplicate } : {})}
-          onClose={closeEditor}
+          onClose={closeEditorSession}
           initialRange={createRange}
           onOpenTickets={() => setActiveView("tickets")}
         />

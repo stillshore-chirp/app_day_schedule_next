@@ -4,6 +4,7 @@ import {
   readDayOverviewStartMinute,
   saveDayOverviewStartMinute,
 } from "../shared/day-overview-preferences";
+import { dateInputValue } from "../shared/time";
 
 export type AppView =
   | "today"
@@ -43,6 +44,7 @@ function restoredView(): AppView {
 interface UiState {
   activeView: AppView;
   selectedDate: Date;
+  selectedDateFollowsToday: boolean;
   selectedScheduleId: string | null;
   editorMode: "closed" | "create" | "edit";
   search: string;
@@ -50,6 +52,8 @@ interface UiState {
   dayOverviewStartMinute: number;
   setActiveView: (view: AppView) => void;
   setSelectedDate: (date: Date) => void;
+  setTodayDate: (date: Date) => void;
+  syncFollowingTodayDate: (date: Date) => void;
   selectSchedule: (id: string | null) => void;
   openCreate: (range?: { startUtc: string; endUtc: string }) => void;
   openEdit: (id: string) => void;
@@ -61,6 +65,7 @@ interface UiState {
 export const useUiStore = create<UiState>((set, get) => ({
   activeView: restoredView(),
   selectedDate: new Date(),
+  selectedDateFollowsToday: true,
   selectedScheduleId: null,
   editorMode: "closed",
   search: "",
@@ -70,7 +75,18 @@ export const useUiStore = create<UiState>((set, get) => ({
     localStorage.setItem("day-schedule-next.active-view", activeView);
     set({ activeView });
   },
-  setSelectedDate: (selectedDate) => set({ selectedDate, selectedScheduleId: null }),
+  setSelectedDate: (selectedDate) =>
+    set({
+      selectedDate,
+      selectedDateFollowsToday: dateInputValue(selectedDate) === dateInputValue(new Date()),
+      selectedScheduleId: null,
+    }),
+  setTodayDate: (selectedDate) =>
+    set({ selectedDate, selectedDateFollowsToday: true, selectedScheduleId: null }),
+  syncFollowingTodayDate: (selectedDate) => {
+    if (!get().selectedDateFollowsToday) return;
+    set({ selectedDate });
+  },
   selectSchedule: (selectedScheduleId) => set({ selectedScheduleId }),
   openCreate: (createRange) =>
     set({ editorMode: "create", selectedScheduleId: null, createRange: createRange ?? null }),

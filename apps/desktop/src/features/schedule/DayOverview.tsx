@@ -5,9 +5,9 @@ import {
   maxDayOverviewStartMinute,
   normalizeDayOverviewStartMinute,
 } from "../../shared/day-overview-preferences";
-import { translate } from "../../shared/i18n/messages";
+import { appLocale, translate } from "../../shared/i18n/messages";
 import type { DayTemplate, Schedule } from "../../shared/contracts";
-import { dayOverviewMinuteAt, formatTime } from "../../shared/time";
+import { dayOverviewMinuteAt, dayOverviewRange, formatTime } from "../../shared/time";
 import { Tooltip } from "../../shared/ui/Tooltip";
 import { layoutSchedulesForDay, minuteToPercent } from "./overview-layout";
 import { layoutTemplateBlocks } from "./template-overview-layout";
@@ -23,6 +23,7 @@ interface DayOverviewProps {
   scheduleState: "loading" | "error" | "ready";
   onRetrySchedules?: () => void;
   selectedDate: Date;
+  now?: Date;
   selectedId: string | null;
   onSelect: (schedule: Schedule) => void;
   onCreateSchedule: () => void;
@@ -103,6 +104,7 @@ export function DayOverview({
   scheduleState,
   onRetrySchedules = () => undefined,
   selectedDate,
+  now = new Date(),
   selectedId,
   onSelect,
   onCreateSchedule,
@@ -115,7 +117,6 @@ export function DayOverview({
   visibleLanes = "both",
   showStartTimeSlider = true,
 }: DayOverviewProps) {
-  const now = new Date();
   const visibleStartMinute = normalizeDayOverviewStartMinute(overviewStartMinute);
   const nowDisplayMinute = dayOverviewMinuteAt(now, selectedDate, visibleStartMinute);
   const nowVisible = nowDisplayMinute !== null;
@@ -124,6 +125,19 @@ export function DayOverview({
   const templateItems = layoutTemplateBlocks(template?.blocks ?? [], visibleStartMinute);
   const rangeStartLabel = minuteToTime(visibleStartMinute);
   const rangeEndLabel = windowTimeLabel(1440, visibleStartMinute);
+  const dateTimeFormatter = new Intl.DateTimeFormat(appLocale, {
+    month: "numeric",
+    day: "numeric",
+  });
+  const overviewRange = dayOverviewRange(selectedDate, visibleStartMinute);
+  const overviewRangeStart = new Date(overviewRange.startUtc);
+  const overviewRangeEnd = new Date(overviewRange.endUtc);
+  const rangeCaption = translate("features.schedule.DayOverview.035", [
+    dateTimeFormatter.format(overviewRangeStart),
+    formatTime(overviewRange.startUtc),
+    dateTimeFormatter.format(overviewRangeEnd),
+    formatTime(overviewRange.endUtc),
+  ]);
   const hourWidthPercent = (60 / 1440) * 100;
   const hourOffsetPercent = (((60 - (visibleStartMinute % 60)) % 60) / 1440) * 100;
   const trackStyle = {
@@ -163,6 +177,7 @@ export function DayOverview({
         <div>
           <span className="eyebrow">{translate("features.schedule.DayOverview.001")}</span>
           <h2 id="overview-title">{translate("features.schedule.DayOverview.007")}</h2>
+          <p className="overview-range-caption">{rangeCaption}</p>
         </div>
         {showScheduleLane ? (
           <span className="legend">
