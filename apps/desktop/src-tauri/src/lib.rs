@@ -207,6 +207,7 @@ pub fn run() {
             commands::compact_window_open,
             commands::analog_clock_window_open,
             commands::day_overview_window_open,
+            commands::day_overview_window_set_display_mode,
             commands::analog_clock_window_resize,
             commands::main_window_show,
             commands::day_overview_main_action,

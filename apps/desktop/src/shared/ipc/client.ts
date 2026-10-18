@@ -4,6 +4,8 @@ import { emit } from "@tauri-apps/api/event";
 import {
   backupRecordSchema,
   bootstrapSchema,
+  dayOverviewWindowHeightSchema,
+  dayOverviewWindowModeSchema,
   dayOverviewMainActionSchema,
   dayTemplateSchema,
   freeAlarmSchema,
@@ -56,6 +58,7 @@ import {
   type DayTemplate,
   type DayTemplateDraft,
   type DayOverviewMainAction,
+  type DayOverviewWindowMode,
   type FreeAlarm,
   type FreeAlarmDraft,
   type ExportResult,
@@ -206,6 +209,7 @@ export interface AppClient {
   openCompactWindow(): Promise<void>;
   openAnalogClockWindow(): Promise<void>;
   openDayOverviewWindow(): Promise<void>;
+  setDayOverviewWindowMode(mode: DayOverviewWindowMode, expandedHeight?: number): Promise<number>;
   openMainWithDayOverviewAction(action: DayOverviewMainAction): Promise<void>;
   resizeAnalogClockWindow(factor: 1 | 1.5 | 2 | 2.5): Promise<void>;
   showMainWindowWithAction(action: "quick-add" | "focus"): Promise<void>;
@@ -614,6 +618,23 @@ export class TauriAppClient implements AppClient {
     await call("day_overview_window_open");
   }
 
+  async setDayOverviewWindowMode(
+    mode: DayOverviewWindowMode,
+    expandedHeight?: number,
+  ): Promise<number> {
+    const validatedMode = dayOverviewWindowModeSchema.parse(mode);
+    const validatedHeight =
+      expandedHeight === undefined
+        ? undefined
+        : dayOverviewWindowHeightSchema.parse(expandedHeight);
+    return dayOverviewWindowHeightSchema.parse(
+      await call("day_overview_window_set_display_mode", {
+        mode: validatedMode,
+        expandedHeight: validatedHeight,
+      }),
+    );
+  }
+
   async openMainWithDayOverviewAction(action: DayOverviewMainAction): Promise<void> {
     const validated = dayOverviewMainActionSchema.parse(action);
     await call("day_overview_main_action", { action: validated });
@@ -1018,6 +1039,9 @@ class NativeRuntimeRequiredClient implements AppClient {
     return Promise.reject(this.unavailable());
   }
   openDayOverviewWindow(): Promise<void> {
+    return Promise.reject(this.unavailable());
+  }
+  setDayOverviewWindowMode(): Promise<number> {
     return Promise.reject(this.unavailable());
   }
   openMainWithDayOverviewAction(): Promise<void> {

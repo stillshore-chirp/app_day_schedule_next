@@ -85,6 +85,7 @@ describe("FloatingDayOverviewApp", () => {
     const user = userEvent.setup();
     const client = new MemoryAppClient([schedule]);
     const setAlwaysOnTop = vi.spyOn(client, "setWindowAlwaysOnTop");
+    const setWindowMode = vi.spyOn(client, "setDayOverviewWindowMode");
     renderWidget(client);
 
     expect(await screen.findByRole("button", { name: /概要ウィジェットの予定/ })).toBeVisible();
@@ -97,20 +98,29 @@ describe("FloatingDayOverviewApp", () => {
     const both = screen.getByRole("button", { name: "予定とテンプレート" });
 
     await user.click(scheduleOnly);
-    expect(scheduleOnly).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => {
+      expect(scheduleOnly).toHaveAttribute("aria-pressed", "true");
+      expect(setWindowMode).toHaveBeenCalledTimes(1);
+      expect(setWindowMode).toHaveBeenLastCalledWith("single");
+      expect(localStorage.getItem("day-schedule-next.day-overview-expanded-height")).toBe("420");
+    });
     expect(
       document.querySelector(".overview-lane[aria-labelledby='template-lane-title']"),
     ).toHaveAttribute("hidden");
 
     await user.click(templateOnly);
     expect(templateOnly).toHaveAttribute("aria-pressed", "true");
+    expect(setWindowMode).toHaveBeenCalledTimes(1);
     expect(
       document.querySelector(".overview-lane[aria-labelledby='schedule-lane-title']"),
     ).toHaveAttribute("hidden");
     expect(document.querySelector(".overview-lane__track--template")).toBeVisible();
 
     await user.click(both);
-    expect(both).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => {
+      expect(both).toHaveAttribute("aria-pressed", "true");
+      expect(setWindowMode).toHaveBeenLastCalledWith("both", 420);
+    });
     expect(document.querySelectorAll(".overview-lane")).toHaveLength(2);
     expect(document.querySelector(".overview-lane[hidden]")).toBeNull();
 

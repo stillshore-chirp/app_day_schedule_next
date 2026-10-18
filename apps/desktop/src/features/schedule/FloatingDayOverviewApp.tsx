@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import type { Settings } from "../../shared/contracts";
+import { dayOverviewWindowHeightSchema, type Settings } from "../../shared/contracts";
 import type { AppClient } from "../../shared/ipc/client";
 import { applyAppAppearance } from "../../shared/appearance";
 import { formatDateHeading, dayRange, dateInputValue } from "../../shared/time";
@@ -17,6 +17,8 @@ type OverviewTheme = "auto" | "light" | "dark";
 
 const modeStorageKey = "day-schedule-next.day-overview-mode";
 const themeStorageKey = "day-schedule-next.day-overview-theme";
+const expandedHeightStorageKey = "day-schedule-next.day-overview-expanded-height";
+const defaultExpandedHeight = 420;
 
 function storedMode(): OverviewMode {
   const value = localStorage.getItem(modeStorageKey);
@@ -26,6 +28,12 @@ function storedMode(): OverviewMode {
 function storedTheme(): OverviewTheme {
   const value = localStorage.getItem(themeStorageKey);
   return value === "light" || value === "dark" ? value : "auto";
+}
+
+function storedExpandedHeight(): number {
+  const stored = Number(localStorage.getItem(expandedHeightStorageKey));
+  const parsed = dayOverviewWindowHeightSchema.safeParse(stored);
+  return parsed.success ? parsed.data : defaultExpandedHeight;
 }
 
 function localDateFromDateKey(dateKey: string): Date {
@@ -71,6 +79,7 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
     refetchInterval: 30_000,
   });
   const [mode, setMode] = useState<OverviewMode>(storedMode);
+  const [modeChangePending, setModeChangePending] = useState(false);
   const [themeMode, setThemeMode] = useState<OverviewTheme>(storedTheme);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const [alwaysOnTopPending, setAlwaysOnTopPending] = useState(false);
@@ -80,6 +89,7 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
   const settingsButton = useRef<HTMLButtonElement | null>(null);
   const settingsPanel = useRef<HTMLElement | null>(null);
   const alwaysOnTopRequestPending = useRef(false);
+  const modeChangePendingRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(modeStorageKey, mode);
@@ -174,6 +184,35 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
     } finally {
       alwaysOnTopRequestPending.current = false;
       setAlwaysOnTopPending(false);
+    }
+  };
+
+  const changeMode = async (nextMode: OverviewMode) => {
+    if (nextMode === mode || modeChangePendingRef.current) return;
+    setStatus("");
+
+    const wasBoth = mode === "both";
+    const willBeBoth = nextMode === "both";
+    if (wasBoth === willBeBoth) {
+      setMode(nextMode);
+      return;
+    }
+
+    modeChangePendingRef.current = true;
+    setModeChangePending(true);
+    try {
+      if (willBeBoth) {
+        await client.setDayOverviewWindowMode("both", storedExpandedHeight());
+      } else {
+        const expandedHeight = await client.setDayOverviewWindowMode("single");
+        localStorage.setItem(expandedHeightStorageKey, String(expandedHeight));
+      }
+      setMode(nextMode);
+    } catch {
+      setStatus(translate("app.DayOverview.026"));
+    } finally {
+      modeChangePendingRef.current = false;
+      setModeChangePending(false);
     }
   };
 
@@ -393,7 +432,8 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
                       className="button button--subtle"
                       type="button"
                       aria-pressed={mode === value}
-                      onClick={() => setMode(value)}
+                      disabled={modeChangePending}
+                      onClick={() => void changeMode(value)}
                     >
                       {translate(messageKey)}
                     </button>

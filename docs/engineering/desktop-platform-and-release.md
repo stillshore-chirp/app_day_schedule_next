@@ -71,7 +71,7 @@ E2E capability は `cfg(feature = "e2e")` の build だけに存在します。
 - Command / Control、tray、close / quit semantics
 - path、installer、scale、multi-monitor work area
 
-window state は logical label で保存し、main / Compact / analog-clock / day-overview の always-on-top を独立管理します。動的な補助ウィンドウは同じ label を再利用して重複生成せず、表示・復元・focus します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
+window state は logical label で保存し、main / Compact / analog-clock / day-overview の always-on-top を独立管理します。動的な補助ウィンドウは同じ label を再利用して重複生成せず、表示・復元・focus します。day-overview の一段表示は幅と位置を保ったまま高さを最大320 logical pxへ縮め、両段へ戻すと切替前の高さを復元します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
 
 ## 5. unsigned 個人配布
 

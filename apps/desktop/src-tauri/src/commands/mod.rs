@@ -2,7 +2,9 @@ use std::{fmt::Display, future::Future, path::PathBuf};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
@@ -274,6 +276,13 @@ pub enum DayOverviewMainAction {
         date: NaiveDate,
     },
     OpenTemplates,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DayOverviewWindowMode {
+    Both,
+    Single,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1356,6 +1365,46 @@ pub async fn day_overview_window_open(
     Ok(())
 }
 
+#[tauri::command]
+pub fn day_overview_window_set_display_mode(
+    window: WebviewWindow,
+    mode: DayOverviewWindowMode,
+    expanded_height: Option<f64>,
+) -> CommandResult<f64> {
+    if window.label() != "day-overview" {
+        return Err(window_error());
+    }
+    let scale_factor = window.scale_factor().map_err(|_| window_error())?;
+    if !scale_factor.is_finite() || scale_factor <= 0.0 {
+        return Err(window_error());
+    }
+    let size = window.inner_size().map_err(|_| window_error())?;
+    let width = f64::from(size.width) / scale_factor;
+    let current_height = f64::from(size.height) / scale_factor;
+    if !width.is_finite() || width <= 0.0 || !valid_day_overview_height(current_height) {
+        return Err(day_overview_height_error());
+    }
+
+    let (target_height, remembered_height) = match mode {
+        DayOverviewWindowMode::Both => {
+            let height = expanded_height.unwrap_or(current_height);
+            if !valid_day_overview_height(height) {
+                return Err(day_overview_height_error());
+            }
+            (height, height)
+        }
+        DayOverviewWindowMode::Single => (
+            current_height.min(DAY_OVERVIEW_SINGLE_HEIGHT),
+            current_height,
+        ),
+    };
+
+    window
+        .set_size(tauri::LogicalSize::new(width, target_height))
+        .map_err(|_| window_error())?;
+    Ok(remembered_height)
+}
+
 #[cfg(feature = "e2e")]
 #[tauri::command]
 pub async fn e2e_analog_clock_square_constraint_get(app: AppHandle) -> CommandResult<bool> {
@@ -1654,6 +1703,25 @@ fn window_error() -> UserSafeError {
         message: "ウィンドウを開けませんでした。".into(),
         recovery: "メインウィンドウを開いたまま、もう一度試してください。".into(),
         retryable: true,
+        diagnostic_id: None,
+    }
+}
+
+const DAY_OVERVIEW_MINIMUM_HEIGHT: f64 = 280.0;
+const DAY_OVERVIEW_SINGLE_HEIGHT: f64 = 320.0;
+const DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT: f64 = 10_000.0;
+
+fn valid_day_overview_height(height: f64) -> bool {
+    height.is_finite()
+        && (DAY_OVERVIEW_MINIMUM_HEIGHT..=DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT).contains(&height)
+}
+
+fn day_overview_height_error() -> UserSafeError {
+    UserSafeError {
+        code: "validation",
+        message: "概要ウィンドウの高さが正しくありません。".into(),
+        recovery: "ウィンドウの表示をもう一度切り替えてください。".into(),
+        retryable: false,
         diagnostic_id: None,
     }
 }

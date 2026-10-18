@@ -156,6 +156,7 @@ export const jaMessages = {
   "app.DayOverview.023": "予定を読み込めませんでした。",
   "app.DayOverview.024": "この予定は見つからないか、すでに変更されています。",
   "app.DayOverview.025": "メイン画面で予定を開けませんでした。もう一度お試しください。",
+  "app.DayOverview.026": "表示切替に失敗しました。もう一度お試しください。",
   "features.schedule.DayOverview.001": "一日の分布",
   "features.schedule.DayOverview.002": "24時間ストリップ",
   "features.schedule.DayOverview.003": " 同期待ちを点線で表示 ",

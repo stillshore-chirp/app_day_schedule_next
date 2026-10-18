@@ -8,6 +8,7 @@ import {
   type DayTemplate,
   type DayTemplateDraft,
   type DayOverviewMainAction,
+  type DayOverviewWindowMode,
   type FreeAlarm,
   type FreeAlarmDraft,
   type ExportResult,
@@ -1163,6 +1164,13 @@ export class MemoryAppClient implements AppClient {
 
   async openDayOverviewWindow(): Promise<void> {
     return Promise.resolve();
+  }
+
+  async setDayOverviewWindowMode(
+    mode: DayOverviewWindowMode,
+    expandedHeight?: number,
+  ): Promise<number> {
+    return mode === "both" ? (expandedHeight ?? 420) : 420;
   }
 
   async openMainWithDayOverviewAction(action: DayOverviewMainAction): Promise<void> {
