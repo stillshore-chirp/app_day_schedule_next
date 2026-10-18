@@ -57,11 +57,14 @@ function axisTimeLabel(displayMinute: number, startMinute: number): string {
   const dayOffset = Math.floor(absoluteMinute / 1440);
   const clockMinute = ((absoluteMinute % 1440) + 1440) % 1440;
   const isWindowBoundary = displayMinute === 0 || displayMinute === 1440;
-  const clockLabel =
-    isWindowBoundary || (dayOffset > 0 && clockMinute === 0) || clockMinute % 60 !== 0
-      ? minuteToTime(clockMinute)
-      : String(Math.floor(clockMinute / 60)).padStart(2, "0");
-  return dayOffset > 0 ? translate("features.schedule.DayOverview.031", [clockLabel]) : clockLabel;
+  if (isWindowBoundary) {
+    const time = minuteToTime(clockMinute);
+    return dayOffset > 0 ? translate("features.schedule.DayOverview.031", [time]) : time;
+  }
+  const hour = String(Math.floor(clockMinute / 60)).padStart(2, "0");
+  return dayOffset > 0 && clockMinute === 0
+    ? translate("features.schedule.DayOverview.031", [hour])
+    : hour;
 }
 
 function scheduleDateTimeLabel(iso: string, selectedDate: Date): string {
@@ -127,14 +130,15 @@ export function DayOverview({
     "--overview-hour-width": `${hourWidthPercent}%`,
     "--overview-hour-offset": `${hourOffsetPercent}%`,
   } as CSSProperties;
-  const midnightOffset = 1440 - visibleStartMinute;
-  const axisMinutes = Array.from({ length: 25 }, (_, hour) => hour * 60)
-    .concat(
-      midnightOffset > 60 && midnightOffset < 1380 && midnightOffset % 60 !== 0
-        ? [midnightOffset]
-        : [],
-    )
-    .sort((left, right) => left - right);
+  const axisMinutes = [0, 1440];
+  const firstHourMinute = Math.ceil(visibleStartMinute / 60) * 60;
+  for (let hourMinute = firstHourMinute; hourMinute < visibleStartMinute + 1440; hourMinute += 60) {
+    const displayMinute = hourMinute - visibleStartMinute;
+    if (displayMinute === 0 || displayMinute === 1440) continue;
+    if (displayMinute < 60 || 1440 - displayMinute < 60) continue;
+    axisMinutes.push(displayMinute);
+  }
+  axisMinutes.sort((left, right) => left - right);
   const scheduleLevelCount = Math.max(1, ...scheduleItems.map((item) => item.level + 1));
   const templateLevelCount = Math.max(1, ...templateItems.map((item) => item.level + 1));
   const hiddenScheduleCount = scheduleItems.filter(
@@ -174,7 +178,9 @@ export function DayOverview({
             key={minute}
             style={{ left: `${minuteToPercent(minute)}%` }}
           >
-            {axisTimeLabel(minute, visibleStartMinute)}
+            <span className="overview-tick__label">
+              {axisTimeLabel(minute, visibleStartMinute)}
+            </span>
           </span>
         ))}
       </div>

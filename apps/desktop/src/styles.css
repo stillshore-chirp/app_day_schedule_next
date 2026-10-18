@@ -1222,7 +1222,6 @@ button:disabled {
   border-left: 1px solid var(--border);
   font-size: var(--app-font-0-68, 0.68rem);
   font-variant-numeric: tabular-nums;
-  transform: translateX(-1px);
 }
 
 .overview-tick:first-child,
@@ -1230,8 +1229,19 @@ button:disabled {
   border-left-color: transparent;
 }
 
-.overview-tick:last-child {
-  transform: translateX(-18px);
+.overview-tick__label {
+  display: block;
+  width: max-content;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.overview-tick:first-child .overview-tick__label {
+  transform: none;
+}
+
+.overview-tick:last-child .overview-tick__label {
+  transform: translateX(-100%);
 }
 
 .overview-event,

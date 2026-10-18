@@ -354,8 +354,23 @@ describe("DayOverview", () => {
     const scheduleTrack = container.querySelector<HTMLElement>(".overview-lane__track");
 
     expect(ticks[0]?.textContent).toBe("07:00");
-    expect(ticks.map((tick) => tick.textContent)).toContain("翌00:00");
+    expect(ticks.map((tick) => tick.textContent)).toContain("翌00");
     expect(ticks.at(-1)?.textContent).toBe("翌07:00");
     expect(scheduleTrack).toHaveAttribute("aria-label", "07:00から翌07:00までの予定");
+  });
+
+  it("aligns the axis with whole hours and keeps nearby boundary labels distinct", () => {
+    const { container } = renderOverview({ overviewStartMinute: 6 * 60 + 50 });
+    const ticks = Array.from(container.querySelectorAll<HTMLElement>(".overview-tick"));
+    const track = container.querySelector<HTMLElement>(".overview-lane__track");
+
+    expect(ticks.map((tick) => tick.textContent)).toEqual([
+      "06:50",
+      ...Array.from({ length: 16 }, (_, index) => String(index + 8).padStart(2, "0")),
+      "翌00",
+      ...Array.from({ length: 5 }, (_, index) => String(index + 1).padStart(2, "0")),
+      "翌06:50",
+    ]);
+    expect(track?.style.getPropertyValue("--overview-hour-offset")).toBe(`${(10 / 1440) * 100}%`);
   });
 });
