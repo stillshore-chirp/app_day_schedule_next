@@ -48,10 +48,9 @@ pub fn run() {
                     if matches!(
                         event,
                         tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }
-                    ) {
-                        if let Some(window) = app.get_webview_window("day-overview") {
-                            commands::save_day_overview_window_size(&window);
-                        }
+                    ) && let Some(window) = app.get_webview_window("day-overview")
+                    {
+                        commands::save_day_overview_window_size(&window);
                     }
                 })
                 .build(),
@@ -112,10 +111,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if window.label() == "day-overview" {
-                if matches!(event, WindowEvent::CloseRequested { .. }) {
-                    if let Some(widget) = window.app_handle().get_webview_window("day-overview") {
-                        commands::save_day_overview_window_size(&widget);
-                    }
+                if matches!(event, WindowEvent::CloseRequested { .. })
+                    && let Some(widget) = window.app_handle().get_webview_window("day-overview")
+                {
+                    commands::save_day_overview_window_size(&widget);
                 }
                 return;
             }

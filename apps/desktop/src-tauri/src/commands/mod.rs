@@ -1418,7 +1418,7 @@ pub fn day_overview_window_set_display_mode(
         .set_size(tauri::LogicalSize::new(width, target_height))
         .map_err(|_| window_error())?;
     persist_day_overview_window_size(
-        &window.app_handle(),
+        window.app_handle(),
         DayOverviewWindowSize {
             width,
             height: target_height,
@@ -1546,7 +1546,7 @@ pub(crate) fn save_day_overview_window_size(window: &WebviewWindow) {
             y: f64::from(position.y) / scale_factor,
         });
     persist_day_overview_window_size(
-        &window.app_handle(),
+        window.app_handle(),
         DayOverviewWindowSize {
             width: f64::from(size.width) / scale_factor,
             height: f64::from(size.height) / scale_factor,
