@@ -1381,14 +1381,16 @@ pub fn day_overview_window_set_display_mode(
     let size = window.inner_size().map_err(|_| window_error())?;
     let width = f64::from(size.width) / scale_factor;
     let current_height = f64::from(size.height) / scale_factor;
-    if !width.is_finite() || width <= 0.0 || !valid_day_overview_height(current_height) {
+    if !width.is_finite() || width <= 0.0 {
         return Err(day_overview_height_error());
     }
+    let current_height = normalize_day_overview_current_height(current_height)
+        .ok_or_else(day_overview_height_error)?;
 
     let (target_height, remembered_height) = match mode {
         DayOverviewWindowMode::Both => {
             let height = expanded_height.unwrap_or(current_height);
-            if !valid_day_overview_height(height) {
+            if !valid_day_overview_restored_height(height) {
                 return Err(day_overview_height_error());
             }
             (height, height)
@@ -1711,7 +1713,17 @@ const DAY_OVERVIEW_MINIMUM_HEIGHT: f64 = 280.0;
 const DAY_OVERVIEW_SINGLE_HEIGHT: f64 = 320.0;
 const DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT: f64 = 10_000.0;
 
-fn valid_day_overview_height(height: f64) -> bool {
+fn normalize_day_overview_current_height(height: f64) -> Option<f64> {
+    if !height.is_finite() || height <= 0.0 {
+        return None;
+    }
+    Some(height.clamp(
+        DAY_OVERVIEW_MINIMUM_HEIGHT,
+        DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT,
+    ))
+}
+
+fn valid_day_overview_restored_height(height: f64) -> bool {
     height.is_finite()
         && (DAY_OVERVIEW_MINIMUM_HEIGHT..=DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT).contains(&height)
 }
