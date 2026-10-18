@@ -1219,6 +1219,7 @@ button:disabled {
   display: flex;
   flex: 1 0 auto;
   flex-direction: column;
+  align-items: stretch;
 }
 
 .overview[data-fill-height="true"] .overview-lane {
