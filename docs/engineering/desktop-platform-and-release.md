@@ -71,7 +71,7 @@ E2E capability は `cfg(feature = "e2e")` の build だけに存在します。
 - Command / Control、tray、close / quit semantics
 - path、installer、scale、multi-monitor work area
 
-Tauri window-state plugin は window label ごとに position 等を復元します。day-overview だけは plugin が physical px で保存した SIZE の初期復元を skip し、POSITION の復元を再利用します。サイズは app config dir の専用 JSON に logical px で保存し、次回起動時は最小サイズへ正規化して復元します。main / Compact / analog-clock / day-overview の always-on-top は独立管理します。動的な補助ウィンドウは同じ label を再利用して重複生成せず、表示・復元・focus します。day-overview の一段表示は幅と位置を保ったまま高さを最大320 logical pxへ縮め、両段へ戻すと切替前の高さを復元します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
+Tauri window-state plugin は window label ごとに position 等を復元します。day-overview だけは plugin の初期復元を skip し、幅・高さ・位置を app config dir の専用 JSON に logical px で保存して builder から復元します。保存値は次回起動時に最小サイズと有限座標へ正規化します。main / Compact / analog-clock / day-overview の always-on-top は独立管理します。動的な補助ウィンドウは同じ label を再利用して重複生成せず、表示・復元・focus します。day-overview の一段表示は幅と位置を保ったまま高さを最大320 logical pxへ縮め、両段へ戻すと切替前の高さを復元します。single-instance plugin は二重 worker を防ぎ、2回目の起動で既存 main window を表示します。close behavior が `tray` なら main を隠し、`quit` なら完全終了します。
 
 ## 5. unsigned 個人配布
 

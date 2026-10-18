@@ -6,7 +6,6 @@ use tauri::{
     AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 use tauri_plugin_opener::OpenerExt;
-use tauri_plugin_window_state::{StateFlags, WindowExt};
 use uuid::Uuid;
 
 use crate::{
@@ -1352,7 +1351,7 @@ pub async fn day_overview_window_open(
         .await
         .map_err(UserSafeError::from)?;
     let size = load_day_overview_window_size(&app);
-    let window = WebviewWindowBuilder::new(
+    let mut builder = WebviewWindowBuilder::new(
         &app,
         "day-overview",
         WebviewUrl::App("index.html?window=day-overview".into()),
@@ -1362,10 +1361,11 @@ pub async fn day_overview_window_open(
     .min_inner_size(680.0, 280.0)
     .resizable(true)
     .always_on_top(always_on_top)
-    .visible(false)
-    .build()
-    .map_err(|_| window_error())?;
-    let _ = window.restore_state(StateFlags::POSITION);
+    .visible(false);
+    if let Some(position) = size.position {
+        builder = builder.position(position.x, position.y);
+    }
+    let window = builder.build().map_err(|_| window_error())?;
     window.show().map_err(|_| window_error())?;
     window.unminimize().map_err(|_| window_error())?;
     window.set_focus().map_err(|_| window_error())?;
@@ -1422,6 +1422,7 @@ pub fn day_overview_window_set_display_mode(
         DayOverviewWindowSize {
             width,
             height: target_height,
+            position: None,
         },
     );
     Ok(remembered_height)
@@ -1438,6 +1439,15 @@ const DAY_OVERVIEW_MAXIMUM_WIDTH: f64 = 10_000.0;
 struct DayOverviewWindowSize {
     width: f64,
     height: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    position: Option<DayOverviewWindowPosition>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DayOverviewWindowPosition {
+    x: f64,
+    y: f64,
 }
 
 impl Default for DayOverviewWindowSize {
@@ -1445,21 +1455,35 @@ impl Default for DayOverviewWindowSize {
         Self {
             width: DAY_OVERVIEW_DEFAULT_WIDTH,
             height: DAY_OVERVIEW_DEFAULT_HEIGHT,
+            position: None,
         }
     }
 }
 
-fn normalize_day_overview_window_size(width: f64, height: f64) -> Option<DayOverviewWindowSize> {
-    if !width.is_finite() || width <= 0.0 || !height.is_finite() || height <= 0.0 {
+fn normalize_day_overview_window_size(
+    mut size: DayOverviewWindowSize,
+) -> Option<DayOverviewWindowSize> {
+    if !size.width.is_finite()
+        || size.width <= 0.0
+        || !size.height.is_finite()
+        || size.height <= 0.0
+    {
         return None;
     }
-    Some(DayOverviewWindowSize {
-        width: width.clamp(DAY_OVERVIEW_MINIMUM_WIDTH, DAY_OVERVIEW_MAXIMUM_WIDTH),
-        height: height.clamp(
-            DAY_OVERVIEW_MINIMUM_HEIGHT,
-            DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT,
-        ),
-    })
+    size.width = size
+        .width
+        .clamp(DAY_OVERVIEW_MINIMUM_WIDTH, DAY_OVERVIEW_MAXIMUM_WIDTH);
+    size.height = size.height.clamp(
+        DAY_OVERVIEW_MINIMUM_HEIGHT,
+        DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT,
+    );
+    size.position = size.position.filter(|position| {
+        position.x.is_finite()
+            && position.y.is_finite()
+            && (-100_000.0..=100_000.0).contains(&position.x)
+            && (-100_000.0..=100_000.0).contains(&position.y)
+    });
+    Some(size)
 }
 
 fn day_overview_window_size_path(app: &AppHandle) -> Option<PathBuf> {
@@ -1476,14 +1500,17 @@ fn load_day_overview_window_size(app: &AppHandle) -> DayOverviewWindowSize {
     std::fs::read(path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<DayOverviewWindowSize>(&bytes).ok())
-        .and_then(|size| normalize_day_overview_window_size(size.width, size.height))
+        .and_then(normalize_day_overview_window_size)
         .unwrap_or_default()
 }
 
 fn persist_day_overview_window_size(app: &AppHandle, size: DayOverviewWindowSize) {
-    let Some(size) = normalize_day_overview_window_size(size.width, size.height) else {
+    let Some(mut size) = normalize_day_overview_window_size(size) else {
         return;
     };
+    if size.position.is_none() {
+        size.position = load_day_overview_window_size(app).position;
+    }
     let Some(path) = day_overview_window_size_path(app) else {
         return;
     };
@@ -1511,11 +1538,19 @@ pub(crate) fn save_day_overview_window_size(window: &WebviewWindow) {
     let Ok(size) = window.inner_size() else {
         return;
     };
+    let position = window
+        .outer_position()
+        .ok()
+        .map(|position| DayOverviewWindowPosition {
+            x: f64::from(position.x) / scale_factor,
+            y: f64::from(position.y) / scale_factor,
+        });
     persist_day_overview_window_size(
         &window.app_handle(),
         DayOverviewWindowSize {
             width: f64::from(size.width) / scale_factor,
             height: f64::from(size.height) / scale_factor,
+            position,
         },
     );
 }
