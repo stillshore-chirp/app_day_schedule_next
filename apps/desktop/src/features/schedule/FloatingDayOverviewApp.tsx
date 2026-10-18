@@ -420,6 +420,7 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
           textScalePercent={bootstrap.data.settings.textScalePercent}
           visibleLanes={mode}
           showStartTimeSlider={false}
+          fillAvailableHeight
         />
       ) : null}
 
