@@ -1183,10 +1183,14 @@ button:disabled {
   background-image:
     repeating-linear-gradient(
       to right,
-      transparent 0 calc(4.1666667% - 1px),
-      color-mix(in srgb, var(--border) 70%, transparent) calc(4.1666667% - 1px) 4.1666667%
+      transparent 0 calc(var(--overview-hour-width, 4.1666667%) - 1px),
+      color-mix(in srgb, var(--border) 70%, transparent)
+        calc(var(--overview-hour-width, 4.1666667%) - 1px) var(--overview-hour-width, 4.1666667%)
     ),
     repeating-linear-gradient(135deg, transparent 0 10px, rgb(100 116 139 / 5%) 10px 11px);
+  background-position:
+    var(--overview-hour-offset, 0%) 0,
+    0 0;
   background-color: var(--surface-soft);
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -1218,7 +1222,6 @@ button:disabled {
   border-left: 1px solid var(--border);
   font-size: var(--app-font-0-68, 0.68rem);
   font-variant-numeric: tabular-nums;
-  transform: translateX(-1px);
 }
 
 .overview-tick:first-child,
@@ -1226,8 +1229,19 @@ button:disabled {
   border-left-color: transparent;
 }
 
-.overview-tick:last-child {
-  transform: translateX(-18px);
+.overview-tick__label {
+  display: block;
+  width: max-content;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.overview-tick:first-child .overview-tick__label {
+  transform: none;
+}
+
+.overview-tick:last-child .overview-tick__label {
+  transform: translateX(-100%);
 }
 
 .overview-event,
@@ -4710,6 +4724,13 @@ tbody tr:focus {
 
 :root[data-text-scale-level="high"] .overview-tick:nth-child(4n + 1),
 :root[data-text-scale-level="extra"] .overview-tick:nth-child(4n + 1) {
+  display: block;
+}
+
+:root[data-text-scale-level="high"] .overview-tick:first-child,
+:root[data-text-scale-level="high"] .overview-tick:last-child,
+:root[data-text-scale-level="extra"] .overview-tick:first-child,
+:root[data-text-scale-level="extra"] .overview-tick:last-child {
   display: block;
 }
 

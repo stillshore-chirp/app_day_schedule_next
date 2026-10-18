@@ -1,3 +1,4 @@
+import { addDays } from "date-fns";
 import { fromZonedTime } from "date-fns-tz";
 import type { QuickBlock, Schedule } from "../../shared/contracts";
 import { dateInputValue } from "../../shared/time";
@@ -46,4 +47,13 @@ export function quickBlocksAsSchedules(quickBlocks: QuickBlock[], selectedDate: 
         deletedAt: null,
       } satisfies Schedule;
     });
+}
+
+export function quickBlocksForDayOverview(
+  quickBlocks: QuickBlock[],
+  selectedDate: Date,
+): Schedule[] {
+  return [-1, 0, 1].flatMap((dayOffset) =>
+    quickBlocksAsSchedules(quickBlocks, addDays(selectedDate, dayOffset)),
+  );
 }

@@ -1,4 +1,9 @@
 import { create } from "zustand";
+import {
+  normalizeDayOverviewStartMinute,
+  readDayOverviewStartMinute,
+  saveDayOverviewStartMinute,
+} from "../shared/day-overview-preferences";
 
 export type AppView =
   | "today"
@@ -42,7 +47,7 @@ interface UiState {
   editorMode: "closed" | "create" | "edit";
   search: string;
   createRange: { startUtc: string; endUtc: string } | null;
-  referenceMinute: number;
+  dayOverviewStartMinute: number;
   setActiveView: (view: AppView) => void;
   setSelectedDate: (date: Date) => void;
   selectSchedule: (id: string | null) => void;
@@ -50,17 +55,17 @@ interface UiState {
   openEdit: (id: string) => void;
   closeEditor: () => void;
   setSearch: (search: string) => void;
-  setReferenceMinute: (minute: number) => void;
+  setDayOverviewStartMinute: (minute: number) => void;
 }
 
-export const useUiStore = create<UiState>((set) => ({
+export const useUiStore = create<UiState>((set, get) => ({
   activeView: restoredView(),
   selectedDate: new Date(),
   selectedScheduleId: null,
   editorMode: "closed",
   search: "",
   createRange: null,
-  referenceMinute: 8 * 60,
+  dayOverviewStartMinute: readDayOverviewStartMinute(),
   setActiveView: (activeView) => {
     localStorage.setItem("day-schedule-next.active-view", activeView);
     set({ activeView });
@@ -73,5 +78,10 @@ export const useUiStore = create<UiState>((set) => ({
     set({ editorMode: "edit", selectedScheduleId, createRange: null }),
   closeEditor: () => set({ editorMode: "closed", createRange: null }),
   setSearch: (search) => set({ search }),
-  setReferenceMinute: (referenceMinute) => set({ referenceMinute }),
+  setDayOverviewStartMinute: (minute) => {
+    const dayOverviewStartMinute = normalizeDayOverviewStartMinute(minute);
+    if (dayOverviewStartMinute === get().dayOverviewStartMinute) return;
+    saveDayOverviewStartMinute(dayOverviewStartMinute);
+    set({ dayOverviewStartMinute });
+  },
 }));

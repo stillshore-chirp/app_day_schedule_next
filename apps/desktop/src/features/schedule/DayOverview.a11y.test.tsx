@@ -16,8 +16,8 @@ const baseProps: ComponentProps<typeof DayOverview> = {
   template: null,
   templateState: "loading",
   onRetryTemplate: vi.fn(),
-  referenceMinute: 0,
-  onReferenceChange: vi.fn(),
+  overviewStartMinute: 0,
+  onOverviewStartMinuteChange: vi.fn(),
   textScalePercent: 250,
 };
 

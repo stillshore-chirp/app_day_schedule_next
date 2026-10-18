@@ -1,16 +1,25 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
-import { dayOverviewWindowHeightSchema, type Settings } from "../../shared/contracts";
+import {
+  dayOverviewWindowHeightSchema,
+  type Schedule,
+  type Settings,
+} from "../../shared/contracts";
+import {
+  dayOverviewStartMinuteChangedEvent,
+  isDayOverviewStartMinute,
+  readDayOverviewStartMinute,
+} from "../../shared/day-overview-preferences";
 import type { AppClient } from "../../shared/ipc/client";
 import { applyAppAppearance } from "../../shared/appearance";
-import { formatDateHeading, dayRange, dateInputValue } from "../../shared/time";
+import { formatDateHeading, dayOverviewRange, dateInputValue } from "../../shared/time";
 import { translate } from "../../shared/i18n/messages";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 import { Tooltip } from "../../shared/ui/Tooltip";
 import { resolveDisplayedTemplate } from "./template-selection";
 import { DayOverview } from "./DayOverview";
-import { quickBlocksAsSchedules } from "./quick-block-schedules";
+import { quickBlocksForDayOverview } from "./quick-block-schedules";
 
 type OverviewMode = "both" | "schedule" | "template";
 type OverviewTheme = "auto" | "light" | "dark";
@@ -60,7 +69,8 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
     () => (bootstrap.data ? localDateFromDateKey(bootstrap.data.today) : null),
     [bootstrap.data?.today, bootstrap.dataUpdatedAt],
   );
-  const range = date ? dayRange(date) : null;
+  const [overviewStartMinute, setOverviewStartMinute] = useState(readDayOverviewStartMinute);
+  const range = date ? dayOverviewRange(date, overviewStartMinute) : null;
   const schedules = useQuery({
     queryKey: ["schedules", range?.startUtc, range?.endUtc, ""],
     queryFn: () => client.listSchedules({ ...range!, search: "", limit: 500 }),
@@ -143,6 +153,30 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
       if (unlisten) unlistenSafely(unlisten);
     };
   }, [queryClient]);
+
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let active = true;
+    let stop: (() => void) | undefined;
+    void listen<unknown>(dayOverviewStartMinuteChangedEvent, ({ payload }) => {
+      if (isDayOverviewStartMinute(payload)) setOverviewStartMinute(payload);
+    })
+      .then((unlisten) => {
+        if (active) {
+          stop = unlisten;
+          setOverviewStartMinute(readDayOverviewStartMinute());
+        } else {
+          unlistenSafely(unlisten);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      const unlisten = stop;
+      stop = undefined;
+      if (unlisten) unlistenSafely(unlisten);
+    };
+  }, []);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -263,7 +297,7 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
   const quickBlockIds = new Set((quickBlocks.data ?? []).map((item) => item.id));
   const displaySchedules = [
     ...(schedules.data?.items ?? []),
-    ...(date ? quickBlocksAsSchedules(quickBlocks.data ?? [], date) : []),
+    ...(date ? quickBlocksForDayOverview(quickBlocks.data ?? [], date) : []),
   ];
 
   return (
@@ -341,26 +375,32 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
         <DayOverview
           schedules={displaySchedules}
           scheduleState="ready"
+          onRetrySchedules={() => void schedules.refetch()}
           selectedDate={date}
           selectedId={null}
-          onSelect={(schedule) =>
-            void submitMainAction(
-              quickBlockIds.has(schedule.id)
-                ? { type: "open-templates" }
-                : { type: "edit-schedule", scheduleId: schedule.id, date: activeDate },
-            )
-          }
+          onSelect={(schedule) => {
+            if (quickBlockIds.has(schedule.id)) {
+              void submitMainAction({ type: "open-templates" });
+              return;
+            }
+            const actionDate = overviewScheduleActionDate(schedule, range?.startUtc, date);
+            void submitMainAction({
+              type: "edit-schedule",
+              scheduleId: schedule.id,
+              date: actionDate,
+            });
+          }}
           onCreateSchedule={() =>
             void submitMainAction({ type: "create-schedule", date: activeDate })
           }
           template={displayedTemplate}
           templateState={templates.isLoading ? "loading" : templates.isError ? "error" : "ready"}
           onRetryTemplate={() => void templates.refetch()}
-          referenceMinute={8 * 60}
-          onReferenceChange={() => undefined}
+          overviewStartMinute={overviewStartMinute}
+          onOverviewStartMinuteChange={() => undefined}
           textScalePercent={bootstrap.data.settings.textScalePercent}
           visibleLanes={mode}
-          showReferenceSlider={false}
+          showStartTimeSlider={false}
         />
       ) : null}
 
@@ -457,4 +497,15 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
       ) : null}
     </main>
   );
+}
+
+function overviewScheduleActionDate(
+  schedule: Schedule,
+  rangeStartUtc: string | undefined,
+  selectedDate: Date,
+): string {
+  if (!rangeStartUtc || Date.parse(schedule.startUtc) < Date.parse(rangeStartUtc)) {
+    return dateInputValue(selectedDate);
+  }
+  return dateInputValue(new Date(schedule.startUtc));
 }

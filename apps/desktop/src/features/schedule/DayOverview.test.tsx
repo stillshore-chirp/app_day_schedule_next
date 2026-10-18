@@ -65,8 +65,8 @@ function renderOverview(overrides: Partial<React.ComponentProps<typeof DayOvervi
     template,
     templateState: "ready",
     onRetryTemplate: vi.fn(),
-    referenceMinute: 0,
-    onReferenceChange: vi.fn(),
+    overviewStartMinute: 0,
+    onOverviewStartMinuteChange: vi.fn(),
     textScalePercent: 100,
     ...overrides,
   };
@@ -99,7 +99,11 @@ describe("DayOverview", () => {
       Array.from(container.querySelectorAll<HTMLElement>(".overview-tick")).map(
         (tick) => tick.textContent,
       ),
-    ).toEqual(Array.from({ length: 25 }, (_, hour) => String(hour).padStart(2, "0")));
+    ).toEqual([
+      "00:00",
+      ...Array.from({ length: 23 }, (_, hour) => String(hour + 1).padStart(2, "0")),
+      "翌00:00",
+    ]);
   });
 
   it("keeps schedule selection while template blocks remain read-only information", async () => {
@@ -229,7 +233,7 @@ describe("DayOverview", () => {
     const user = userEvent.setup();
     const { props } = renderOverview({ schedules: [] });
 
-    expect(screen.getByText("今日の予定はありません")).toBeVisible();
+    expect(screen.getByText("この24時間に予定はありません")).toBeVisible();
     expect(screen.getByRole("heading", { name: "集中日の型" })).toBeVisible();
     await user.click(screen.getByRole("button", { name: "予定を作成" }));
     expect(props.onCreateSchedule).toHaveBeenCalledOnce();
@@ -250,6 +254,7 @@ describe("DayOverview", () => {
       <DayOverview
         schedules={[schedule]}
         scheduleState="ready"
+        onRetrySchedules={vi.fn()}
         selectedDate={new Date(2026, 6, 20)}
         selectedId={null}
         onSelect={vi.fn()}
@@ -257,8 +262,8 @@ describe("DayOverview", () => {
         template={null}
         templateState="error"
         onRetryTemplate={retry}
-        referenceMinute={0}
-        onReferenceChange={vi.fn()}
+        overviewStartMinute={0}
+        onOverviewStartMinuteChange={vi.fn()}
         textScalePercent={100}
       />,
     );
@@ -269,6 +274,7 @@ describe("DayOverview", () => {
       <DayOverview
         schedules={[schedule]}
         scheduleState="ready"
+        onRetrySchedules={vi.fn()}
         selectedDate={new Date(2026, 6, 20)}
         selectedId={null}
         onSelect={vi.fn()}
@@ -276,8 +282,8 @@ describe("DayOverview", () => {
         template={null}
         templateState="ready"
         onRetryTemplate={retry}
-        referenceMinute={0}
-        onReferenceChange={vi.fn()}
+        overviewStartMinute={0}
+        onOverviewStartMinuteChange={vi.fn()}
         textScalePercent={100}
       />,
     );
@@ -300,6 +306,7 @@ describe("DayOverview", () => {
       <DayOverview
         schedules={[schedule]}
         scheduleState="ready"
+        onRetrySchedules={vi.fn()}
         selectedDate={new Date(2026, 6, 20)}
         selectedId={null}
         onSelect={vi.fn()}
@@ -307,8 +314,8 @@ describe("DayOverview", () => {
         template={null}
         templateState="error"
         onRetryTemplate={vi.fn()}
-        referenceMinute={0}
-        onReferenceChange={vi.fn()}
+        overviewStartMinute={0}
+        onOverviewStartMinuteChange={vi.fn()}
         textScalePercent={250}
       />,
     );
@@ -317,7 +324,7 @@ describe("DayOverview", () => {
     expect(screen.getByRole("button", { name: "再試行" })).toBeVisible();
   });
 
-  it("announces a cross-midnight template block without wrapping it to the next day", () => {
+  it("labels both sides of a daily cross-midnight template block at a 00:00 boundary", () => {
     renderOverview({
       template: {
         ...template,
@@ -333,8 +340,37 @@ describe("DayOverview", () => {
 
     expect(
       screen.getByRole("listitem", {
-        name: "集中作業 23:59–24:00、翌日へ継続",
+        name: "表示開始前から継続、集中作業 00:00–00:59",
       }),
+    ).not.toHaveAttribute("data-continues-next-day");
+    expect(
+      screen.getByRole("listitem", { name: "集中作業 23:59–翌00:00、翌日へ継続" }),
     ).toHaveAttribute("data-continues-next-day", "true");
+  });
+
+  it("shows the selected-day start through the following day's same time on the shared axis", () => {
+    const { container } = renderOverview({ overviewStartMinute: 7 * 60 });
+    const ticks = Array.from(container.querySelectorAll<HTMLElement>(".overview-tick"));
+    const scheduleTrack = container.querySelector<HTMLElement>(".overview-lane__track");
+
+    expect(ticks[0]?.textContent).toBe("07:00");
+    expect(ticks.map((tick) => tick.textContent)).toContain("翌00");
+    expect(ticks.at(-1)?.textContent).toBe("翌07:00");
+    expect(scheduleTrack).toHaveAttribute("aria-label", "07:00から翌07:00までの予定");
+  });
+
+  it("aligns the axis with whole hours and keeps nearby boundary labels distinct", () => {
+    const { container } = renderOverview({ overviewStartMinute: 6 * 60 + 50 });
+    const ticks = Array.from(container.querySelectorAll<HTMLElement>(".overview-tick"));
+    const track = container.querySelector<HTMLElement>(".overview-lane__track");
+
+    expect(ticks.map((tick) => tick.textContent)).toEqual([
+      "06:50",
+      ...Array.from({ length: 16 }, (_, index) => String(index + 8).padStart(2, "0")),
+      "翌00",
+      ...Array.from({ length: 5 }, (_, index) => String(index + 1).padStart(2, "0")),
+      "翌06:50",
+    ]);
+    expect(track?.style.getPropertyValue("--overview-hour-offset")).toBe(`${(10 / 1440) * 100}%`);
   });
 });

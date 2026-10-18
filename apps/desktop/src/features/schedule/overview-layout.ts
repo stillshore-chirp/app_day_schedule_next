@@ -1,5 +1,5 @@
 import type { Schedule } from "../../shared/contracts";
-import { clampScheduleToDay } from "../../shared/time";
+import { clampScheduleToDayOverview } from "../../shared/time";
 
 export interface MinuteInterval<T> {
   key: string;
@@ -75,11 +75,18 @@ export function assignOverviewLevels<T>(
 export function layoutSchedulesForDay(
   schedules: Schedule[],
   selectedDate: Date,
+  visibleStartMinute = 0,
 ): OverviewLayoutItem[] {
   const intervals = schedules
     .map((schedule): MinuteInterval<Schedule> | null => {
-      const segment = clampScheduleToDay(schedule.startUtc, schedule.endUtc, selectedDate);
-      return segment
+      const segment = clampScheduleToDayOverview(
+        schedule.startUtc,
+        schedule.endUtc,
+        selectedDate,
+        visibleStartMinute,
+      );
+      if (!segment) return null;
+      return segment.endMinute > segment.startMinute
         ? {
             key: `${schedule.id}-${schedule.startUtc}`,
             value: schedule,

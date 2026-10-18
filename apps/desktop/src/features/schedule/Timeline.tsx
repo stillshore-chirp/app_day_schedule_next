@@ -19,7 +19,6 @@ interface TimelineProps {
   onCreate: () => void;
   onCreateRange: (startUtc: string, endUtc: string) => void;
   onAdjust: (schedule: Schedule, startUtc: string, endUtc: string) => Promise<void>;
-  referenceMinute: number;
   textScalePercent: number;
 }
 
@@ -52,7 +51,6 @@ export function Timeline({
   onCreate,
   onCreateRange,
   onAdjust,
-  referenceMinute,
   textScalePercent,
 }: TimelineProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -129,15 +127,6 @@ export function Timeline({
       sessionStorage.setItem(storageKey, String(viewport.scrollTop));
     };
   }, [effectiveHourHeight, isToday, selectedDate]);
-
-  useEffect(() => {
-    if (viewportRef.current) {
-      viewportRef.current.scrollTop = Math.max(
-        0,
-        (referenceMinute / 60) * effectiveHourHeight - effectiveHourHeight,
-      );
-    }
-  }, [effectiveHourHeight, referenceMinute]);
 
   useEffect(() => {
     if (!drag) return;
