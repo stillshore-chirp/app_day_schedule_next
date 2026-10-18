@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { DayTemplate } from "../../shared/contracts";
-import { layoutTemplateBlocks } from "./template-overview-layout";
+import {
+  layoutTemplateBlocks,
+  layoutTemplateBlocksForInstantRange,
+} from "./template-overview-layout";
 
 type TemplateBlock = DayTemplate["blocks"][number];
 
@@ -44,6 +47,27 @@ describe("layoutTemplateBlocks", () => {
       startMinute: 1439,
       endMinute: 1440,
       continuesNextDay: true,
+    });
+  });
+
+  it("projects a cross-midnight template occurrence into an instant-centered viewport", () => {
+    const date = new Date(2026, 6, 20, 22);
+    const range = {
+      startUtc: date.toISOString(),
+      endUtc: new Date(date.getTime() + 4 * 60 * 60_000).toISOString(),
+    };
+    const result = layoutTemplateBlocksForInstantRange(
+      [block("overnight", 23 * 60 + 30, 120)],
+      range,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      startMinute: 90,
+      endMinute: 210,
+      continuesNextDay: true,
+      startsBeforeWindow: false,
+      continuesAfterWindow: false,
     });
   });
 

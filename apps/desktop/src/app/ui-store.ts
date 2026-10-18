@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import {
+  type DayOverviewMode,
+  normalizeDayOverviewWindowHours,
   normalizeDayOverviewStartMinute,
-  readDayOverviewStartMinute,
-  saveDayOverviewStartMinute,
+  readDayOverviewPreferences,
+  saveDayOverviewPreferences,
 } from "../shared/day-overview-preferences";
 import { dateInputValue } from "../shared/time";
 
@@ -50,6 +52,8 @@ interface UiState {
   search: string;
   createRange: { startUtc: string; endUtc: string } | null;
   dayOverviewStartMinute: number;
+  dayOverviewMode: DayOverviewMode;
+  dayOverviewWindowHours: number;
   setActiveView: (view: AppView) => void;
   setSelectedDate: (date: Date) => void;
   setTodayDate: (date: Date) => void;
@@ -60,7 +64,11 @@ interface UiState {
   closeEditor: () => void;
   setSearch: (search: string) => void;
   setDayOverviewStartMinute: (minute: number) => void;
+  setDayOverviewMode: (mode: DayOverviewMode) => void;
+  setDayOverviewWindowHours: (hours: number) => void;
 }
+
+const initialDayOverviewPreferences = readDayOverviewPreferences();
 
 export const useUiStore = create<UiState>((set, get) => ({
   activeView: restoredView(),
@@ -70,7 +78,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   editorMode: "closed",
   search: "",
   createRange: null,
-  dayOverviewStartMinute: readDayOverviewStartMinute(),
+  dayOverviewStartMinute: initialDayOverviewPreferences.startMinute,
+  dayOverviewMode: initialDayOverviewPreferences.mode,
+  dayOverviewWindowHours: initialDayOverviewPreferences.windowHours,
   setActiveView: (activeView) => {
     localStorage.setItem("day-schedule-next.active-view", activeView);
     set({ activeView });
@@ -97,7 +107,18 @@ export const useUiStore = create<UiState>((set, get) => ({
   setDayOverviewStartMinute: (minute) => {
     const dayOverviewStartMinute = normalizeDayOverviewStartMinute(minute);
     if (dayOverviewStartMinute === get().dayOverviewStartMinute) return;
-    saveDayOverviewStartMinute(dayOverviewStartMinute);
+    saveDayOverviewPreferences({ startMinute: dayOverviewStartMinute });
     set({ dayOverviewStartMinute });
+  },
+  setDayOverviewMode: (dayOverviewMode) => {
+    if (dayOverviewMode === get().dayOverviewMode) return;
+    saveDayOverviewPreferences({ mode: dayOverviewMode });
+    set({ dayOverviewMode });
+  },
+  setDayOverviewWindowHours: (hours) => {
+    const dayOverviewWindowHours = normalizeDayOverviewWindowHours(hours);
+    if (dayOverviewWindowHours === get().dayOverviewWindowHours) return;
+    saveDayOverviewPreferences({ windowHours: dayOverviewWindowHours });
+    set({ dayOverviewWindowHours });
   },
 }));

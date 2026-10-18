@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DayTemplate, Schedule } from "../../shared/contracts";
 import { DayOverview } from "./DayOverview";
 
@@ -54,6 +54,14 @@ const template: DayTemplate = {
   ],
 };
 
+afterEach(() => {
+  vi.useRealTimers();
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "visible",
+  });
+});
+
 function renderOverview(overrides: Partial<React.ComponentProps<typeof DayOverview>> = {}) {
   const props: React.ComponentProps<typeof DayOverview> = {
     schedules: [schedule],
@@ -75,6 +83,56 @@ function renderOverview(overrides: Partial<React.ComponentProps<typeof DayOvervi
 }
 
 describe("DayOverview", () => {
+  it("centers the now line and advances only the visible centered window each second", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 20, 9, 30));
+    const { container } = renderOverview({
+      overviewMode: "centered",
+      overviewWindowHours: 6,
+    });
+    const nowLine = container.querySelector<HTMLElement>(".overview-now");
+    const event = container.querySelector<HTMLElement>(".overview-event");
+    const axisLabels = Array.from(
+      container.querySelectorAll<HTMLElement>(".overview-axis .overview-tick__label"),
+    ).map((tick) => tick.textContent);
+    const initialLeft = event?.style.left;
+
+    expect(nowLine?.style.left).toBe("50%");
+    expect(axisLabels).toEqual(["07", "08", "09", "10", "11", "12"]);
+    expect(initialLeft).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(container.querySelector(".overview")?.getAttribute("data-live-centered")).toBe("true");
+    expect(nowLine?.style.left).toBe("50%");
+    expect(event?.style.left).not.toBe(initialLeft);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    const hiddenLeft = event?.style.left;
+    act(() => {
+      vi.setSystemTime(new Date(2026, 6, 20, 9, 30, 15));
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(event?.style.left).toBe(hiddenLeft);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(event?.style.left).not.toBe(hiddenLeft);
+  });
+
   it("expands only the overview vertical geometry needed by 250% text", () => {
     const { container } = renderOverview({ textScalePercent: 250 });
     const track = container.querySelector<HTMLElement>(".overview-lane__track");

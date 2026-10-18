@@ -57,3 +57,30 @@ export function quickBlocksForDayOverview(
     quickBlocksAsSchedules(quickBlocks, addDays(selectedDate, dayOffset)),
   );
 }
+
+export function quickBlocksForInstantRange(
+  quickBlocks: QuickBlock[],
+  range: { startUtc: string; endUtc: string },
+): Schedule[] {
+  const start = new Date(range.startUtc);
+  const end = new Date(range.endUtc);
+  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || start >= end)
+    return [];
+  const windowStart = start.getTime();
+  const windowEnd = end.getTime();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 3);
+  end.setHours(0, 0, 0, 0);
+  end.setDate(end.getDate() + 2);
+  const schedules: Schedule[] = [];
+  for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
+    schedules.push(
+      ...quickBlocksAsSchedules(quickBlocks, date).filter((schedule) => {
+        const scheduleStart = Date.parse(schedule.startUtc);
+        const scheduleEnd = Date.parse(schedule.endUtc);
+        return scheduleStart < windowEnd && scheduleEnd > windowStart;
+      }),
+    );
+  }
+  return schedules;
+}

@@ -12,8 +12,17 @@ import { Timeline } from "./Timeline";
 import { resolveDisplayedTemplate } from "./template-selection";
 import { useScheduleActions, useSchedules } from "./use-schedules";
 import { PriorityTicketDrawer } from "./PriorityTicketDrawer";
-import { quickBlocksAsSchedules, quickBlocksForDayOverview } from "./quick-block-schedules";
-import { dateInputValue, dayOverviewDateForSelection, dayOverviewRange } from "../../shared/time";
+import {
+  quickBlocksAsSchedules,
+  quickBlocksForDayOverview,
+  quickBlocksForInstantRange,
+} from "./quick-block-schedules";
+import {
+  centeredDayOverviewQueryRange,
+  dateInputValue,
+  dayOverviewDateForSelection,
+  dayOverviewRange,
+} from "../../shared/time";
 import { useOverviewClock } from "./use-overview-clock";
 
 interface TodayViewProps {
@@ -42,6 +51,10 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     createRange,
     dayOverviewStartMinute,
     setDayOverviewStartMinute,
+    dayOverviewMode,
+    setDayOverviewMode,
+    dayOverviewWindowHours,
+    setDayOverviewWindowHours,
     syncFollowingTodayDate,
     setActiveView,
   } = useUiStore();
@@ -58,7 +71,10 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     selectedDateFollowsToday,
   );
   const schedulesQuery = useSchedules(client, selectedDate, search);
-  const overviewRange = dayOverviewRange(overviewDate, dayOverviewStartMinute);
+  const overviewRange =
+    dayOverviewMode === "centered"
+      ? centeredDayOverviewQueryRange(now)
+      : dayOverviewRange(overviewDate, dayOverviewStartMinute);
   const overviewSchedulesQuery = useQuery({
     queryKey: ["schedules", overviewRange.startUtc, overviewRange.endUtc, search],
     queryFn: () => client.listSchedules({ ...overviewRange, search, limit: 500 }),
@@ -85,8 +101,17 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     [quickBlocksQuery.data, selectedDate],
   );
   const overviewQuickSchedules = useMemo(
-    () => quickBlocksForDayOverview(quickBlocksQuery.data ?? [], overviewDate),
-    [quickBlocksQuery.data, overviewDate],
+    () =>
+      dayOverviewMode === "centered"
+        ? quickBlocksForInstantRange(quickBlocksQuery.data ?? [], overviewRange)
+        : quickBlocksForDayOverview(quickBlocksQuery.data ?? [], overviewDate),
+    [
+      dayOverviewMode,
+      overviewDate,
+      overviewRange.endUtc,
+      overviewRange.startUtc,
+      quickBlocksQuery.data,
+    ],
   );
   const schedules = [...(schedulesQuery.data?.items ?? []), ...quickSchedules];
   const overviewSchedules = [
@@ -139,7 +164,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     snapshotMatchesEditor && editorSnapshot ? editorSnapshot.selectedDate : selectedDate;
   const busy = actions.create.isPending || actions.update.isPending || actions.remove.isPending;
 
-  const choose = (schedule: Schedule) => {
+  const choose = (schedule: Schedule, visibleDate: Date = selectedDate) => {
     if (quickBlockIds.has(schedule.id)) {
       setActiveView("templates");
       return;
@@ -148,7 +173,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       mode: "edit",
       scheduleId: schedule.id,
       schedule,
-      selectedDate: new Date(selectedDate),
+      selectedDate: new Date(visibleDate),
     });
     selectSchedule(schedule.id);
     openEdit(schedule.id);
@@ -157,6 +182,24 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
   const closeEditorSession = () => {
     setEditorSnapshot(null);
     closeEditor();
+  };
+
+  const createFromOverview = () => {
+    if (dayOverviewMode === "centered") {
+      const currentInstant = new Date();
+      const calendarToday = new Date(
+        currentInstant.getFullYear(),
+        currentInstant.getMonth(),
+        currentInstant.getDate(),
+      );
+      setEditorSnapshot({
+        mode: "create",
+        scheduleId: null,
+        schedule: null,
+        selectedDate: calendarToday,
+      });
+    }
+    openCreate();
   };
 
   const save = async (
@@ -310,7 +353,7 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             now={now}
             selectedId={selectedScheduleId}
             onSelect={choose}
-            onCreateSchedule={() => openCreate()}
+            onCreateSchedule={createFromOverview}
             template={displayedTemplate}
             templateState={
               templatesQuery.isLoading ? "loading" : templatesQuery.isError ? "error" : "ready"
@@ -318,6 +361,10 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             onRetryTemplate={() => void templatesQuery.refetch()}
             overviewStartMinute={dayOverviewStartMinute}
             onOverviewStartMinuteChange={setDayOverviewStartMinute}
+            overviewMode={dayOverviewMode}
+            onOverviewModeChange={setDayOverviewMode}
+            overviewWindowHours={dayOverviewWindowHours}
+            onOverviewWindowHoursChange={setDayOverviewWindowHours}
             textScalePercent={bootstrap.settings.textScalePercent}
           />
         ) : null}

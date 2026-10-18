@@ -4,6 +4,7 @@ import {
   assignOverviewLevels,
   layoutOverview,
   layoutSchedulesForDay,
+  layoutSchedulesForInstantRange,
   minuteToPercent,
 } from "./overview-layout";
 
@@ -99,12 +100,39 @@ describe("layoutOverview", () => {
   });
 
   it("maps minute boundaries to a shared deterministic percentage", () => {
-    expect([0, 1, 720, 1439, 1440].map(minuteToPercent)).toEqual([
+    expect([0, 1, 720, 1439, 1440].map((minute) => minuteToPercent(minute))).toEqual([
       0,
       100 / 1440,
       50,
       (1439 / 1440) * 100,
       100,
+    ]);
+  });
+
+  it("clips schedules to an instant-centered window before assigning overlap levels", () => {
+    const range = {
+      startUtc: localIso(20, 6, 30),
+      endUtc: localIso(20, 12, 30),
+    };
+    const result = layoutSchedulesForInstantRange(
+      [
+        item("before", localIso(20, 6), localIso(20, 7, 30)),
+        item("after", localIso(20, 12, 15), localIso(20, 13)),
+        item("outside", localIso(20, 13), localIso(20, 14)),
+      ],
+      range,
+    );
+
+    expect(
+      result.map(({ schedule, startMinute, endMinute, levelCount }) => [
+        schedule.id,
+        startMinute,
+        endMinute,
+        levelCount,
+      ]),
+    ).toEqual([
+      ["before", 0, 60, 1],
+      ["after", 345, 360, 1],
     ]);
   });
 

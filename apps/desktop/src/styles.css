@@ -1253,6 +1253,42 @@ button:disabled {
   transform: translateX(-100%);
 }
 
+.overview-time-controls {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.overview-mode-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.overview-mode-controls [aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.overview-time-controls input:disabled {
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .overview[data-overview-mode="centered"][data-live-centered="true"] .overview-tick,
+  .overview[data-overview-mode="centered"][data-live-centered="true"] .overview-event,
+  .overview[data-overview-mode="centered"][data-live-centered="true"] .overview-template-block {
+    transition:
+      left 250ms linear,
+      width 250ms linear;
+  }
+
+  .overview[data-overview-mode="centered"][data-live-centered="true"] .overview-lane__track {
+    transition: background-position 250ms linear;
+  }
+}
+
 .overview-event,
 .overview-template-block {
   position: absolute;

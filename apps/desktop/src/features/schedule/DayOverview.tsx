@@ -1,16 +1,29 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { differenceInCalendarDays } from "date-fns";
 import {
   dayOverviewStartMinuteStep,
   maxDayOverviewStartMinute,
   normalizeDayOverviewStartMinute,
+  type DayOverviewMode,
 } from "../../shared/day-overview-preferences";
+import {
+  centeredDayOverviewRange,
+  dayOverviewRange,
+  dayOverviewMinuteAt,
+  formatTime,
+} from "../../shared/time";
 import { appLocale, translate } from "../../shared/i18n/messages";
 import type { DayTemplate, Schedule } from "../../shared/contracts";
-import { dayOverviewMinuteAt, dayOverviewRange, formatTime } from "../../shared/time";
 import { Tooltip } from "../../shared/ui/Tooltip";
-import { layoutSchedulesForDay, minuteToPercent } from "./overview-layout";
-import { layoutTemplateBlocks } from "./template-overview-layout";
+import {
+  layoutSchedulesForDay,
+  layoutSchedulesForInstantRange,
+  minuteToPercent,
+} from "./overview-layout";
+import {
+  layoutTemplateBlocks,
+  layoutTemplateBlocksForInstantRange,
+} from "./template-overview-layout";
 
 const MAX_VISIBLE_LEVELS = 8;
 const OVERVIEW_BLOCK_HEIGHT = 60;
@@ -25,13 +38,17 @@ interface DayOverviewProps {
   selectedDate: Date;
   now?: Date;
   selectedId: string | null;
-  onSelect: (schedule: Schedule) => void;
+  onSelect: (schedule: Schedule, visibleDate?: Date) => void;
   onCreateSchedule: () => void;
   template: DayTemplate | null;
   templateState: "loading" | "error" | "ready";
   onRetryTemplate: () => void;
   overviewStartMinute: number;
   onOverviewStartMinuteChange: (minute: number) => void;
+  overviewMode?: DayOverviewMode;
+  onOverviewModeChange?: (mode: DayOverviewMode) => void;
+  overviewWindowHours?: number;
+  onOverviewWindowHoursChange?: (hours: number) => void;
   textScalePercent: number;
   visibleLanes?: "both" | "schedule" | "template";
   showStartTimeSlider?: boolean;
@@ -57,6 +74,40 @@ function axisTimeLabel(displayMinute: number, startMinute: number): string {
   const absoluteMinute = startMinute + displayMinute;
   const clockMinute = ((absoluteMinute % 1440) + 1440) % 1440;
   return String(Math.floor(clockMinute / 60)).padStart(2, "0");
+}
+
+function centeredAxisTicks(range: { startUtc: string; endUtc: string }) {
+  const start = Date.parse(range.startUtc);
+  const end = Date.parse(range.endUtc);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return [];
+  const firstTick = new Date(start);
+  firstTick.setMinutes(0, 0, 0);
+  if (firstTick.getTime() <= start) firstTick.setTime(firstTick.getTime() + 60 * 60_000);
+  const ticks: { key: string; minute: number; label: string }[] = [];
+  for (let timestamp = firstTick.getTime(); timestamp < end; timestamp += 60 * 60_000) {
+    const tick = new Date(timestamp);
+    ticks.push({
+      key: tick.toISOString(),
+      minute: (timestamp - start) / 60_000,
+      label: String(tick.getHours()).padStart(2, "0"),
+    });
+  }
+  return ticks;
+}
+
+function rangeOffsetTimeLabel(
+  displayMinute: number,
+  range: { startUtc: string; endUtc: string },
+): string {
+  const rangeStart = new Date(range.startUtc);
+  const instant = new Date(rangeStart.getTime() + displayMinute * 60_000);
+  const dayOffset = differenceInCalendarDays(instant, rangeStart);
+  const time = formatTime(instant.toISOString());
+  if (dayOffset === 0) return time;
+  return translate(
+    dayOffset > 0 ? "features.schedule.DayOverview.031" : "features.schedule.DayOverview.032",
+    [time],
+  );
 }
 
 function scheduleDateTimeLabel(iso: string, selectedDate: Date): string {
@@ -104,46 +155,129 @@ export function DayOverview({
   onRetryTemplate,
   overviewStartMinute,
   onOverviewStartMinuteChange,
+  overviewMode = "fixed",
+  onOverviewModeChange = () => undefined,
+  overviewWindowHours = 24,
+  onOverviewWindowHoursChange = () => undefined,
   textScalePercent,
   visibleLanes = "both",
   showStartTimeSlider = true,
 }: DayOverviewProps) {
+  const centered = overviewMode === "centered";
+  const clockConfig = `${overviewMode}:${overviewWindowHours}`;
+  const lastClockConfig = useRef(clockConfig);
+  const clockConfigChanged = lastClockConfig.current !== clockConfig;
+  const [centeredNow, setCenteredNow] = useState(now);
+  const [liveTick, setLiveTick] = useState(false);
+  useEffect(() => {
+    lastClockConfig.current = clockConfig;
+    setLiveTick(false);
+    if (!centered) return;
+
+    let timer: number | undefined;
+    const stop = () => {
+      if (timer !== undefined) window.clearInterval(timer);
+      timer = undefined;
+    };
+    const start = () => {
+      stop();
+      if (document.visibilityState !== "visible") return;
+      setLiveTick(false);
+      setCenteredNow(new Date());
+      timer = window.setInterval(() => {
+        setCenteredNow(new Date());
+        setLiveTick(true);
+      }, 1_000);
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") start();
+      else stop();
+    };
+
+    start();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [centered, clockConfig]);
   const visibleStartMinute = normalizeDayOverviewStartMinute(overviewStartMinute);
-  const nowDisplayMinute = dayOverviewMinuteAt(now, selectedDate, visibleStartMinute);
-  const nowVisible = nowDisplayMinute !== null;
-  const nowPercent = minuteToPercent(nowDisplayMinute ?? 0);
-  const scheduleItems = layoutSchedulesForDay(schedules, selectedDate, visibleStartMinute);
-  const templateItems = layoutTemplateBlocks(template?.blocks ?? [], visibleStartMinute);
-  const rangeStartLabel = minuteToTime(visibleStartMinute);
-  const rangeEndLabel = windowTimeLabel(1440, visibleStartMinute);
+  const displayNow = centered ? centeredNow : now;
+  const windowMinutes = centered ? overviewWindowHours * 60 : 1440;
+  const overviewRange = centered
+    ? centeredDayOverviewRange(displayNow, overviewWindowHours)
+    : dayOverviewRange(selectedDate, visibleStartMinute);
+  const windowStartMs = Date.parse(overviewRange.startUtc);
+  const windowDurationMs = Date.parse(overviewRange.endUtc) - windowStartMs;
   const dateTimeFormatter = new Intl.DateTimeFormat(appLocale, {
     month: "numeric",
     day: "numeric",
   });
-  const overviewRange = dayOverviewRange(selectedDate, visibleStartMinute);
   const overviewRangeStart = new Date(overviewRange.startUtc);
   const overviewRangeEnd = new Date(overviewRange.endUtc);
-  const rangeCaption = translate("features.schedule.DayOverview.035", [
-    dateTimeFormatter.format(overviewRangeStart),
-    formatTime(overviewRange.startUtc),
-    dateTimeFormatter.format(overviewRangeEnd),
-    formatTime(overviewRange.endUtc),
-  ]);
-  const hourWidthPercent = (60 / 1440) * 100;
-  const hourOffsetPercent = (((60 - (visibleStartMinute % 60)) % 60) / 1440) * 100;
+  const rangeCaption = translate(
+    centered ? "features.schedule.DayOverview.036" : "features.schedule.DayOverview.035",
+    [
+      dateTimeFormatter.format(overviewRangeStart),
+      formatTime(overviewRange.startUtc),
+      dateTimeFormatter.format(overviewRangeEnd),
+      formatTime(overviewRange.endUtc),
+    ],
+  );
+  const rangeStartLabel = centered
+    ? `${dateTimeFormatter.format(overviewRangeStart)} ${formatTime(overviewRange.startUtc)}`
+    : minuteToTime(visibleStartMinute);
+  const rangeEndLabel = centered
+    ? `${dateTimeFormatter.format(overviewRangeEnd)} ${formatTime(overviewRange.endUtc)}`
+    : windowTimeLabel(1440, visibleStartMinute);
+  const nowDisplayMinute = centered
+    ? windowMinutes / 2
+    : dayOverviewMinuteAt(displayNow, selectedDate, visibleStartMinute);
+  const nowVisible = centered || nowDisplayMinute !== null;
+  const nowPercent = minuteToPercent(nowDisplayMinute ?? 0, windowMinutes);
+  const scheduleItems = centered
+    ? layoutSchedulesForInstantRange(schedules, overviewRange)
+    : layoutSchedulesForDay(schedules, selectedDate, visibleStartMinute);
+  const templateItems = centered
+    ? layoutTemplateBlocksForInstantRange(template?.blocks ?? [], overviewRange)
+    : layoutTemplateBlocks(template?.blocks ?? [], visibleStartMinute);
+  const hourWidthPercent = (60 / windowMinutes) * 100;
+  let hourOffsetPercent = (((60 - (visibleStartMinute % 60)) % 60) / windowMinutes) * 100;
+  if (centered && Number.isFinite(windowStartMs) && windowDurationMs > 0) {
+    const firstHour = new Date(windowStartMs);
+    firstHour.setMinutes(0, 0, 0);
+    if (firstHour.getTime() <= windowStartMs) firstHour.setTime(firstHour.getTime() + 60 * 60_000);
+    hourOffsetPercent =
+      ((firstHour.getTime() - windowStartMs - 60 * 60_000) / windowDurationMs) * 100;
+  }
   const trackStyle = {
     "--overview-hour-width": `${hourWidthPercent}%`,
     "--overview-hour-offset": `${hourOffsetPercent}%`,
   } as CSSProperties;
-  const axisMinutes = [0, 1440];
-  const firstHourMinute = Math.ceil(visibleStartMinute / 60) * 60;
-  for (let hourMinute = firstHourMinute; hourMinute < visibleStartMinute + 1440; hourMinute += 60) {
-    const displayMinute = hourMinute - visibleStartMinute;
-    if (displayMinute === 0 || displayMinute === 1440) continue;
-    if (displayMinute < 60 || 1440 - displayMinute < 60) continue;
-    axisMinutes.push(displayMinute);
+  let axisTicks: { key: string; minute: number; label: string }[];
+  if (centered) {
+    axisTicks = centeredAxisTicks(overviewRange);
+  } else {
+    const axisMinutes = [0, 1440];
+    const firstHourMinute = Math.ceil(visibleStartMinute / 60) * 60;
+    for (
+      let hourMinute = firstHourMinute;
+      hourMinute < visibleStartMinute + 1440;
+      hourMinute += 60
+    ) {
+      const displayMinute = hourMinute - visibleStartMinute;
+      if (displayMinute === 0 || displayMinute === 1440) continue;
+      if (displayMinute < 60 || 1440 - displayMinute < 60) continue;
+      axisMinutes.push(displayMinute);
+    }
+    axisTicks = axisMinutes
+      .sort((left, right) => left - right)
+      .map((minute) => ({
+        key: String(minute),
+        minute,
+        label: axisTimeLabel(minute, visibleStartMinute),
+      }));
   }
-  axisMinutes.sort((left, right) => left - right);
   const scheduleLevelCount = Math.max(1, ...scheduleItems.map((item) => item.level + 1));
   const templateLevelCount = Math.max(1, ...templateItems.map((item) => item.level + 1));
   const hiddenScheduleCount = scheduleItems.filter(
@@ -163,7 +297,12 @@ export function DayOverview({
   const showTemplateLane = visibleLanes !== "schedule";
 
   return (
-    <section className="overview" aria-labelledby="overview-title">
+    <section
+      className="overview"
+      aria-labelledby="overview-title"
+      data-overview-mode={overviewMode}
+      data-live-centered={centered && liveTick && !clockConfigChanged ? "true" : undefined}
+    >
       <div className="section-heading section-heading--compact">
         <div>
           <span className="eyebrow">{translate("features.schedule.DayOverview.001")}</span>
@@ -178,15 +317,13 @@ export function DayOverview({
       </div>
 
       <div className="overview-axis" aria-hidden="true">
-        {axisMinutes.map((minute) => (
+        {axisTicks.map(({ key, minute, label }) => (
           <span
             className="overview-tick"
-            key={minute}
-            style={{ left: `${minuteToPercent(minute)}%` }}
+            key={key}
+            style={{ left: `${minuteToPercent(minute, windowMinutes)}%` }}
           >
-            <span className="overview-tick__label">
-              {axisTimeLabel(minute, visibleStartMinute)}
-            </span>
+            <span className="overview-tick__label">{label}</span>
           </span>
         ))}
       </div>
@@ -218,9 +355,21 @@ export function DayOverview({
               .map(({ schedule, startMinute, endMinute, level, levelCount, key }, index) => {
                 const accessibleLabel = translate("features.schedule.DayOverview.005", [
                   schedule.title,
-                  scheduleDateTimeLabel(schedule.startUtc, selectedDate),
-                  scheduleDateTimeLabel(schedule.endUtc, selectedDate),
+                  scheduleDateTimeLabel(
+                    schedule.startUtc,
+                    centered ? overviewRangeStart : selectedDate,
+                  ),
+                  scheduleDateTimeLabel(
+                    schedule.endUtc,
+                    centered ? overviewRangeStart : selectedDate,
+                  ),
                 ]);
+                const eventStartLabel = centered
+                  ? rangeOffsetTimeLabel(startMinute, overviewRange)
+                  : windowTimeLabel(startMinute, visibleStartMinute);
+                const visibleDate = new Date(
+                  Math.max(Date.parse(schedule.startUtc), windowStartMs),
+                );
                 return (
                   <Tooltip key={key} label={accessibleLabel}>
                     <button
@@ -234,20 +383,20 @@ export function DayOverview({
                       data-overview-index={index + 1}
                       data-sync={schedule.syncStatus}
                       style={{
-                        left: `${minuteToPercent(startMinute)}%`,
-                        width: `${Math.max(0.8, minuteToPercent(endMinute) - minuteToPercent(startMinute))}%`,
+                        left: `${minuteToPercent(startMinute, windowMinutes)}%`,
+                        width: `${Math.max(0.8, minuteToPercent(endMinute, windowMinutes) - minuteToPercent(startMinute, windowMinutes))}%`,
                         top: blockTop(level, levelCount, textScaleFactor),
                         height: overviewBlockHeight,
                         zIndex: levelCount - level,
                         backgroundColor: schedule.color,
                       }}
-                      onClick={() => onSelect(schedule)}
+                      onClick={() =>
+                        centered ? onSelect(schedule, visibleDate) : onSelect(schedule)
+                      }
                     >
                       <span className="overview-event__content" aria-hidden="true">
                         <span className="overview-event__index">{index + 1}</span>
-                        <span className="overview-event__start">
-                          {windowTimeLabel(startMinute, visibleStartMinute)}
-                        </span>
+                        <span className="overview-event__start">{eventStartLabel}</span>
                         <b className="overview-event__title">{schedule.title}</b>
                       </span>
                     </button>
@@ -269,7 +418,13 @@ export function DayOverview({
             ) : null}
             {scheduleState === "ready" && scheduleItems.length === 0 ? (
               <div className="overview-lane__state">
-                <span>{translate("features.schedule.DayOverview.011")}</span>
+                <span>
+                  {translate(
+                    centered
+                      ? "features.schedule.DayOverview.042"
+                      : "features.schedule.DayOverview.011",
+                  )}
+                </span>
                 <button className="button button--subtle" type="button" onClick={onCreateSchedule}>
                   {translate("features.schedule.TodayView.019")}
                 </button>
@@ -294,9 +449,18 @@ export function DayOverview({
             >
               {scheduleItems.map(({ schedule, startMinute, endMinute, key }, index) => (
                 <li key={`readable-${key}`}>
-                  <button type="button" onClick={() => onSelect(schedule)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const visibleDate = new Date(
+                        Math.max(Date.parse(schedule.startUtc), windowStartMs),
+                      );
+                      if (centered) onSelect(schedule, visibleDate);
+                      else onSelect(schedule);
+                    }}
+                  >
                     <span>{index + 1}</span>
-                    <time>{`${windowTimeLabel(startMinute, visibleStartMinute)}–${windowTimeLabel(endMinute, visibleStartMinute)}`}</time>
+                    <time>{`${centered ? rangeOffsetTimeLabel(startMinute, overviewRange) : windowTimeLabel(startMinute, visibleStartMinute)}–${centered ? rangeOffsetTimeLabel(endMinute, overviewRange) : windowTimeLabel(endMinute, visibleStartMinute)}`}</time>
                     <strong>{schedule.title}</strong>
                   </button>
                 </li>
@@ -375,7 +539,7 @@ export function DayOverview({
                       },
                       index,
                     ) => {
-                      const timeRange = `${windowTimeLabel(startMinute, visibleStartMinute)}–${windowTimeLabel(endMinute, visibleStartMinute)}`;
+                      const timeRange = `${centered ? rangeOffsetTimeLabel(startMinute, overviewRange) : windowTimeLabel(startMinute, visibleStartMinute)}–${centered ? rangeOffsetTimeLabel(endMinute, overviewRange) : windowTimeLabel(endMinute, visibleStartMinute)}`;
                       const blockLabel = continuesNextDay
                         ? translate("features.schedule.DayOverview.023", [block.title, timeRange])
                         : translate("features.schedule.DayOverview.024", [block.title, timeRange]);
@@ -397,8 +561,8 @@ export function DayOverview({
                             data-overview-index={index + 1}
                             data-continues-next-day={continuesNextDay ? "true" : undefined}
                             style={{
-                              left: `${minuteToPercent(startMinute)}%`,
-                              width: `${Math.max(0.8, minuteToPercent(endMinute) - minuteToPercent(startMinute))}%`,
+                              left: `${minuteToPercent(startMinute, windowMinutes)}%`,
+                              width: `${Math.max(0.8, minuteToPercent(endMinute, windowMinutes) - minuteToPercent(startMinute, windowMinutes))}%`,
                               top: blockTop(level, levelCount, textScaleFactor),
                               height: overviewBlockHeight,
                               zIndex: levelCount - level,
@@ -408,7 +572,9 @@ export function DayOverview({
                             <span className="overview-template-block__content" aria-hidden="true">
                               <span className="overview-template-block__index">{index + 1}</span>
                               <span className="overview-template-block__start">
-                                {windowTimeLabel(startMinute, visibleStartMinute)}
+                                {centered
+                                  ? rangeOffsetTimeLabel(startMinute, overviewRange)
+                                  : windowTimeLabel(startMinute, visibleStartMinute)}
                               </span>
                               <b className="overview-template-block__title">{block.title}</b>
                             </span>
@@ -459,7 +625,7 @@ export function DayOverview({
                       {startsBeforeWindow ? (
                         <small>{translate("features.schedule.DayOverview.029")}</small>
                       ) : null}
-                      <time>{`${windowTimeLabel(startMinute, visibleStartMinute)}–${windowTimeLabel(endMinute, visibleStartMinute)}`}</time>
+                      <time>{`${centered ? rangeOffsetTimeLabel(startMinute, overviewRange) : windowTimeLabel(startMinute, visibleStartMinute)}–${centered ? rangeOffsetTimeLabel(endMinute, overviewRange) : windowTimeLabel(endMinute, visibleStartMinute)}`}</time>
                       <strong>{block.title}</strong>
                       {continuesAfterWindow && !continuesNextDay ? (
                         <small>{translate("features.schedule.DayOverview.030")}</small>
@@ -474,18 +640,56 @@ export function DayOverview({
       </div>
 
       {showStartTimeSlider ? (
-        <label className="reference-time-control">
-          <span>{translate("features.schedule.DayOverview.006")}</span>
-          <input
-            type="range"
-            min={0}
-            max={maxDayOverviewStartMinute}
-            step={dayOverviewStartMinuteStep}
-            value={visibleStartMinute}
-            onChange={(event) => onOverviewStartMinuteChange(Number(event.target.value))}
-          />
-          <output>{minuteToTime(visibleStartMinute)}</output>
-        </label>
+        <div className="overview-time-controls">
+          <div
+            className="overview-mode-controls"
+            role="group"
+            aria-label={translate("features.schedule.DayOverview.037")}
+          >
+            <button
+              type="button"
+              className="button button--subtle"
+              aria-pressed={!centered}
+              onClick={() => onOverviewModeChange("fixed")}
+            >
+              {translate("features.schedule.DayOverview.038")}
+            </button>
+            <button
+              type="button"
+              className="button button--subtle"
+              aria-pressed={centered}
+              onClick={() => onOverviewModeChange("centered")}
+            >
+              {translate("features.schedule.DayOverview.039")}
+            </button>
+          </div>
+          <label className="reference-time-control">
+            <span>{translate("features.schedule.DayOverview.006")}</span>
+            <input
+              type="range"
+              min={0}
+              max={maxDayOverviewStartMinute}
+              step={dayOverviewStartMinuteStep}
+              value={visibleStartMinute}
+              disabled={centered}
+              onChange={(event) => onOverviewStartMinuteChange(Number(event.target.value))}
+            />
+            <output>{minuteToTime(visibleStartMinute)}</output>
+          </label>
+          <label className="reference-time-control overview-window-control">
+            <span>{translate("features.schedule.DayOverview.040")}</span>
+            <input
+              type="range"
+              min={1}
+              max={24}
+              step={1}
+              value={overviewWindowHours}
+              disabled={!centered}
+              onChange={(event) => onOverviewWindowHoursChange(Number(event.target.value))}
+            />
+            <output>{translate("features.schedule.DayOverview.041", [overviewWindowHours])}</output>
+          </label>
+        </div>
       ) : null}
     </section>
   );
