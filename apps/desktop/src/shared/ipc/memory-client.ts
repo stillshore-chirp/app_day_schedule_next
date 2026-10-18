@@ -7,6 +7,8 @@ import {
   type DeleteRequest,
   type DayTemplate,
   type DayTemplateDraft,
+  type DayOverviewMainAction,
+  type DayOverviewWindowMode,
   type FreeAlarm,
   type FreeAlarmDraft,
   type ExportResult,
@@ -270,6 +272,7 @@ export class MemoryAppClient implements AppClient {
         mainAlwaysOnTop: false,
         compactAlwaysOnTop: false,
         analogClockAlwaysOnTop: false,
+        dayOverviewAlwaysOnTop: false,
       },
     };
   }
@@ -1156,6 +1159,22 @@ export class MemoryAppClient implements AppClient {
   }
 
   async openAnalogClockWindow(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async openDayOverviewWindow(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async setDayOverviewWindowMode(
+    mode: DayOverviewWindowMode,
+    expandedHeight?: number,
+  ): Promise<number> {
+    return mode === "both" ? (expandedHeight ?? 420) : 420;
+  }
+
+  async openMainWithDayOverviewAction(action: DayOverviewMainAction): Promise<void> {
+    void action;
     return Promise.resolve();
   }
 

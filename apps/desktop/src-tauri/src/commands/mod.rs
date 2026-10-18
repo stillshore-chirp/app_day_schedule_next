@@ -2,7 +2,9 @@ use std::{fmt::Display, future::Future, path::PathBuf};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager, Runtime, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
 
@@ -260,6 +262,27 @@ pub struct TemplateTargetRequest {
 pub struct WindowPreferenceRequest {
     label: String,
     always_on_top: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum DayOverviewMainAction {
+    #[serde(rename_all = "camelCase")]
+    EditSchedule {
+        schedule_id: Uuid,
+        date: NaiveDate,
+    },
+    CreateSchedule {
+        date: NaiveDate,
+    },
+    OpenTemplates,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DayOverviewWindowMode {
+    Both,
+    Single,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1312,6 +1335,226 @@ pub async fn analog_clock_window_open(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn day_overview_window_open(
+    app: AppHandle,
+    service: State<'_, AppService>,
+) -> CommandResult<()> {
+    if let Some(window) = app.get_webview_window("day-overview") {
+        window.show().map_err(|_| window_error())?;
+        window.unminimize().map_err(|_| window_error())?;
+        window.set_focus().map_err(|_| window_error())?;
+        return Ok(());
+    }
+    let always_on_top = service
+        .window_always_on_top("day-overview")
+        .await
+        .map_err(UserSafeError::from)?;
+    let size = load_day_overview_window_size(&app);
+    let mut builder = WebviewWindowBuilder::new(
+        &app,
+        "day-overview",
+        WebviewUrl::App("index.html?window=day-overview".into()),
+    )
+    .title("Day Schedule Next — 一日の分布")
+    .inner_size(size.width, size.height)
+    .min_inner_size(680.0, 280.0)
+    .resizable(true)
+    .always_on_top(always_on_top)
+    .visible(false);
+    if let Some(position) = size.position {
+        builder = builder.position(position.x, position.y);
+    }
+    let window = builder.build().map_err(|_| window_error())?;
+    window.show().map_err(|_| window_error())?;
+    window.unminimize().map_err(|_| window_error())?;
+    window.set_focus().map_err(|_| window_error())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn day_overview_window_set_display_mode(
+    window: WebviewWindow,
+    mode: DayOverviewWindowMode,
+    expanded_height: Option<f64>,
+) -> CommandResult<f64> {
+    if window.label() != "day-overview" {
+        return Err(window_error());
+    }
+    let scale_factor = window.scale_factor().map_err(|_| window_error())?;
+    if !scale_factor.is_finite() || scale_factor <= 0.0 {
+        return Err(window_error());
+    }
+    let size = window.inner_size().map_err(|_| window_error())?;
+    let width = f64::from(size.width) / scale_factor;
+    let current_height = f64::from(size.height) / scale_factor;
+    if !width.is_finite() || width <= 0.0 {
+        return Err(day_overview_height_error());
+    }
+    let current_height = normalize_day_overview_current_height(current_height)
+        .ok_or_else(day_overview_height_error)?;
+
+    let (target_height, remembered_height) = match mode {
+        DayOverviewWindowMode::Both => {
+            let height = expanded_height.unwrap_or(current_height);
+            if !valid_day_overview_restored_height(height) {
+                return Err(day_overview_height_error());
+            }
+            (height, height)
+        }
+        DayOverviewWindowMode::Single => {
+            let remembered_height = expanded_height.unwrap_or(current_height);
+            if !valid_day_overview_restored_height(remembered_height) {
+                return Err(day_overview_height_error());
+            }
+            (
+                current_height.min(DAY_OVERVIEW_SINGLE_HEIGHT),
+                remembered_height,
+            )
+        }
+    };
+
+    window
+        .set_size(tauri::LogicalSize::new(width, target_height))
+        .map_err(|_| window_error())?;
+    persist_day_overview_window_size(
+        window.app_handle(),
+        DayOverviewWindowSize {
+            width,
+            height: target_height,
+            position: None,
+        },
+    );
+    Ok(remembered_height)
+}
+
+const DAY_OVERVIEW_WINDOW_SIZE_FILE: &str = "day-overview-window-size.json";
+const DAY_OVERVIEW_MINIMUM_WIDTH: f64 = 680.0;
+const DAY_OVERVIEW_DEFAULT_WIDTH: f64 = 1440.0;
+const DAY_OVERVIEW_DEFAULT_HEIGHT: f64 = 420.0;
+const DAY_OVERVIEW_MAXIMUM_WIDTH: f64 = 10_000.0;
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DayOverviewWindowSize {
+    width: f64,
+    height: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    position: Option<DayOverviewWindowPosition>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DayOverviewWindowPosition {
+    x: f64,
+    y: f64,
+}
+
+impl Default for DayOverviewWindowSize {
+    fn default() -> Self {
+        Self {
+            width: DAY_OVERVIEW_DEFAULT_WIDTH,
+            height: DAY_OVERVIEW_DEFAULT_HEIGHT,
+            position: None,
+        }
+    }
+}
+
+fn normalize_day_overview_window_size(
+    mut size: DayOverviewWindowSize,
+) -> Option<DayOverviewWindowSize> {
+    if !size.width.is_finite()
+        || size.width <= 0.0
+        || !size.height.is_finite()
+        || size.height <= 0.0
+    {
+        return None;
+    }
+    size.width = size
+        .width
+        .clamp(DAY_OVERVIEW_MINIMUM_WIDTH, DAY_OVERVIEW_MAXIMUM_WIDTH);
+    size.height = size.height.clamp(
+        DAY_OVERVIEW_MINIMUM_HEIGHT,
+        DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT,
+    );
+    size.position = size.position.filter(|position| {
+        position.x.is_finite()
+            && position.y.is_finite()
+            && (-100_000.0..=100_000.0).contains(&position.x)
+            && (-100_000.0..=100_000.0).contains(&position.y)
+    });
+    Some(size)
+}
+
+fn day_overview_window_size_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|directory| directory.join(DAY_OVERVIEW_WINDOW_SIZE_FILE))
+}
+
+fn load_day_overview_window_size(app: &AppHandle) -> DayOverviewWindowSize {
+    let Some(path) = day_overview_window_size_path(app) else {
+        return DayOverviewWindowSize::default();
+    };
+    std::fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<DayOverviewWindowSize>(&bytes).ok())
+        .and_then(normalize_day_overview_window_size)
+        .unwrap_or_default()
+}
+
+fn persist_day_overview_window_size(app: &AppHandle, size: DayOverviewWindowSize) {
+    let Some(mut size) = normalize_day_overview_window_size(size) else {
+        return;
+    };
+    if size.position.is_none() {
+        size.position = load_day_overview_window_size(app).position;
+    }
+    let Some(path) = day_overview_window_size_path(app) else {
+        return;
+    };
+    let Some(directory) = path.parent() else {
+        return;
+    };
+    if std::fs::create_dir_all(directory).is_err() {
+        return;
+    }
+    if let Ok(bytes) = serde_json::to_vec(&size) {
+        let _ = std::fs::write(path, bytes);
+    }
+}
+
+pub(crate) fn save_day_overview_window_size(window: &WebviewWindow) {
+    if window.label() != "day-overview" {
+        return;
+    }
+    let Ok(scale_factor) = window.scale_factor() else {
+        return;
+    };
+    if !scale_factor.is_finite() || scale_factor <= 0.0 {
+        return;
+    }
+    let Ok(size) = window.inner_size() else {
+        return;
+    };
+    let position = window
+        .outer_position()
+        .ok()
+        .map(|position| DayOverviewWindowPosition {
+            x: f64::from(position.x) / scale_factor,
+            y: f64::from(position.y) / scale_factor,
+        });
+    persist_day_overview_window_size(
+        window.app_handle(),
+        DayOverviewWindowSize {
+            width: f64::from(size.width) / scale_factor,
+            height: f64::from(size.height) / scale_factor,
+            position,
+        },
+    );
+}
+
 #[cfg(feature = "e2e")]
 #[tauri::command]
 pub async fn e2e_analog_clock_square_constraint_get(app: AppHandle) -> CommandResult<bool> {
@@ -1358,6 +1601,10 @@ pub fn analog_clock_window_resize(app: AppHandle, factor: f64) -> CommandResult<
 
 #[tauri::command]
 pub fn main_window_show(app: AppHandle) -> CommandResult<()> {
+    show_main_window(&app)
+}
+
+fn show_main_window(app: &AppHandle) -> CommandResult<()> {
     let Some(window) = app.get_webview_window("main") else {
         return Err(window_error());
     };
@@ -1365,6 +1612,16 @@ pub fn main_window_show(app: AppHandle) -> CommandResult<()> {
     window.unminimize().map_err(|_| window_error())?;
     window.set_focus().map_err(|_| window_error())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn day_overview_main_action(
+    app: AppHandle,
+    action: DayOverviewMainAction,
+) -> CommandResult<()> {
+    show_main_window(&app)?;
+    app.emit_to("main", "day-overview-action", action)
+        .map_err(|_| window_error())
 }
 
 #[derive(Debug)]
@@ -1400,7 +1657,10 @@ pub async fn window_always_on_top_set(
     service: State<'_, AppService>,
     request: WindowPreferenceRequest,
 ) -> CommandResult<()> {
-    if !matches!(request.label.as_str(), "main" | "compact" | "analog-clock") {
+    if !matches!(
+        request.label.as_str(),
+        "main" | "compact" | "analog-clock" | "day-overview"
+    ) {
         return Err(UserSafeError {
             code: "validation",
             message: "対象ウィンドウが正しくありません。".into(),
@@ -1593,6 +1853,35 @@ fn window_error() -> UserSafeError {
         message: "ウィンドウを開けませんでした。".into(),
         recovery: "メインウィンドウを開いたまま、もう一度試してください。".into(),
         retryable: true,
+        diagnostic_id: None,
+    }
+}
+
+const DAY_OVERVIEW_MINIMUM_HEIGHT: f64 = 280.0;
+const DAY_OVERVIEW_SINGLE_HEIGHT: f64 = 320.0;
+const DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT: f64 = 10_000.0;
+
+fn normalize_day_overview_current_height(height: f64) -> Option<f64> {
+    if !height.is_finite() || height <= 0.0 {
+        return None;
+    }
+    Some(height.clamp(
+        DAY_OVERVIEW_MINIMUM_HEIGHT,
+        DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT,
+    ))
+}
+
+fn valid_day_overview_restored_height(height: f64) -> bool {
+    height.is_finite()
+        && (DAY_OVERVIEW_MINIMUM_HEIGHT..=DAY_OVERVIEW_MAXIMUM_RESTORED_HEIGHT).contains(&height)
+}
+
+fn day_overview_height_error() -> UserSafeError {
+    UserSafeError {
+        code: "validation",
+        message: "概要ウィンドウの高さが正しくありません。".into(),
+        recovery: "ウィンドウの表示をもう一度切り替えてください。".into(),
+        retryable: false,
         diagnostic_id: None,
     }
 }

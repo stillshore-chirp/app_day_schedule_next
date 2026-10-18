@@ -24,6 +24,8 @@ interface DayOverviewProps {
   referenceMinute: number;
   onReferenceChange: (minute: number) => void;
   textScalePercent: number;
+  visibleLanes?: "both" | "schedule" | "template";
+  showReferenceSlider?: boolean;
 }
 
 function minuteToTime(minute: number): string {
@@ -65,6 +67,8 @@ export function DayOverview({
   referenceMinute,
   onReferenceChange,
   textScalePercent,
+  visibleLanes = "both",
+  showReferenceSlider = true,
 }: DayOverviewProps) {
   const now = new Date();
   const isToday = selectedDate.toDateString() === now.toDateString();
@@ -86,6 +90,8 @@ export function DayOverview({
   const overviewBlockHeight = OVERVIEW_BLOCK_HEIGHT * textScaleFactor;
   const scheduleLaneHeight = laneHeight(scheduleLevelCount, textScaleFactor);
   const templateLaneHeight = laneHeight(templateLevelCount, textScaleFactor);
+  const showScheduleLane = visibleLanes !== "template";
+  const showTemplateLane = visibleLanes !== "schedule";
 
   return (
     <section className="overview" aria-labelledby="overview-title">
@@ -94,9 +100,11 @@ export function DayOverview({
           <span className="eyebrow">{translate("features.schedule.DayOverview.001")}</span>
           <h2 id="overview-title">{translate("features.schedule.DayOverview.007")}</h2>
         </div>
-        <span className="legend">
-          <i className="legend__pending" /> {translate("features.schedule.DayOverview.003")}
-        </span>
+        {showScheduleLane ? (
+          <span className="legend">
+            <i className="legend__pending" /> {translate("features.schedule.DayOverview.003")}
+          </span>
+        ) : null}
       </div>
 
       <div className="overview-axis" aria-hidden="true">
@@ -108,7 +116,11 @@ export function DayOverview({
       </div>
 
       <div className="overview-lanes">
-        <section className="overview-lane" aria-labelledby="schedule-lane-title">
+        <section
+          className="overview-lane"
+          aria-labelledby="schedule-lane-title"
+          hidden={!showScheduleLane}
+        >
           <div className="overview-lane__heading">
             <div>
               <span className="overview-lane__kind">
@@ -201,7 +213,11 @@ export function DayOverview({
           ) : null}
         </section>
 
-        <section className="overview-lane" aria-labelledby="template-lane-title">
+        <section
+          className="overview-lane"
+          aria-labelledby="template-lane-title"
+          hidden={!showTemplateLane}
+        >
           <div className="overview-lane__heading">
             <div>
               <span className="overview-lane__kind">
@@ -321,18 +337,20 @@ export function DayOverview({
         </section>
       </div>
 
-      <label className="reference-time-control">
-        <span>{translate("features.schedule.DayOverview.006")}</span>
-        <input
-          type="range"
-          min={0}
-          max={1439}
-          step={5}
-          value={referenceMinute}
-          onChange={(event) => onReferenceChange(Number(event.target.value))}
-        />
-        <output>{minuteToTime(referenceMinute)}</output>
-      </label>
+      {showReferenceSlider ? (
+        <label className="reference-time-control">
+          <span>{translate("features.schedule.DayOverview.006")}</span>
+          <input
+            type="range"
+            min={0}
+            max={1439}
+            step={5}
+            value={referenceMinute}
+            onChange={(event) => onReferenceChange(Number(event.target.value))}
+          />
+          <output>{minuteToTime(referenceMinute)}</output>
+        </label>
+      ) : null}
     </section>
   );
 }

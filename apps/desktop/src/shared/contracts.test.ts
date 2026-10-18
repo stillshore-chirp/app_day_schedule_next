@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import ticketContractFixture from "./fixtures/ticket-contract-v1.json";
 import {
   scheduleDraftSchema,
+  dayOverviewWindowHeightSchema,
+  dayOverviewWindowModeSchema,
   settingsSchema,
   stopwatchSchema,
   timerDraftSchema,
@@ -9,6 +11,19 @@ import {
   ticketDraftSchema,
   ticketSchema,
 } from "./contracts";
+
+describe("day overview window sizing contract", () => {
+  it("accepts both display sizes and bounds the restorable height", () => {
+    expect(dayOverviewWindowModeSchema.safeParse("both").success).toBe(true);
+    expect(dayOverviewWindowModeSchema.safeParse("single").success).toBe(true);
+    expect(dayOverviewWindowModeSchema.safeParse("square").success).toBe(false);
+    expect(dayOverviewWindowHeightSchema.safeParse(280).success).toBe(true);
+    expect(dayOverviewWindowHeightSchema.safeParse(10_000).success).toBe(true);
+    expect(dayOverviewWindowHeightSchema.safeParse(279).success).toBe(false);
+    expect(dayOverviewWindowHeightSchema.safeParse(Number.NaN).success).toBe(false);
+    expect(dayOverviewWindowHeightSchema.safeParse(10_001).success).toBe(false);
+  });
+});
 
 const valid = {
   title: "境界テスト",

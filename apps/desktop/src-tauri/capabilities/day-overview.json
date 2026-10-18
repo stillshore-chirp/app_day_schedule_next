@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "day-overview",
+  "description": "Day overview window listens to settings updates and invokes allowlisted application commands.",
+  "windows": ["day-overview"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

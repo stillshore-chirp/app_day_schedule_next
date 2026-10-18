@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./app/App";
 import { CompactApp } from "./app/CompactApp";
 import { AnalogClockApp } from "./features/analog-clock/AnalogClockApp";
+import { FloatingDayOverviewApp } from "./features/schedule/FloatingDayOverviewApp";
 import { createDefaultClient } from "./shared/ipc/client";
 import { MemoryAppClient } from "./shared/ipc/memory-client";
 import "./styles.css";
@@ -25,7 +26,8 @@ async function startApp() {
   const root = document.getElementById("root");
   if (root) {
     const windowName = new URLSearchParams(window.location.search).get("window");
-    const isSecondaryWindow = windowName === "compact" || windowName === "analog-clock";
+    const isSecondaryWindow =
+      windowName === "compact" || windowName === "analog-clock" || windowName === "day-overview";
     document.documentElement.dataset.windowKind = isSecondaryWindow ? "secondary" : "main";
     if (isSecondaryWindow) {
       document.documentElement.dataset.window = windowName;
@@ -39,6 +41,8 @@ async function startApp() {
             <CompactApp client={client} />
           ) : windowName === "analog-clock" ? (
             <AnalogClockApp client={client} />
+          ) : windowName === "day-overview" ? (
+            <FloatingDayOverviewApp client={client} />
           ) : (
             <App
               client={client}

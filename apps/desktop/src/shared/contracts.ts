@@ -240,8 +240,22 @@ export const bootstrapSchema = z.object({
     mainAlwaysOnTop: z.boolean(),
     compactAlwaysOnTop: z.boolean(),
     analogClockAlwaysOnTop: z.boolean(),
+    dayOverviewAlwaysOnTop: z.boolean(),
   }),
 });
+
+export const dayOverviewMainActionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("edit-schedule"),
+    scheduleId: z.uuid(),
+    date: z.iso.date(),
+  }),
+  z.object({ type: z.literal("create-schedule"), date: z.iso.date() }),
+  z.object({ type: z.literal("open-templates") }),
+]);
+
+export const dayOverviewWindowModeSchema = z.enum(["both", "single"]);
+export const dayOverviewWindowHeightSchema = z.number().finite().min(280).max(10_000);
 
 export const schedulePageSchema = z.object({
   items: z.array(scheduleSchema),
@@ -260,6 +274,8 @@ export type Schedule = z.infer<typeof scheduleSchema>;
 export type ScheduleDraft = z.infer<typeof scheduleDraftSchema>;
 export type Settings = z.infer<typeof settingsSchema>;
 export type Bootstrap = z.infer<typeof bootstrapSchema>;
+export type DayOverviewMainAction = z.infer<typeof dayOverviewMainActionSchema>;
+export type DayOverviewWindowMode = z.infer<typeof dayOverviewWindowModeSchema>;
 export type FocusState = z.infer<typeof focusStateSchema>;
 export type FocusHistoryReport = z.infer<typeof focusHistoryReportSchema>;
 export type FocusScheduleSummary = z.infer<typeof focusScheduleSummarySchema>;
