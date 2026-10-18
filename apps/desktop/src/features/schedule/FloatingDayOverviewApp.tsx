@@ -79,6 +79,8 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
     refetchInterval: 30_000,
   });
   const [mode, setMode] = useState<OverviewMode>(storedMode);
+  const initialMode = useRef(mode);
+  const initialWindowModeSync = useRef(false);
   const [modeChangePending, setModeChangePending] = useState(false);
   const [themeMode, setThemeMode] = useState<OverviewTheme>(storedTheme);
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
@@ -94,6 +96,15 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
   useEffect(() => {
     localStorage.setItem(modeStorageKey, mode);
   }, [mode]);
+
+  useEffect(() => {
+    if (initialWindowModeSync.current) return;
+    initialWindowModeSync.current = true;
+    if (initialMode.current === "both") return;
+    void client
+      .setDayOverviewWindowMode("single", storedExpandedHeight())
+      .catch(() => setStatus(translate("app.DayOverview.026")));
+  }, [client]);
 
   useEffect(() => {
     localStorage.setItem(themeStorageKey, themeMode);

@@ -165,6 +165,23 @@ describe("FloatingDayOverviewApp", () => {
       date: dateInputValue(new Date()),
     });
   });
+
+  it("restores a saved single-lane window size without replacing its expanded height", async () => {
+    localStorage.setItem("day-schedule-next.day-overview-mode", "template");
+    localStorage.setItem("day-schedule-next.day-overview-expanded-height", "640");
+    const client = new MemoryAppClient([schedule]);
+    const setWindowMode = vi.spyOn(client, "setDayOverviewWindowMode");
+    renderWidget(client);
+
+    expect(await screen.findByRole("button", { name: "概要の設定を開く" })).toBeVisible();
+    await waitFor(() => {
+      expect(setWindowMode).toHaveBeenLastCalledWith("single", 640);
+    });
+    expect(localStorage.getItem("day-schedule-next.day-overview-expanded-height")).toBe("640");
+    expect(
+      document.querySelector(".overview-lane[aria-labelledby='schedule-lane-title']"),
+    ).toHaveAttribute("hidden");
+  });
 });
 
 describe("FloatingDayOverviewLauncher", () => {

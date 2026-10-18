@@ -37,7 +37,25 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .skip_initial_state("day-overview")
+                .build(),
+        )
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("day-overview-logical-size")
+                .on_event(|app, event| {
+                    if matches!(
+                        event,
+                        tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }
+                    ) {
+                        if let Some(window) = app.get_webview_window("day-overview") {
+                            commands::save_day_overview_window_size(&window);
+                        }
+                    }
+                })
+                .build(),
+        )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -93,6 +111,14 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == "day-overview" {
+                if matches!(event, WindowEvent::CloseRequested { .. }) {
+                    if let Some(widget) = window.app_handle().get_webview_window("day-overview") {
+                        commands::save_day_overview_window_size(&widget);
+                    }
+                }
+                return;
+            }
             if window.label() != "main" {
                 return;
             }
