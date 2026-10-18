@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DayTemplate, Schedule } from "../../shared/contracts";
 import { DayOverview } from "./DayOverview";
 
@@ -54,11 +54,20 @@ const template: DayTemplate = {
   ],
 };
 
+afterEach(() => {
+  vi.useRealTimers();
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "visible",
+  });
+});
+
 function renderOverview(overrides: Partial<React.ComponentProps<typeof DayOverview>> = {}) {
   const props: React.ComponentProps<typeof DayOverview> = {
     schedules: [schedule],
     scheduleState: "ready",
     selectedDate: new Date(2026, 6, 20),
+    now: new Date(2026, 6, 20, 9, 30),
     selectedId: null,
     onSelect: vi.fn(),
     onCreateSchedule: vi.fn(),
@@ -74,6 +83,56 @@ function renderOverview(overrides: Partial<React.ComponentProps<typeof DayOvervi
 }
 
 describe("DayOverview", () => {
+  it("centers the now line and advances only the visible centered window each second", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 20, 9, 30));
+    const { container } = renderOverview({
+      overviewMode: "centered",
+      overviewWindowHours: 6,
+    });
+    const nowLine = container.querySelector<HTMLElement>(".overview-now");
+    const event = container.querySelector<HTMLElement>(".overview-event");
+    const axisLabels = Array.from(
+      container.querySelectorAll<HTMLElement>(".overview-axis .overview-tick__label"),
+    ).map((tick) => tick.textContent);
+    const initialLeft = event?.style.left;
+
+    expect(nowLine?.style.left).toBe("50%");
+    expect(axisLabels).toEqual(["07", "08", "09", "10", "11", "12"]);
+    expect(initialLeft).toBeTruthy();
+
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(container.querySelector(".overview")?.getAttribute("data-live-centered")).toBe("true");
+    expect(nowLine?.style.left).toBe("50%");
+    expect(event?.style.left).not.toBe(initialLeft);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "hidden",
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    const hiddenLeft = event?.style.left;
+    act(() => {
+      vi.setSystemTime(new Date(2026, 6, 20, 9, 30, 15));
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(event?.style.left).toBe(hiddenLeft);
+
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(event?.style.left).not.toBe(hiddenLeft);
+  });
+
   it("expands only the overview vertical geometry needed by 250% text", () => {
     const { container } = renderOverview({ textScalePercent: 250 });
     const track = container.querySelector<HTMLElement>(".overview-lane__track");
@@ -100,9 +159,9 @@ describe("DayOverview", () => {
         (tick) => tick.textContent,
       ),
     ).toEqual([
-      "00:00",
+      "00",
       ...Array.from({ length: 23 }, (_, hour) => String(hour + 1).padStart(2, "0")),
-      "翌00:00",
+      "00",
     ]);
   });
 
@@ -353,24 +412,46 @@ describe("DayOverview", () => {
     const ticks = Array.from(container.querySelectorAll<HTMLElement>(".overview-tick"));
     const scheduleTrack = container.querySelector<HTMLElement>(".overview-lane__track");
 
-    expect(ticks[0]?.textContent).toBe("07:00");
-    expect(ticks.map((tick) => tick.textContent)).toContain("翌00");
-    expect(ticks.at(-1)?.textContent).toBe("翌07:00");
+    expect(ticks[0]?.textContent).toBe("07");
+    expect(ticks.map((tick) => tick.textContent)).toContain("00");
+    expect(ticks.at(-1)?.textContent).toBe("07");
+    expect(screen.getByText("表示範囲 7/20 07:00〜7/21 07:00")).toBeVisible();
     expect(scheduleTrack).toHaveAttribute("aria-label", "07:00から翌07:00までの予定");
   });
 
-  it("aligns the axis with whole hours and keeps nearby boundary labels distinct", () => {
+  it("moves the now marker with the supplied clock snapshot", () => {
+    const { container, props, rerender } = renderOverview({
+      overviewStartMinute: 7 * 60,
+      now: new Date(2026, 6, 20, 10),
+    });
+    const track = container.querySelector<HTMLElement>(".overview-lane__track");
+    expect(track?.querySelector<HTMLElement>(".overview-now")?.style.left).toBe(
+      `${(180 / 1440) * 100}%`,
+    );
+
+    rerender(<DayOverview {...props} now={new Date(2026, 6, 20, 11)} />);
+    expect(track?.querySelector<HTMLElement>(".overview-now")?.style.left).toBe(
+      `${(240 / 1440) * 100}%`,
+    );
+  });
+
+  it("normalizes the start slider to whole hours and keeps axis labels compact", () => {
     const { container } = renderOverview({ overviewStartMinute: 6 * 60 + 50 });
     const ticks = Array.from(container.querySelectorAll<HTMLElement>(".overview-tick"));
     const track = container.querySelector<HTMLElement>(".overview-lane__track");
+    const slider = screen.getByRole("slider", { name: /概要の表示開始時刻/ });
 
     expect(ticks.map((tick) => tick.textContent)).toEqual([
-      "06:50",
+      "07",
       ...Array.from({ length: 16 }, (_, index) => String(index + 8).padStart(2, "0")),
-      "翌00",
-      ...Array.from({ length: 5 }, (_, index) => String(index + 1).padStart(2, "0")),
-      "翌06:50",
+      "00",
+      ...Array.from({ length: 6 }, (_, index) => String(index + 1).padStart(2, "0")),
+      "07",
     ]);
-    expect(track?.style.getPropertyValue("--overview-hour-offset")).toBe(`${(10 / 1440) * 100}%`);
+    expect(track?.style.getPropertyValue("--overview-hour-offset")).toBe("0%");
+    expect(slider).toHaveAttribute("min", "0");
+    expect(slider).toHaveAttribute("max", "1380");
+    expect(slider).toHaveAttribute("step", "60");
+    expect(slider).toHaveValue("420");
   });
 });

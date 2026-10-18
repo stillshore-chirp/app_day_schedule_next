@@ -1,25 +1,29 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
+import { dayOverviewWindowHeightSchema, type Settings } from "../../shared/contracts";
 import {
-  dayOverviewWindowHeightSchema,
-  type Schedule,
-  type Settings,
-} from "../../shared/contracts";
-import {
-  dayOverviewStartMinuteChangedEvent,
-  isDayOverviewStartMinute,
-  readDayOverviewStartMinute,
+  dayOverviewPreferencesChangedEvent,
+  isDayOverviewPreferences,
+  readDayOverviewPreferences,
 } from "../../shared/day-overview-preferences";
 import type { AppClient } from "../../shared/ipc/client";
 import { applyAppAppearance } from "../../shared/appearance";
-import { formatDateHeading, dayOverviewRange, dateInputValue } from "../../shared/time";
+import {
+  dayOverviewCycleDate,
+  dayOverviewRange,
+  centeredDayOverviewQueryRange,
+  dateInputValue,
+  formatDateHeading,
+} from "../../shared/time";
 import { translate } from "../../shared/i18n/messages";
 import { StatusMessage } from "../../shared/ui/StatusMessage";
 import { Tooltip } from "../../shared/ui/Tooltip";
 import { resolveDisplayedTemplate } from "./template-selection";
 import { DayOverview } from "./DayOverview";
-import { quickBlocksForDayOverview } from "./quick-block-schedules";
+import { quickBlocksForDayOverview, quickBlocksForInstantRange } from "./quick-block-schedules";
+import { fetchCenteredOverviewSchedules } from "./overview-schedules";
+import { useOverviewClock } from "./use-overview-clock";
 
 type OverviewMode = "both" | "schedule" | "template";
 type OverviewTheme = "auto" | "light" | "dark";
@@ -45,11 +49,6 @@ function storedExpandedHeight(): number {
   return parsed.success ? parsed.data : defaultExpandedHeight;
 }
 
-function localDateFromDateKey(dateKey: string): Date {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1);
-}
-
 function unlistenSafely(unlisten: () => void): void {
   try {
     void Promise.resolve(unlisten()).catch(() => undefined);
@@ -65,15 +64,23 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
     queryFn: () => client.bootstrap(),
     refetchInterval: 30_000,
   });
-  const date = useMemo(
-    () => (bootstrap.data ? localDateFromDateKey(bootstrap.data.today) : null),
-    [bootstrap.data?.today, bootstrap.dataUpdatedAt],
-  );
-  const [overviewStartMinute, setOverviewStartMinute] = useState(readDayOverviewStartMinute);
-  const range = date ? dayOverviewRange(date, overviewStartMinute) : null;
+  const [overviewPreferences, setOverviewPreferences] = useState(readDayOverviewPreferences);
+  const now = useOverviewClock();
+  const calendarDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const overviewDate = dayOverviewCycleDate(now, overviewPreferences.startMinute);
+  const range = bootstrap.data
+    ? overviewPreferences.mode === "centered"
+      ? centeredDayOverviewQueryRange(now)
+      : dayOverviewRange(overviewDate, overviewPreferences.startMinute)
+    : null;
   const schedules = useQuery({
     queryKey: ["schedules", range?.startUtc, range?.endUtc, ""],
-    queryFn: () => client.listSchedules({ ...range!, search: "", limit: 500 }),
+    queryFn: () => {
+      const query = { ...range!, search: "", limit: 500 };
+      return overviewPreferences.mode === "centered"
+        ? fetchCenteredOverviewSchedules(client, query)
+        : client.listSchedules(query);
+    },
     enabled: range !== null,
     refetchInterval: 30_000,
     staleTime: 15_000,
@@ -158,13 +165,13 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
     if (!("__TAURI_INTERNALS__" in window)) return;
     let active = true;
     let stop: (() => void) | undefined;
-    void listen<unknown>(dayOverviewStartMinuteChangedEvent, ({ payload }) => {
-      if (isDayOverviewStartMinute(payload)) setOverviewStartMinute(payload);
+    void listen<unknown>(dayOverviewPreferencesChangedEvent, ({ payload }) => {
+      if (isDayOverviewPreferences(payload)) setOverviewPreferences(payload);
     })
       .then((unlisten) => {
         if (active) {
           stop = unlisten;
-          setOverviewStartMinute(readDayOverviewStartMinute());
+          setOverviewPreferences(readDayOverviewPreferences());
         } else {
           unlistenSafely(unlisten);
         }
@@ -289,7 +296,6 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
           : "app.DayOverview.011",
   );
   const settingsLabel = translate("app.DayOverview.018");
-  const activeDate = date ? dateInputValue(date) : "";
   const displayedTemplate = resolveDisplayedTemplate(
     templates.data ?? [],
     bootstrap.data?.settings.lastTemplateId ?? null,
@@ -297,7 +303,11 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
   const quickBlockIds = new Set((quickBlocks.data ?? []).map((item) => item.id));
   const displaySchedules = [
     ...(schedules.data?.items ?? []),
-    ...(date ? quickBlocksForDayOverview(quickBlocks.data ?? [], date) : []),
+    ...(bootstrap.data && range
+      ? overviewPreferences.mode === "centered"
+        ? quickBlocksForInstantRange(quickBlocks.data ?? [], range)
+        : quickBlocksForDayOverview(quickBlocks.data ?? [], overviewDate)
+      : []),
   ];
 
   return (
@@ -305,7 +315,9 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
       <header className="day-overview-window__header">
         <div>
           <span className="eyebrow">{translate("app.DayOverview.001")}</span>
-          {date ? <time dateTime={activeDate}>{formatDateHeading(date)}</time> : null}
+          {bootstrap.data ? (
+            <time dateTime={dateInputValue(calendarDate)}>{formatDateHeading(calendarDate)}</time>
+          ) : null}
         </div>
         <div className="day-overview-window__controls">
           <Tooltip label={pinLabel}>
@@ -371,33 +383,40 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
             </button>
           }
         />
-      ) : date ? (
+      ) : bootstrap.data ? (
         <DayOverview
           schedules={displaySchedules}
           scheduleState="ready"
           onRetrySchedules={() => void schedules.refetch()}
-          selectedDate={date}
+          selectedDate={overviewPreferences.mode === "centered" ? calendarDate : overviewDate}
+          now={now}
           selectedId={null}
-          onSelect={(schedule) => {
+          onSelect={(schedule, visibleDate = calendarDate) => {
             if (quickBlockIds.has(schedule.id)) {
               void submitMainAction({ type: "open-templates" });
               return;
             }
-            const actionDate = overviewScheduleActionDate(schedule, range?.startUtc, date);
             void submitMainAction({
               type: "edit-schedule",
               scheduleId: schedule.id,
-              date: actionDate,
+              date:
+                overviewPreferences.mode === "centered"
+                  ? dateInputValue(visibleDate)
+                  : overviewScheduleActionDate(schedule, range?.startUtc, overviewDate),
             });
           }}
           onCreateSchedule={() =>
-            void submitMainAction({ type: "create-schedule", date: activeDate })
+            void submitMainAction({ type: "create-schedule", date: dateInputValue(new Date()) })
           }
           template={displayedTemplate}
           templateState={templates.isLoading ? "loading" : templates.isError ? "error" : "ready"}
           onRetryTemplate={() => void templates.refetch()}
-          overviewStartMinute={overviewStartMinute}
+          overviewStartMinute={overviewPreferences.startMinute}
           onOverviewStartMinuteChange={() => undefined}
+          overviewMode={overviewPreferences.mode}
+          onOverviewModeChange={() => undefined}
+          overviewWindowHours={overviewPreferences.windowHours}
+          onOverviewWindowHoursChange={() => undefined}
           textScalePercent={bootstrap.data.settings.textScalePercent}
           visibleLanes={mode}
           showStartTimeSlider={false}
@@ -500,7 +519,7 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
 }
 
 function overviewScheduleActionDate(
-  schedule: Schedule,
+  schedule: { startUtc: string },
   rangeStartUtc: string | undefined,
   selectedDate: Date,
 ): string {

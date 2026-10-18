@@ -19,6 +19,43 @@ export function dayOverviewRange(
   return { startUtc: start.toISOString(), endUtc: end.toISOString() };
 }
 
+export function centeredDayOverviewRange(
+  instant: Date,
+  windowHours: number,
+): { startUtc: string; endUtc: string } {
+  const hours = Math.min(24, Math.max(1, Math.round(windowHours)));
+  const halfWindowMs = (hours * 60 * 60_000) / 2;
+  return {
+    startUtc: new Date(instant.getTime() - halfWindowMs).toISOString(),
+    endUtc: new Date(instant.getTime() + halfWindowMs).toISOString(),
+  };
+}
+
+export function centeredDayOverviewQueryRange(instant: Date): { startUtc: string; endUtc: string } {
+  const hourMs = 60 * 60_000;
+  const hourBucket = Math.floor(instant.getTime() / hourMs) * hourMs;
+  return {
+    startUtc: new Date(hourBucket - 13 * hourMs).toISOString(),
+    endUtc: new Date(hourBucket + 14 * hourMs).toISOString(),
+  };
+}
+
+export function dayOverviewCycleDate(instant: Date, startMinute: number): Date {
+  const today = startOfDay(instant);
+  const cycleStart = new Date(today);
+  cycleStart.setMinutes(startMinute);
+  return instant.getTime() < cycleStart.getTime() ? addDays(today, -1) : today;
+}
+
+export function dayOverviewDateForSelection(
+  selectedDate: Date,
+  instant: Date,
+  startMinute: number,
+  followsToday: boolean,
+): Date {
+  return followsToday ? dayOverviewCycleDate(instant, startMinute) : startOfDay(selectedDate);
+}
+
 export function formatDateHeading(date: Date): string {
   return new Intl.DateTimeFormat(appLocale, {
     year: "numeric",

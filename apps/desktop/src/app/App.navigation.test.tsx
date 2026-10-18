@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DayTemplate, Schedule, Settings } from "../shared/contracts";
 import { MemoryAppClient } from "../shared/ipc/memory-client";
+import { dayOverviewCycleDate } from "../shared/time";
 import { App } from "./App";
 import { useUiStore } from "./ui-store";
 
@@ -13,6 +14,7 @@ vi.mock("@tauri-apps/api/event", () => ({ listen: listenMock }));
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   localStorage.clear();
   delete document.documentElement.dataset.theme;
   delete document.documentElement.dataset.textScale;
@@ -27,6 +29,7 @@ afterEach(() => {
   useUiStore.setState({
     activeView: "today",
     selectedDate: new Date(),
+    selectedDateFollowsToday: true,
     selectedScheduleId: null,
     editorMode: "closed",
     dayOverviewStartMinute: 0,
@@ -37,7 +40,7 @@ describe("App time-tool navigation", () => {
   it("opens a next-morning overview schedule in its editor", async () => {
     const selectedDate = new Date();
     selectedDate.setHours(0, 0, 0, 0);
-    const start = new Date(selectedDate);
+    const start = dayOverviewCycleDate(new Date(), 7 * 60);
     start.setDate(start.getDate() + 1);
     start.setHours(2, 30, 0, 0);
     const end = new Date(start.getTime() + 30 * 60_000);
@@ -76,9 +79,90 @@ describe("App time-tool navigation", () => {
       </QueryClientProvider>,
     );
 
-    await user.click(await screen.findByRole("button", { name: /翌朝の予定を編集/ }));
+    await user.click(await screen.findByRole("button", { name: /翌朝の予定を編集.*翌日 02:30/ }));
 
     expect(await screen.findByLabelText("タイトル")).toHaveValue("翌朝の予定を編集");
+  });
+
+  it("keeps an unsaved edit bound to its schedule across midnight and overview rollover", async () => {
+    vi.setSystemTime(new Date(2026, 6, 19, 23, 59, 45));
+    const user = userEvent.setup();
+    const start = new Date(2026, 6, 19, 23, 0);
+    const end = new Date(2026, 6, 20, 0, 0);
+    const schedule: Schedule = {
+      id: "00000000-0000-4000-8000-000000000062",
+      title: "日付境界を越える編集対象",
+      description: "",
+      location: "",
+      startUtc: start.toISOString(),
+      endUtc: end.toISOString(),
+      timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo",
+      allDay: false,
+      allDayStartDate: null,
+      allDayEndDateExclusive: null,
+      status: "scheduled",
+      project: "",
+      category: "",
+      tags: [],
+      color: "#336699",
+      priority: "normal",
+      recurrenceRule: null,
+      recurrenceSupplementalLines: [],
+      recurrenceExdates: [],
+      startNotificationMinutes: null,
+      endNotificationMinutes: null,
+      syncStatus: "local_only",
+      version: 0,
+      deletedAt: null,
+    };
+    const client = new MemoryAppClient([schedule]);
+    const updateSchedule = vi.spyOn(client, "updateSchedule");
+    useUiStore.setState({
+      selectedDate: new Date(2026, 6, 19),
+      selectedDateFollowsToday: true,
+      dayOverviewStartMinute: 7 * 60,
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(
+      <QueryClientProvider client={queryClient}>
+        <App client={client} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("heading", { name: "予定と日次テンプレート" });
+    const overview = container.querySelector(".overview");
+    expect(overview).not.toBeNull();
+    await user.click(
+      await within(overview as HTMLElement).findByRole("button", {
+        name: /日付境界を越える編集対象/,
+      }),
+    );
+    const title = await screen.findByLabelText("タイトル");
+    await user.clear(title);
+    await user.type(title, "保存前の入力を保持する");
+
+    act(() => {
+      vi.setSystemTime(new Date(2026, 6, 20, 0, 0, 15));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("タイトル")).toHaveValue("保存前の入力を保持する"),
+    );
+
+    act(() => {
+      vi.setSystemTime(new Date(2026, 6, 20, 7, 0, 15));
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("タイトル")).toHaveValue("保存前の入力を保持する"),
+    );
+    await user.click(screen.getByRole("button", { name: "変更を保存" }));
+
+    await waitFor(() => expect(updateSchedule).toHaveBeenCalledOnce());
+    const savedUpdate = updateSchedule.mock.calls[0]?.[0];
+    expect(savedUpdate?.id).toBe(schedule.id);
+    expect(savedUpdate?.expectedVersion).toBe(schedule.version);
+    expect(savedUpdate?.draft.title).toBe("保存前の入力を保持する");
   });
 
   it("keeps priority tickets visible when the schedule query fails", async () => {

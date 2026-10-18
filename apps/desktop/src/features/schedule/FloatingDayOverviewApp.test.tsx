@@ -4,8 +4,16 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emit } from "@tauri-apps/api/event";
 import type { QuickBlock, Schedule } from "../../shared/contracts";
-import { dayOverviewStartMinuteStorageKey } from "../../shared/day-overview-preferences";
-import { dateInputValue, dayOverviewRange } from "../../shared/time";
+import {
+  dayOverviewPreferencesChangedEvent,
+  dayOverviewStartMinuteStorageKey,
+} from "../../shared/day-overview-preferences";
+import {
+  centeredDayOverviewQueryRange,
+  dateInputValue,
+  dayOverviewCycleDate,
+  dayOverviewRange,
+} from "../../shared/time";
 import { MemoryAppClient } from "../../shared/ipc/memory-client";
 import { FloatingDayOverviewApp } from "./FloatingDayOverviewApp";
 import { FloatingDayOverviewLauncher } from "./FloatingDayOverviewLauncher";
@@ -104,7 +112,7 @@ afterEach(() => {
 });
 
 describe("FloatingDayOverviewApp", () => {
-  it("updates an open overview window from the shared start-time event", async () => {
+  it("updates an open overview window from the shared preferences event", async () => {
     Reflect.set(window, "__TAURI_INTERNALS__", {});
     const client = new MemoryAppClient([schedule]);
     const listSchedules = vi.spyOn(client, "listSchedules");
@@ -112,17 +120,52 @@ describe("FloatingDayOverviewApp", () => {
 
     expect(await screen.findByRole("button", { name: /概要ウィジェットの予定/ })).toBeVisible();
     await waitFor(() =>
-      expect(eventCallbacks.get("day-overview-start-minute-changed")?.size).toBe(1),
+      expect(eventCallbacks.get(dayOverviewPreferencesChangedEvent)?.size).toBe(1),
     );
 
     await act(async () => {
-      await emit("day-overview-start-minute-changed", 7 * 60);
+      await emit(dayOverviewPreferencesChangedEvent, {
+        startMinute: 7 * 60,
+        mode: "fixed",
+        windowHours: 24,
+      });
     });
 
-    const range = dayOverviewRange(new Date(), 7 * 60);
+    const range = dayOverviewRange(dayOverviewCycleDate(new Date(), 7 * 60), 7 * 60);
     await waitFor(() => {
       expect(listSchedules).toHaveBeenCalledWith({ ...range, search: "", limit: 500 });
-      expect(container.querySelector(".overview-tick")?.textContent).toBe("07:00");
+      expect(container.querySelector(".overview-tick")?.textContent).toBe("07");
+    });
+  });
+
+  it("switches an open widget to the shared centered range", async () => {
+    Reflect.set(window, "__TAURI_INTERNALS__", {});
+    const client = new MemoryAppClient([schedule]);
+    const listSchedules = vi.spyOn(client, "listSchedules");
+    const { container } = renderWidget(client);
+
+    await screen.findByRole("button", { name: /概要ウィジェットの予定/ });
+    await waitFor(() =>
+      expect(eventCallbacks.get(dayOverviewPreferencesChangedEvent)?.size).toBe(1),
+    );
+    const instant = new Date();
+    await act(async () => {
+      await emit(dayOverviewPreferencesChangedEvent, {
+        startMinute: 0,
+        mode: "centered",
+        windowHours: 6,
+      });
+    });
+
+    const range = centeredDayOverviewQueryRange(instant);
+    await waitFor(() => {
+      expect(listSchedules).toHaveBeenCalledWith({ ...range, search: "", limit: 500, offset: 0 });
+      expect(container.querySelector(".overview")?.getAttribute("data-overview-mode")).toBe(
+        "centered",
+      );
+      expect(container.querySelector(".overview-range-caption")?.textContent).toContain(
+        "現在を中心に",
+      );
     });
   });
 
@@ -219,25 +262,35 @@ describe("FloatingDayOverviewApp", () => {
     expect(action).toHaveBeenLastCalledWith({ type: "open-templates" });
 
     first.unmount();
+    vi.setSystemTime(new Date(2026, 6, 20, 1, 0));
+    localStorage.setItem(dayOverviewStartMinuteStorageKey, String(7 * 60));
     const emptyClient = new MemoryAppClient([]);
     const emptyAction = vi.spyOn(emptyClient, "openMainWithDayOverviewAction");
     renderWidget(emptyClient);
+    const calendarToday = dateInputValue(new Date());
+    await waitFor(() =>
+      expect(document.querySelector(".day-overview-window__header time")).not.toBeNull(),
+    );
+    expect(document.querySelector(".day-overview-window__header time")).toHaveAttribute(
+      "datetime",
+      calendarToday,
+    );
     await user.click(await screen.findByRole("button", { name: "予定を作成" }));
+    expect(dateInputValue(dayOverviewCycleDate(new Date(), 7 * 60))).not.toBe(calendarToday);
     expect(emptyAction).toHaveBeenCalledWith({
       type: "create-schedule",
-      date: dateInputValue(new Date()),
+      date: calendarToday,
     });
   });
 
   it("routes schedules using the visible day when their start is outside the window", async () => {
     const user = userEvent.setup();
-    const selectedDate = new Date();
-    selectedDate.setHours(0, 0, 0, 0);
-    const previousStart = new Date(selectedDate);
+    const cycleDate = dayOverviewCycleDate(new Date(), 7 * 60);
+    const previousStart = new Date(cycleDate);
     previousStart.setDate(previousStart.getDate() - 1);
     previousStart.setHours(23, 0, 0, 0);
     const previousEnd = new Date(previousStart.getTime() + 9 * 60 * 60_000);
-    const nextMorningStart = new Date(selectedDate);
+    const nextMorningStart = new Date(cycleDate);
     nextMorningStart.setDate(nextMorningStart.getDate() + 1);
     nextMorningStart.setHours(2, 30, 0, 0);
     const nextMorningEnd = new Date(nextMorningStart.getTime() + 30 * 60_000);
@@ -264,7 +317,7 @@ describe("FloatingDayOverviewApp", () => {
     expect(action).toHaveBeenLastCalledWith({
       type: "edit-schedule",
       scheduleId: previousSchedule.id,
-      date: dateInputValue(selectedDate),
+      date: dateInputValue(cycleDate),
     });
 
     await user.click(await screen.findByRole("button", { name: /翌朝の予定/ }));

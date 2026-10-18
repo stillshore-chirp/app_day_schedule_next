@@ -18,8 +18,8 @@ export interface OverviewLayoutItem extends PositionedMinuteInterval<Schedule> {
   schedule: Schedule;
 }
 
-export function minuteToPercent(minute: number): number {
-  return (Math.min(1440, Math.max(0, minute)) / 1440) * 100;
+export function minuteToPercent(minute: number, windowMinutes = 1440): number {
+  return (Math.min(windowMinutes, Math.max(0, minute)) / windowMinutes) * 100;
 }
 
 function compareStableOrder(left: number | string, right: number | string): number {
@@ -94,6 +94,43 @@ export function layoutSchedulesForDay(
             ...segment,
           }
         : null;
+    })
+    .filter((item): item is MinuteInterval<Schedule> => item !== null);
+
+  return assignOverviewLevels(intervals, 5).map((item) => ({
+    ...item,
+    schedule: item.value,
+  }));
+}
+
+export function layoutSchedulesForInstantRange(
+  schedules: Schedule[],
+  range: { startUtc: string; endUtc: string },
+): OverviewLayoutItem[] {
+  const windowStart = Date.parse(range.startUtc);
+  const windowEnd = Date.parse(range.endUtc);
+  const windowMinutes = (windowEnd - windowStart) / 60_000;
+  if (!Number.isFinite(windowMinutes) || windowMinutes <= 0) return [];
+  const intervals = schedules
+    .map((schedule): MinuteInterval<Schedule> | null => {
+      const scheduleStart = Date.parse(schedule.startUtc);
+      const scheduleEnd = Date.parse(schedule.endUtc);
+      const clippedStart = Math.max(scheduleStart, windowStart);
+      const clippedEnd = Math.min(scheduleEnd, windowEnd);
+      if (
+        !Number.isFinite(clippedStart) ||
+        !Number.isFinite(clippedEnd) ||
+        clippedStart >= clippedEnd
+      ) {
+        return null;
+      }
+      return {
+        key: `${schedule.id}-${schedule.startUtc}`,
+        value: schedule,
+        stableOrder: schedule.id,
+        startMinute: (clippedStart - windowStart) / 60_000,
+        endMinute: (clippedEnd - windowStart) / 60_000,
+      };
     })
     .filter((item): item is MinuteInterval<Schedule> => item !== null);
 
