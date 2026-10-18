@@ -1,12 +1,33 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { emit } from "@tauri-apps/api/event";
 import type { QuickBlock, Schedule } from "../../shared/contracts";
-import { dateInputValue } from "../../shared/time";
+import { dayOverviewStartMinuteStorageKey } from "../../shared/day-overview-preferences";
+import { dateInputValue, dayOverviewRange } from "../../shared/time";
 import { MemoryAppClient } from "../../shared/ipc/memory-client";
 import { FloatingDayOverviewApp } from "./FloatingDayOverviewApp";
 import { FloatingDayOverviewLauncher } from "./FloatingDayOverviewLauncher";
+
+const eventCallbacks = vi.hoisted(
+  () => new Map<string, Set<(event: { payload: unknown }) => void>>(),
+);
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn((name: string, callback: (event: { payload: unknown }) => void) => {
+    const callbacks = eventCallbacks.get(name) ?? new Set();
+    callbacks.add(callback);
+    eventCallbacks.set(name, callbacks);
+    return Promise.resolve(() => {
+      callbacks.delete(callback);
+    });
+  }),
+  emit: vi.fn((name: string, payload: unknown) => {
+    for (const callback of eventCallbacks.get(name) ?? []) callback({ payload });
+    return Promise.resolve();
+  }),
+}));
 
 function todayAt(hour: number, minute: number): string {
   const date = new Date();
@@ -75,12 +96,54 @@ function renderWidget(client = new MemoryAppClient([schedule])) {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  eventCallbacks.clear();
+  Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
   delete document.documentElement.dataset.theme;
   delete document.documentElement.dataset.textScale;
   delete document.documentElement.dataset.textScaleLevel;
 });
 
 describe("FloatingDayOverviewApp", () => {
+  it("updates an open overview window from the shared start-time event", async () => {
+    Reflect.set(window, "__TAURI_INTERNALS__", {});
+    const client = new MemoryAppClient([schedule]);
+    const listSchedules = vi.spyOn(client, "listSchedules");
+    const { container } = renderWidget(client);
+
+    expect(await screen.findByRole("button", { name: /概要ウィジェットの予定/ })).toBeVisible();
+    await waitFor(() =>
+      expect(eventCallbacks.get("day-overview-start-minute-changed")?.size).toBe(1),
+    );
+
+    await act(async () => {
+      await emit("day-overview-start-minute-changed", 7 * 60);
+    });
+
+    const range = dayOverviewRange(new Date(), 7 * 60);
+    await waitFor(() => {
+      expect(listSchedules).toHaveBeenCalledWith({ ...range, search: "", limit: 500 });
+      expect(container.querySelector(".overview-tick")?.textContent).toBe("07:00");
+    });
+  });
+
+  it("shows a previous-day Quick Block that crosses the selected start time", async () => {
+    localStorage.setItem(dayOverviewStartMinuteStorageKey, String(7 * 60));
+    const client = new MemoryAppClient([schedule]);
+    vi.spyOn(client, "listQuickBlocks").mockResolvedValue([
+      {
+        ...quickBlock,
+        title: "夜間の集中ブロック",
+        startMinute: 23 * 60,
+        durationMinutes: 9 * 60,
+      },
+    ]);
+    renderWidget(client);
+
+    const nightBlock = await screen.findByRole("button", { name: /前日 23:00/ });
+    expect(nightBlock).toHaveAccessibleName(/前日 23:00/);
+    expect(nightBlock).toHaveAccessibleName(/08:00/);
+  });
+
   it("switches between the three lanes, applies local theme, and persists its pin", async () => {
     const user = userEvent.setup();
     const client = new MemoryAppClient([schedule]);
@@ -90,7 +153,7 @@ describe("FloatingDayOverviewApp", () => {
 
     expect(await screen.findByRole("button", { name: /概要ウィジェットの予定/ })).toBeVisible();
     expect(document.querySelectorAll(".overview-lane")).toHaveLength(2);
-    expect(screen.queryByRole("slider", { name: "詳細表示の基準時刻" })).toBeNull();
+    expect(screen.queryByRole("slider", { name: "概要の表示開始時刻" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "概要の設定を開く" }));
     const scheduleOnly = screen.getByRole("button", { name: "予定のみ（上段）" });
@@ -163,6 +226,53 @@ describe("FloatingDayOverviewApp", () => {
     expect(emptyAction).toHaveBeenCalledWith({
       type: "create-schedule",
       date: dateInputValue(new Date()),
+    });
+  });
+
+  it("routes schedules using the visible day when their start is outside the window", async () => {
+    const user = userEvent.setup();
+    const selectedDate = new Date();
+    selectedDate.setHours(0, 0, 0, 0);
+    const previousStart = new Date(selectedDate);
+    previousStart.setDate(previousStart.getDate() - 1);
+    previousStart.setHours(23, 0, 0, 0);
+    const previousEnd = new Date(previousStart.getTime() + 9 * 60 * 60_000);
+    const nextMorningStart = new Date(selectedDate);
+    nextMorningStart.setDate(nextMorningStart.getDate() + 1);
+    nextMorningStart.setHours(2, 30, 0, 0);
+    const nextMorningEnd = new Date(nextMorningStart.getTime() + 30 * 60_000);
+    const previousSchedule: Schedule = {
+      ...schedule,
+      id: "00000000-0000-4000-8000-000000000033",
+      title: "前夜からの予定",
+      startUtc: previousStart.toISOString(),
+      endUtc: previousEnd.toISOString(),
+    };
+    const nextMorningSchedule: Schedule = {
+      ...schedule,
+      id: "00000000-0000-4000-8000-000000000034",
+      title: "翌朝の予定",
+      startUtc: nextMorningStart.toISOString(),
+      endUtc: nextMorningEnd.toISOString(),
+    };
+    localStorage.setItem(dayOverviewStartMinuteStorageKey, String(7 * 60));
+    const client = new MemoryAppClient([previousSchedule, nextMorningSchedule]);
+    const action = vi.spyOn(client, "openMainWithDayOverviewAction");
+    renderWidget(client);
+
+    await user.click(await screen.findByRole("button", { name: /前夜からの予定/ }));
+    expect(action).toHaveBeenLastCalledWith({
+      type: "edit-schedule",
+      scheduleId: previousSchedule.id,
+      date: dateInputValue(selectedDate),
+    });
+
+    await user.click(await screen.findByRole("button", { name: /翌朝の予定/ }));
+
+    expect(action).toHaveBeenLastCalledWith({
+      type: "edit-schedule",
+      scheduleId: nextMorningSchedule.id,
+      date: dateInputValue(nextMorningStart),
     });
   });
 

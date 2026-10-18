@@ -24,10 +24,63 @@ afterEach(() => {
   document.documentElement.style.removeProperty("font-size");
   delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   listenMock.mockReset();
-  useUiStore.setState({ activeView: "today" });
+  useUiStore.setState({
+    activeView: "today",
+    selectedDate: new Date(),
+    selectedScheduleId: null,
+    editorMode: "closed",
+    dayOverviewStartMinute: 0,
+  });
 });
 
 describe("App time-tool navigation", () => {
+  it("opens a next-morning overview schedule in its editor", async () => {
+    const selectedDate = new Date();
+    selectedDate.setHours(0, 0, 0, 0);
+    const start = new Date(selectedDate);
+    start.setDate(start.getDate() + 1);
+    start.setHours(2, 30, 0, 0);
+    const end = new Date(start.getTime() + 30 * 60_000);
+    const schedule: Schedule = {
+      id: "00000000-0000-4000-8000-000000000061",
+      title: "翌朝の予定を編集",
+      description: "",
+      location: "",
+      startUtc: start.toISOString(),
+      endUtc: end.toISOString(),
+      timezoneId: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Tokyo",
+      allDay: false,
+      allDayStartDate: null,
+      allDayEndDateExclusive: null,
+      status: "scheduled",
+      project: "",
+      category: "",
+      tags: [],
+      color: "#336699",
+      priority: "normal",
+      recurrenceRule: null,
+      recurrenceSupplementalLines: [],
+      recurrenceExdates: [],
+      startNotificationMinutes: null,
+      endNotificationMinutes: null,
+      syncStatus: "local_only",
+      version: 0,
+      deletedAt: null,
+    };
+    useUiStore.setState({ selectedDate, dayOverviewStartMinute: 7 * 60 });
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App client={new MemoryAppClient([schedule])} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /翌朝の予定を編集/ }));
+
+    expect(await screen.findByLabelText("タイトル")).toHaveValue("翌朝の予定を編集");
+  });
+
   it("keeps priority tickets visible when the schedule query fails", async () => {
     class FailingScheduleClient extends MemoryAppClient {
       override listSchedules(): Promise<{ items: Schedule[]; total: number }> {

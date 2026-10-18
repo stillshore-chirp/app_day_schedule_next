@@ -1,6 +1,13 @@
+import type { CSSProperties } from "react";
+import { differenceInCalendarDays } from "date-fns";
+import {
+  dayOverviewStartMinuteStep,
+  maxDayOverviewStartMinute,
+  normalizeDayOverviewStartMinute,
+} from "../../shared/day-overview-preferences";
 import { translate } from "../../shared/i18n/messages";
 import type { DayTemplate, Schedule } from "../../shared/contracts";
-import { formatTime } from "../../shared/time";
+import { dayOverviewMinuteAt, formatTime } from "../../shared/time";
 import { Tooltip } from "../../shared/ui/Tooltip";
 import { layoutSchedulesForDay, minuteToPercent } from "./overview-layout";
 import { layoutTemplateBlocks } from "./template-overview-layout";
@@ -13,7 +20,8 @@ const OVERVIEW_MULTI_LEVEL_PADDING = 6;
 
 interface DayOverviewProps {
   schedules: Schedule[];
-  scheduleState: "loading" | "ready";
+  scheduleState: "loading" | "error" | "ready";
+  onRetrySchedules?: () => void;
   selectedDate: Date;
   selectedId: string | null;
   onSelect: (schedule: Schedule) => void;
@@ -21,16 +29,49 @@ interface DayOverviewProps {
   template: DayTemplate | null;
   templateState: "loading" | "error" | "ready";
   onRetryTemplate: () => void;
-  referenceMinute: number;
-  onReferenceChange: (minute: number) => void;
+  overviewStartMinute: number;
+  onOverviewStartMinuteChange: (minute: number) => void;
   textScalePercent: number;
   visibleLanes?: "both" | "schedule" | "template";
-  showReferenceSlider?: boolean;
+  showStartTimeSlider?: boolean;
 }
 
 function minuteToTime(minute: number): string {
-  if (minute >= 1440) return "24:00";
-  return `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+  const normalized = ((minute % 1440) + 1440) % 1440;
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
+}
+
+function windowTimeLabel(displayMinute: number, startMinute: number): string {
+  const absoluteMinute = startMinute + displayMinute;
+  const dayOffset = Math.floor(absoluteMinute / 1440);
+  const time = minuteToTime(absoluteMinute);
+  if (dayOffset === 0) return time;
+  return translate(
+    dayOffset > 0 ? "features.schedule.DayOverview.031" : "features.schedule.DayOverview.032",
+    [time],
+  );
+}
+
+function axisTimeLabel(displayMinute: number, startMinute: number): string {
+  const absoluteMinute = startMinute + displayMinute;
+  const dayOffset = Math.floor(absoluteMinute / 1440);
+  const clockMinute = ((absoluteMinute % 1440) + 1440) % 1440;
+  const isWindowBoundary = displayMinute === 0 || displayMinute === 1440;
+  const clockLabel =
+    isWindowBoundary || (dayOffset > 0 && clockMinute === 0) || clockMinute % 60 !== 0
+      ? minuteToTime(clockMinute)
+      : String(Math.floor(clockMinute / 60)).padStart(2, "0");
+  return dayOffset > 0 ? translate("features.schedule.DayOverview.031", [clockLabel]) : clockLabel;
+}
+
+function scheduleDateTimeLabel(iso: string, selectedDate: Date): string {
+  const date = new Date(iso);
+  const dayOffset = differenceInCalendarDays(date, selectedDate);
+  if (dayOffset === 0) return formatTime(iso);
+  return translate(
+    dayOffset > 0 ? "features.schedule.DayOverview.033" : "features.schedule.DayOverview.034",
+    [formatTime(iso)],
+  );
 }
 
 function laneHeight(levelCount: number, textScaleFactor: number): number {
@@ -57,6 +98,7 @@ function blockTop(level: number, levelCount: number, textScaleFactor: number): n
 export function DayOverview({
   schedules,
   scheduleState,
+  onRetrySchedules = () => undefined,
   selectedDate,
   selectedId,
   onSelect,
@@ -64,17 +106,35 @@ export function DayOverview({
   template,
   templateState,
   onRetryTemplate,
-  referenceMinute,
-  onReferenceChange,
+  overviewStartMinute,
+  onOverviewStartMinuteChange,
   textScalePercent,
   visibleLanes = "both",
-  showReferenceSlider = true,
+  showStartTimeSlider = true,
 }: DayOverviewProps) {
   const now = new Date();
-  const isToday = selectedDate.toDateString() === now.toDateString();
-  const nowPercent = ((now.getHours() * 60 + now.getMinutes()) / 1440) * 100;
-  const scheduleItems = layoutSchedulesForDay(schedules, selectedDate);
-  const templateItems = layoutTemplateBlocks(template?.blocks ?? []);
+  const visibleStartMinute = normalizeDayOverviewStartMinute(overviewStartMinute);
+  const nowDisplayMinute = dayOverviewMinuteAt(now, selectedDate, visibleStartMinute);
+  const nowVisible = nowDisplayMinute !== null;
+  const nowPercent = minuteToPercent(nowDisplayMinute ?? 0);
+  const scheduleItems = layoutSchedulesForDay(schedules, selectedDate, visibleStartMinute);
+  const templateItems = layoutTemplateBlocks(template?.blocks ?? [], visibleStartMinute);
+  const rangeStartLabel = minuteToTime(visibleStartMinute);
+  const rangeEndLabel = windowTimeLabel(1440, visibleStartMinute);
+  const hourWidthPercent = (60 / 1440) * 100;
+  const hourOffsetPercent = (((60 - (visibleStartMinute % 60)) % 60) / 1440) * 100;
+  const trackStyle = {
+    "--overview-hour-width": `${hourWidthPercent}%`,
+    "--overview-hour-offset": `${hourOffsetPercent}%`,
+  } as CSSProperties;
+  const midnightOffset = 1440 - visibleStartMinute;
+  const axisMinutes = Array.from({ length: 25 }, (_, hour) => hour * 60)
+    .concat(
+      midnightOffset > 60 && midnightOffset < 1380 && midnightOffset % 60 !== 0
+        ? [midnightOffset]
+        : [],
+    )
+    .sort((left, right) => left - right);
   const scheduleLevelCount = Math.max(1, ...scheduleItems.map((item) => item.level + 1));
   const templateLevelCount = Math.max(1, ...templateItems.map((item) => item.level + 1));
   const hiddenScheduleCount = scheduleItems.filter(
@@ -108,9 +168,13 @@ export function DayOverview({
       </div>
 
       <div className="overview-axis" aria-hidden="true">
-        {Array.from({ length: 25 }, (_, hour) => hour).map((hour) => (
-          <span className="overview-tick" key={hour} style={{ left: `${(hour / 24) * 100}%` }}>
-            {String(hour).padStart(2, "0")}
+        {axisMinutes.map((minute) => (
+          <span
+            className="overview-tick"
+            key={minute}
+            style={{ left: `${minuteToPercent(minute)}%` }}
+          >
+            {axisTimeLabel(minute, visibleStartMinute)}
           </span>
         ))}
       </div>
@@ -131,16 +195,19 @@ export function DayOverview({
           </div>
           <div
             className="overview-lane__track"
-            aria-label={translate("features.schedule.DayOverview.010")}
-            style={{ height: scheduleLaneHeight, minHeight: scheduleLaneHeight }}
+            aria-label={translate("features.schedule.DayOverview.010", [
+              rangeStartLabel,
+              rangeEndLabel,
+            ])}
+            style={{ ...trackStyle, height: scheduleLaneHeight, minHeight: scheduleLaneHeight }}
           >
             {scheduleItems
               .filter((item) => item.level < MAX_VISIBLE_LEVELS)
               .map(({ schedule, startMinute, endMinute, level, levelCount, key }, index) => {
                 const accessibleLabel = translate("features.schedule.DayOverview.005", [
                   schedule.title,
-                  formatTime(schedule.startUtc),
-                  formatTime(schedule.endUtc),
+                  scheduleDateTimeLabel(schedule.startUtc, selectedDate),
+                  scheduleDateTimeLabel(schedule.endUtc, selectedDate),
                 ]);
                 return (
                   <Tooltip key={key} label={accessibleLabel}>
@@ -166,7 +233,9 @@ export function DayOverview({
                     >
                       <span className="overview-event__content" aria-hidden="true">
                         <span className="overview-event__index">{index + 1}</span>
-                        <span className="overview-event__start">{minuteToTime(startMinute)}</span>
+                        <span className="overview-event__start">
+                          {windowTimeLabel(startMinute, visibleStartMinute)}
+                        </span>
                         <b className="overview-event__title">{schedule.title}</b>
                       </span>
                     </button>
@@ -178,7 +247,15 @@ export function DayOverview({
                 {translate("features.schedule.DayOverview.026")}
               </div>
             ) : null}
-            {scheduleState === "ready" && schedules.length === 0 ? (
+            {scheduleState === "error" ? (
+              <div className="overview-lane__state" role="alert">
+                <span>{translate("features.schedule.DayOverview.028")}</span>
+                <button className="button button--subtle" type="button" onClick={onRetrySchedules}>
+                  {translate("features.schedule.DayOverview.020")}
+                </button>
+              </div>
+            ) : null}
+            {scheduleState === "ready" && scheduleItems.length === 0 ? (
               <div className="overview-lane__state">
                 <span>{translate("features.schedule.DayOverview.011")}</span>
                 <button className="button button--subtle" type="button" onClick={onCreateSchedule}>
@@ -191,20 +268,23 @@ export function DayOverview({
                 {translate("features.schedule.DayOverview.012", [hiddenScheduleCount])}
               </span>
             ) : null}
-            {isToday ? (
+            {nowVisible ? (
               <i className="overview-now" style={{ left: `${nowPercent}%` }} aria-hidden="true" />
             ) : null}
           </div>
           {highTextScale ? (
             <ol
               className="overview-readable-list"
-              aria-label={translate("features.schedule.DayOverview.010")}
+              aria-label={translate("features.schedule.DayOverview.010", [
+                rangeStartLabel,
+                rangeEndLabel,
+              ])}
             >
               {scheduleItems.map(({ schedule, startMinute, endMinute, key }, index) => (
                 <li key={`readable-${key}`}>
                   <button type="button" onClick={() => onSelect(schedule)}>
                     <span>{index + 1}</span>
-                    <time>{`${minuteToTime(startMinute)}–${minuteToTime(endMinute)}`}</time>
+                    <time>{`${windowTimeLabel(startMinute, visibleStartMinute)}–${windowTimeLabel(endMinute, visibleStartMinute)}`}</time>
                     <strong>{schedule.title}</strong>
                   </button>
                 </li>
@@ -236,8 +316,11 @@ export function DayOverview({
                 : undefined
             }
             aria-hidden={hideTemplateTrackFromAssistiveTech || undefined}
-            aria-label={translate("features.schedule.DayOverview.017")}
-            style={{ height: templateLaneHeight, minHeight: templateLaneHeight }}
+            aria-label={translate("features.schedule.DayOverview.017", [
+              rangeStartLabel,
+              rangeEndLabel,
+            ])}
+            style={{ ...trackStyle, height: templateLaneHeight, minHeight: templateLaneHeight }}
           >
             {templateState === "loading" ? (
               <div className="overview-lane__state" role="status">
@@ -267,13 +350,32 @@ export function DayOverview({
                   .filter((item) => item.level < MAX_VISIBLE_LEVELS)
                   .map(
                     (
-                      { block, startMinute, endMinute, continuesNextDay, level, levelCount, key },
+                      {
+                        block,
+                        startMinute,
+                        endMinute,
+                        continuesNextDay,
+                        startsBeforeWindow,
+                        continuesAfterWindow,
+                        level,
+                        levelCount,
+                        key,
+                      },
                       index,
                     ) => {
-                      const timeRange = `${minuteToTime(startMinute)}–${minuteToTime(endMinute)}`;
-                      const accessibleLabel = continuesNextDay
+                      const timeRange = `${windowTimeLabel(startMinute, visibleStartMinute)}–${windowTimeLabel(endMinute, visibleStartMinute)}`;
+                      const blockLabel = continuesNextDay
                         ? translate("features.schedule.DayOverview.023", [block.title, timeRange])
                         : translate("features.schedule.DayOverview.024", [block.title, timeRange]);
+                      const accessibleLabel = [
+                        startsBeforeWindow ? translate("features.schedule.DayOverview.029") : null,
+                        blockLabel,
+                        continuesAfterWindow && !continuesNextDay
+                          ? translate("features.schedule.DayOverview.030")
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join("、");
                       return (
                         <Tooltip key={key} label={accessibleLabel}>
                           <div
@@ -294,7 +396,7 @@ export function DayOverview({
                             <span className="overview-template-block__content" aria-hidden="true">
                               <span className="overview-template-block__index">{index + 1}</span>
                               <span className="overview-template-block__start">
-                                {minuteToTime(startMinute)}
+                                {windowTimeLabel(startMinute, visibleStartMinute)}
                               </span>
                               <b className="overview-template-block__title">{block.title}</b>
                             </span>
@@ -314,41 +416,63 @@ export function DayOverview({
                 {translate("features.schedule.DayOverview.012", [hiddenTemplateCount])}
               </span>
             ) : null}
-            {isToday ? (
+            {nowVisible ? (
               <i className="overview-now" style={{ left: `${nowPercent}%` }} aria-hidden="true" />
             ) : null}
           </div>
           {highTextScale && templateState === "ready" && templateItems.length > 0 ? (
             <ol
               className="overview-readable-list"
-              aria-label={translate("features.schedule.DayOverview.017")}
+              aria-label={translate("features.schedule.DayOverview.017", [
+                rangeStartLabel,
+                rangeEndLabel,
+              ])}
             >
-              {templateItems.map(({ block, startMinute, endMinute, key }, index) => (
-                <li key={`readable-${key}`}>
-                  <span>
-                    <b>{index + 1}</b>
-                    <time>{`${minuteToTime(startMinute)}–${minuteToTime(endMinute)}`}</time>
-                    <strong>{block.title}</strong>
-                  </span>
-                </li>
-              ))}
+              {templateItems.map(
+                (
+                  {
+                    block,
+                    startMinute,
+                    endMinute,
+                    startsBeforeWindow,
+                    continuesAfterWindow,
+                    continuesNextDay,
+                    key,
+                  },
+                  index,
+                ) => (
+                  <li key={`readable-${key}`}>
+                    <span>
+                      <b>{index + 1}</b>
+                      {startsBeforeWindow ? (
+                        <small>{translate("features.schedule.DayOverview.029")}</small>
+                      ) : null}
+                      <time>{`${windowTimeLabel(startMinute, visibleStartMinute)}–${windowTimeLabel(endMinute, visibleStartMinute)}`}</time>
+                      <strong>{block.title}</strong>
+                      {continuesAfterWindow && !continuesNextDay ? (
+                        <small>{translate("features.schedule.DayOverview.030")}</small>
+                      ) : null}
+                    </span>
+                  </li>
+                ),
+              )}
             </ol>
           ) : null}
         </section>
       </div>
 
-      {showReferenceSlider ? (
+      {showStartTimeSlider ? (
         <label className="reference-time-control">
           <span>{translate("features.schedule.DayOverview.006")}</span>
           <input
             type="range"
             min={0}
-            max={1439}
-            step={5}
-            value={referenceMinute}
-            onChange={(event) => onReferenceChange(Number(event.target.value))}
+            max={maxDayOverviewStartMinute}
+            step={dayOverviewStartMinuteStep}
+            value={visibleStartMinute}
+            onChange={(event) => onOverviewStartMinuteChange(Number(event.target.value))}
           />
-          <output>{minuteToTime(referenceMinute)}</output>
+          <output>{minuteToTime(visibleStartMinute)}</output>
         </label>
       ) : null}
     </section>

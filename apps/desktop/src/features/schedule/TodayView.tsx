@@ -12,7 +12,8 @@ import { Timeline } from "./Timeline";
 import { resolveDisplayedTemplate } from "./template-selection";
 import { useScheduleActions, useSchedules } from "./use-schedules";
 import { PriorityTicketDrawer } from "./PriorityTicketDrawer";
-import { quickBlocksAsSchedules } from "./quick-block-schedules";
+import { quickBlocksAsSchedules, quickBlocksForDayOverview } from "./quick-block-schedules";
+import { dayOverviewRange } from "../../shared/time";
 
 interface TodayViewProps {
   client: AppClient;
@@ -30,11 +31,17 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     openEdit,
     closeEditor,
     createRange,
-    referenceMinute,
-    setReferenceMinute,
+    dayOverviewStartMinute,
+    setDayOverviewStartMinute,
     setActiveView,
   } = useUiStore();
   const schedulesQuery = useSchedules(client, selectedDate, search);
+  const overviewRange = dayOverviewRange(selectedDate, dayOverviewStartMinute);
+  const overviewSchedulesQuery = useQuery({
+    queryKey: ["schedules", overviewRange.startUtc, overviewRange.endUtc, search],
+    queryFn: () => client.listSchedules({ ...overviewRange, search, limit: 500 }),
+    staleTime: 15_000,
+  });
   const quickBlocksQuery = useQuery({
     queryKey: ["quick-blocks"],
     queryFn: () => client.listQuickBlocks(),
@@ -54,13 +61,24 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
     () => quickBlocksAsSchedules(quickBlocksQuery.data ?? [], selectedDate),
     [quickBlocksQuery.data, selectedDate],
   );
+  const overviewQuickSchedules = useMemo(
+    () => quickBlocksForDayOverview(quickBlocksQuery.data ?? [], selectedDate),
+    [quickBlocksQuery.data, selectedDate],
+  );
   const schedules = [...(schedulesQuery.data?.items ?? []), ...quickSchedules];
+  const overviewSchedules = [
+    ...(overviewSchedulesQuery.data?.items ?? []),
+    ...overviewQuickSchedules,
+  ];
   const displayedTemplate = resolveDisplayedTemplate(
     templatesQuery.data ?? [],
     bootstrap.settings.lastTemplateId,
   );
   const quickBlockIds = new Set((quickBlocksQuery.data ?? []).map((item) => item.id));
-  const selected = schedules.find((item) => item.id === selectedScheduleId) ?? null;
+  const selected =
+    schedules.find((item) => item.id === selectedScheduleId) ??
+    overviewSchedules.find((item) => item.id === selectedScheduleId) ??
+    null;
   const busy = actions.create.isPending || actions.update.isPending || actions.remove.isPending;
 
   const choose = (schedule: Schedule) => {
@@ -210,8 +228,15 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
         ) : null}
         {!schedulesQuery.isError ? (
           <DayOverview
-            schedules={schedules}
-            scheduleState={schedulesQuery.isLoading ? "loading" : "ready"}
+            schedules={overviewSchedules}
+            scheduleState={
+              overviewSchedulesQuery.isLoading
+                ? "loading"
+                : overviewSchedulesQuery.isError
+                  ? "error"
+                  : "ready"
+            }
+            onRetrySchedules={() => void overviewSchedulesQuery.refetch()}
             selectedDate={selectedDate}
             selectedId={selectedScheduleId}
             onSelect={choose}
@@ -221,8 +246,8 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
               templatesQuery.isLoading ? "loading" : templatesQuery.isError ? "error" : "ready"
             }
             onRetryTemplate={() => void templatesQuery.refetch()}
-            referenceMinute={referenceMinute}
-            onReferenceChange={setReferenceMinute}
+            overviewStartMinute={dayOverviewStartMinute}
+            onOverviewStartMinuteChange={setDayOverviewStartMinute}
             textScalePercent={bootstrap.settings.textScalePercent}
           />
         ) : null}
@@ -237,7 +262,6 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
             onCreate={() => openCreate()}
             onCreateRange={(startUtc, endUtc) => openCreate({ startUtc, endUtc })}
             onAdjust={(schedule, startUtc, endUtc) => adjustSchedule(schedule, startUtc, endUtc)}
-            referenceMinute={referenceMinute}
             textScalePercent={bootstrap.settings.textScalePercent}
           />
         ) : null}

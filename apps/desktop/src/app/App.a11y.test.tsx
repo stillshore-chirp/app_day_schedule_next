@@ -24,7 +24,6 @@ afterEach(() => {
     editorMode: "closed",
     search: "",
     createRange: null,
-    referenceMinute: 480,
   });
 });
 

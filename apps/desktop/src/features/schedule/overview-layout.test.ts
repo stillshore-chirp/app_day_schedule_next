@@ -79,6 +79,25 @@ describe("layoutOverview", () => {
     expect(result.map(({ startMinute, endMinute }) => [startMinute, endMinute])).toEqual([[0, 60]]);
   });
 
+  it("maps both sides of a rotated 07:00 window and excludes outside events before grouping", () => {
+    const date = new Date(2026, 6, 20);
+    const result = layoutSchedulesForDay(
+      [
+        item("left-edge", localIso(20, 6, 30), localIso(20, 8)),
+        item("right-edge", localIso(21, 6, 30), localIso(21, 7, 30)),
+        item("outside", localIso(21, 8), localIso(21, 9)),
+      ],
+      date,
+      7 * 60,
+    );
+    expect(
+      result.map(({ schedule, startMinute, endMinute }) => [schedule.id, startMinute, endMinute]),
+    ).toEqual([
+      ["left-edge", 0, 60],
+      ["right-edge", 1410, 1440],
+    ]);
+  });
+
   it("maps minute boundaries to a shared deterministic percentage", () => {
     expect([0, 1, 720, 1439, 1440].map(minuteToPercent)).toEqual([
       0,

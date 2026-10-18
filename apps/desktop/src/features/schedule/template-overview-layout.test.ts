@@ -32,14 +32,40 @@ describe("layoutTemplateBlocks", () => {
     });
   });
 
-  it("clamps at 24:00 and marks continuation without wrapping", () => {
+  it("keeps a daily cross-midnight block on both sides of the 00:00 window", () => {
     const result = layoutTemplateBlocks([block("00000000-0000-4000-8000-000000000001", 1439, 60)]);
-    expect(result).toHaveLength(1);
+    expect(result).toHaveLength(2);
     expect(result[0]).toMatchObject({
+      startMinute: 0,
+      endMinute: 59,
+      continuesNextDay: false,
+    });
+    expect(result[1]).toMatchObject({
       startMinute: 1439,
       endMinute: 1440,
       continuesNextDay: true,
     });
+  });
+
+  it("rotates a daily block across both edges of a 07:00 window", () => {
+    const result = layoutTemplateBlocks(
+      [block("00000000-0000-4000-8000-000000000001", 6 * 60 + 30, 90)],
+      7 * 60,
+    );
+    expect(
+      result.map(
+        ({
+          startMinute,
+          endMinute,
+          continuesNextDay,
+          startsBeforeWindow,
+          continuesAfterWindow,
+        }) => [startMinute, endMinute, continuesNextDay, startsBeforeWindow, continuesAfterWindow],
+      ),
+    ).toEqual([
+      [0, 60, false, true, false],
+      [1410, 1440, false, false, true],
+    ]);
   });
 
   it("keeps template overlap assignment deterministic and independent", () => {

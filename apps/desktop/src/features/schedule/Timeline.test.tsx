@@ -43,7 +43,6 @@ describe("Timeline interactions", () => {
         onCreate={vi.fn()}
         onCreateRange={vi.fn()}
         onAdjust={vi.fn().mockResolvedValue(undefined)}
-        referenceMinute={0}
         textScalePercent={250}
       />,
     );
@@ -77,7 +76,6 @@ describe("Timeline interactions", () => {
         onCreate={vi.fn()}
         onCreateRange={vi.fn()}
         onAdjust={vi.fn().mockResolvedValue(undefined)}
-        referenceMinute={0}
         textScalePercent={250}
       />,
     );
@@ -105,7 +103,6 @@ describe("Timeline interactions", () => {
           onCreate={vi.fn()}
           onCreateRange={vi.fn()}
           onAdjust={vi.fn().mockResolvedValue(undefined)}
-          referenceMinute={0}
           textScalePercent={250}
         />,
       );
@@ -131,7 +128,6 @@ describe("Timeline interactions", () => {
         onCreate={vi.fn()}
         onCreateRange={vi.fn()}
         onAdjust={vi.fn().mockResolvedValue(undefined)}
-        referenceMinute={0}
         textScalePercent={250}
       />,
     );
@@ -171,7 +167,6 @@ describe("Timeline interactions", () => {
         onCreate={vi.fn()}
         onCreateRange={vi.fn()}
         onAdjust={vi.fn().mockResolvedValue(undefined)}
-        referenceMinute={0}
         textScalePercent={100}
       />,
     );
@@ -196,7 +191,6 @@ describe("Timeline interactions", () => {
         onCreate={vi.fn()}
         onCreateRange={vi.fn()}
         onAdjust={adjust}
-        referenceMinute={480}
         textScalePercent={100}
       />,
     );
@@ -220,7 +214,6 @@ describe("Timeline interactions", () => {
         onCreate={vi.fn()}
         onCreateRange={createRange}
         onAdjust={vi.fn().mockResolvedValue(undefined)}
-        referenceMinute={480}
         textScalePercent={100}
       />,
     );
@@ -275,7 +268,6 @@ describe("Timeline interactions", () => {
           onCreate={vi.fn()}
           onCreateRange={vi.fn()}
           onAdjust={vi.fn().mockResolvedValue(undefined)}
-          referenceMinute={480}
           textScalePercent={100}
         />,
       );
