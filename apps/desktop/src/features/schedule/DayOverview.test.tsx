@@ -101,9 +101,9 @@ describe("DayOverview", () => {
         (tick) => tick.textContent,
       ),
     ).toEqual([
-      "00:00",
+      "00",
       ...Array.from({ length: 23 }, (_, hour) => String(hour + 1).padStart(2, "0")),
-      "翌00:00",
+      "00",
     ]);
   });
 
@@ -354,9 +354,9 @@ describe("DayOverview", () => {
     const ticks = Array.from(container.querySelectorAll<HTMLElement>(".overview-tick"));
     const scheduleTrack = container.querySelector<HTMLElement>(".overview-lane__track");
 
-    expect(ticks[0]?.textContent).toBe("07:00");
-    expect(ticks.map((tick) => tick.textContent)).toContain("翌00");
-    expect(ticks.at(-1)?.textContent).toBe("翌07:00");
+    expect(ticks[0]?.textContent).toBe("07");
+    expect(ticks.map((tick) => tick.textContent)).toContain("00");
+    expect(ticks.at(-1)?.textContent).toBe("07");
     expect(screen.getByText("表示範囲 7/20 07:00〜7/21 07:00")).toBeVisible();
     expect(scheduleTrack).toHaveAttribute("aria-label", "07:00から翌07:00までの予定");
   });
@@ -377,18 +377,23 @@ describe("DayOverview", () => {
     );
   });
 
-  it("aligns the axis with whole hours and keeps nearby boundary labels distinct", () => {
+  it("normalizes the start slider to whole hours and keeps axis labels compact", () => {
     const { container } = renderOverview({ overviewStartMinute: 6 * 60 + 50 });
     const ticks = Array.from(container.querySelectorAll<HTMLElement>(".overview-tick"));
     const track = container.querySelector<HTMLElement>(".overview-lane__track");
+    const slider = screen.getByRole("slider", { name: /概要の表示開始時刻/ });
 
     expect(ticks.map((tick) => tick.textContent)).toEqual([
-      "06:50",
+      "07",
       ...Array.from({ length: 16 }, (_, index) => String(index + 8).padStart(2, "0")),
-      "翌00",
-      ...Array.from({ length: 5 }, (_, index) => String(index + 1).padStart(2, "0")),
-      "翌06:50",
+      "00",
+      ...Array.from({ length: 6 }, (_, index) => String(index + 1).padStart(2, "0")),
+      "07",
     ]);
-    expect(track?.style.getPropertyValue("--overview-hour-offset")).toBe(`${(10 / 1440) * 100}%`);
+    expect(track?.style.getPropertyValue("--overview-hour-offset")).toBe("0%");
+    expect(slider).toHaveAttribute("min", "0");
+    expect(slider).toHaveAttribute("max", "1380");
+    expect(slider).toHaveAttribute("step", "60");
+    expect(slider).toHaveValue("420");
   });
 });

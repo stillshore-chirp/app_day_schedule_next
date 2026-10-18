@@ -3,8 +3,10 @@ import { emit } from "@tauri-apps/api/event";
 export const dayOverviewStartMinuteStorageKey = "day-schedule-next.day-overview-start-minute";
 export const dayOverviewStartMinuteChangedEvent = "day-overview-start-minute-changed";
 export const defaultDayOverviewStartMinute = 0;
-export const maxDayOverviewStartMinute = 1435;
-export const dayOverviewStartMinuteStep = 5;
+export const maxDayOverviewStartMinute = 23 * 60;
+export const dayOverviewStartMinuteStep = 60;
+const maxLegacyDayOverviewStartMinute = 1435;
+const legacyDayOverviewStartMinuteStep = 5;
 
 export function isDayOverviewStartMinute(value: unknown): value is number {
   return (
@@ -18,14 +20,22 @@ export function isDayOverviewStartMinute(value: unknown): value is number {
 
 export function normalizeDayOverviewStartMinute(value: number): number {
   if (!Number.isFinite(value)) return defaultDayOverviewStartMinute;
-  const stepped = Math.round(value / dayOverviewStartMinuteStep) * dayOverviewStartMinuteStep;
-  return Math.min(maxDayOverviewStartMinute, Math.max(defaultDayOverviewStartMinute, stepped));
+  const bounded = Math.min(maxLegacyDayOverviewStartMinute, Math.max(0, value));
+  const roundedHour = Math.round(bounded / dayOverviewStartMinuteStep) % 24;
+  return roundedHour * dayOverviewStartMinuteStep;
 }
 
 export function readDayOverviewStartMinute(): number {
   if (typeof window === "undefined") return defaultDayOverviewStartMinute;
-  const stored = Number(window.localStorage.getItem(dayOverviewStartMinuteStorageKey));
-  return isDayOverviewStartMinute(stored) ? stored : defaultDayOverviewStartMinute;
+  const storedValue = window.localStorage.getItem(dayOverviewStartMinuteStorageKey);
+  if (storedValue === null) return defaultDayOverviewStartMinute;
+  const stored = Number(storedValue);
+  const isLegacyValue =
+    Number.isInteger(stored) &&
+    stored >= 0 &&
+    stored <= maxLegacyDayOverviewStartMinute &&
+    stored % legacyDayOverviewStartMinuteStep === 0;
+  return isLegacyValue ? normalizeDayOverviewStartMinute(stored) : defaultDayOverviewStartMinute;
 }
 
 export function saveDayOverviewStartMinute(value: number): number {

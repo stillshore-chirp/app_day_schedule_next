@@ -122,7 +122,7 @@ describe("FloatingDayOverviewApp", () => {
     const range = dayOverviewRange(dayOverviewCycleDate(new Date(), 7 * 60), 7 * 60);
     await waitFor(() => {
       expect(listSchedules).toHaveBeenCalledWith({ ...range, search: "", limit: 500 });
-      expect(container.querySelector(".overview-tick")?.textContent).toBe("07:00");
+      expect(container.querySelector(".overview-tick")?.textContent).toBe("07");
     });
   });
 

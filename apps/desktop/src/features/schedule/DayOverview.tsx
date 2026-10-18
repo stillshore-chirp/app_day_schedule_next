@@ -55,17 +55,8 @@ function windowTimeLabel(displayMinute: number, startMinute: number): string {
 
 function axisTimeLabel(displayMinute: number, startMinute: number): string {
   const absoluteMinute = startMinute + displayMinute;
-  const dayOffset = Math.floor(absoluteMinute / 1440);
   const clockMinute = ((absoluteMinute % 1440) + 1440) % 1440;
-  const isWindowBoundary = displayMinute === 0 || displayMinute === 1440;
-  if (isWindowBoundary) {
-    const time = minuteToTime(clockMinute);
-    return dayOffset > 0 ? translate("features.schedule.DayOverview.031", [time]) : time;
-  }
-  const hour = String(Math.floor(clockMinute / 60)).padStart(2, "0");
-  return dayOffset > 0 && clockMinute === 0
-    ? translate("features.schedule.DayOverview.031", [hour])
-    : hour;
+  return String(Math.floor(clockMinute / 60)).padStart(2, "0");
 }
 
 function scheduleDateTimeLabel(iso: string, selectedDate: Date): string {
