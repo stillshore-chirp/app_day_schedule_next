@@ -22,6 +22,7 @@ import { Tooltip } from "../../shared/ui/Tooltip";
 import { resolveDisplayedTemplate } from "./template-selection";
 import { DayOverview } from "./DayOverview";
 import { quickBlocksForDayOverview, quickBlocksForInstantRange } from "./quick-block-schedules";
+import { fetchCenteredOverviewSchedules } from "./overview-schedules";
 import { useOverviewClock } from "./use-overview-clock";
 
 type OverviewMode = "both" | "schedule" | "template";
@@ -74,7 +75,12 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
     : null;
   const schedules = useQuery({
     queryKey: ["schedules", range?.startUtc, range?.endUtc, ""],
-    queryFn: () => client.listSchedules({ ...range!, search: "", limit: 500 }),
+    queryFn: () => {
+      const query = { ...range!, search: "", limit: 500 };
+      return overviewPreferences.mode === "centered"
+        ? fetchCenteredOverviewSchedules(client, query)
+        : client.listSchedules(query);
+    },
     enabled: range !== null,
     refetchInterval: 30_000,
     staleTime: 15_000,

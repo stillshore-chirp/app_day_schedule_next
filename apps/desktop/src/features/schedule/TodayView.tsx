@@ -12,6 +12,7 @@ import { Timeline } from "./Timeline";
 import { resolveDisplayedTemplate } from "./template-selection";
 import { useScheduleActions, useSchedules } from "./use-schedules";
 import { PriorityTicketDrawer } from "./PriorityTicketDrawer";
+import { fetchCenteredOverviewSchedules } from "./overview-schedules";
 import {
   quickBlocksAsSchedules,
   quickBlocksForDayOverview,
@@ -77,7 +78,12 @@ export function TodayView({ client, bootstrap }: TodayViewProps) {
       : dayOverviewRange(overviewDate, dayOverviewStartMinute);
   const overviewSchedulesQuery = useQuery({
     queryKey: ["schedules", overviewRange.startUtc, overviewRange.endUtc, search],
-    queryFn: () => client.listSchedules({ ...overviewRange, search, limit: 500 }),
+    queryFn: () => {
+      const query = { ...overviewRange, search, limit: 500 };
+      return dayOverviewMode === "centered"
+        ? fetchCenteredOverviewSchedules(client, query)
+        : client.listSchedules(query);
+    },
     staleTime: 15_000,
   });
   const quickBlocksQuery = useQuery({

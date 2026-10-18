@@ -159,7 +159,7 @@ describe("FloatingDayOverviewApp", () => {
 
     const range = centeredDayOverviewQueryRange(instant);
     await waitFor(() => {
-      expect(listSchedules).toHaveBeenCalledWith({ ...range, search: "", limit: 500 });
+      expect(listSchedules).toHaveBeenCalledWith({ ...range, search: "", limit: 500, offset: 0 });
       expect(container.querySelector(".overview")?.getAttribute("data-overview-mode")).toBe(
         "centered",
       );
