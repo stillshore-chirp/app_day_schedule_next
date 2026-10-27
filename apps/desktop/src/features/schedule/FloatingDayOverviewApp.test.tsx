@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emit } from "@tauri-apps/api/event";
@@ -103,6 +103,7 @@ function renderWidget(client = new MemoryAppClient([schedule])) {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   localStorage.clear();
   eventCallbacks.clear();
   Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
@@ -242,6 +243,99 @@ describe("FloatingDayOverviewApp", () => {
       "aria-pressed",
       "true",
     );
+  });
+
+  it("clears the successful pin status after a short delay", async () => {
+    renderWidget();
+
+    const pin = await screen.findByRole("button", { name: "常に手前に固定" });
+    await waitFor(() => expect(pin).toBeEnabled());
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await act(async () => {
+      fireEvent.click(pin);
+      await Promise.resolve();
+    });
+
+    const message = "常に手前に固定しました。";
+    expect(screen.getByText(message)).toBeVisible();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_999);
+    });
+    expect(screen.getByText(message)).toBeVisible();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(screen.queryByText(message)).toBeNull();
+  });
+
+  it("restarts the pin status timer when the pin is changed again", async () => {
+    renderWidget();
+
+    const pin = await screen.findByRole("button", { name: "常に手前に固定" });
+    await waitFor(() => expect(pin).toBeEnabled());
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await act(async () => {
+      fireEvent.click(pin);
+      await Promise.resolve();
+    });
+    expect(screen.getByText("常に手前に固定しました。")).toBeVisible();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "常に手前を解除" }));
+      await Promise.resolve();
+    });
+    const message = "常に手前を解除しました。";
+    expect(screen.getByText(message)).toBeVisible();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(screen.getByText(message)).toBeVisible();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(screen.queryByText(message)).toBeNull();
+  });
+
+  it("keeps a failed pin status after the previous success timer expires", async () => {
+    const client = new MemoryAppClient([schedule]);
+    const setAlwaysOnTop = vi.spyOn(client, "setWindowAlwaysOnTop");
+    setAlwaysOnTop.mockResolvedValueOnce(undefined);
+    setAlwaysOnTop.mockRejectedValueOnce(new Error("synthetic failure"));
+    renderWidget(client);
+
+    const pin = await screen.findByRole("button", { name: "常に手前に固定" });
+    await waitFor(() => expect(pin).toBeEnabled());
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    await act(async () => {
+      fireEvent.click(pin);
+      await Promise.resolve();
+    });
+    expect(screen.getByText("常に手前に固定しました。")).toBeVisible();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "常に手前を解除" }));
+      await Promise.resolve();
+    });
+
+    const failure = "常に手前の設定を保存できませんでした。もう一度お試しください。";
+    expect(screen.getByRole("alert")).toHaveTextContent(failure);
+    expect(screen.getByRole("button", { name: "常に手前を解除" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(failure);
   });
 
   it("routes schedule, Quick Block, and empty-day actions through the main window contract", async () => {

@@ -32,6 +32,7 @@ const modeStorageKey = "day-schedule-next.day-overview-mode";
 const themeStorageKey = "day-schedule-next.day-overview-theme";
 const expandedHeightStorageKey = "day-schedule-next.day-overview-expanded-height";
 const defaultExpandedHeight = 420;
+const statusDismissMs = 3_000;
 
 function storedMode(): OverviewMode {
   const value = localStorage.getItem(modeStorageKey);
@@ -109,6 +110,18 @@ export function FloatingDayOverviewApp({ client }: { client: AppClient }) {
   const settingsPanel = useRef<HTMLElement | null>(null);
   const alwaysOnTopRequestPending = useRef(false);
   const modeChangePendingRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      status !== translate("app.DayOverview.016") &&
+      status !== translate("app.DayOverview.017")
+    ) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setStatus(""), statusDismissMs);
+    return () => window.clearTimeout(timeout);
+  }, [status]);
 
   useEffect(() => {
     localStorage.setItem(modeStorageKey, mode);
