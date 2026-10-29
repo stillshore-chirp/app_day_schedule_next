@@ -18,11 +18,13 @@ Day Schedule Next は、一日の予定を分単位で設計・実行し、現�
 
 ## 開発環境
 
-- Node.js 22 以上
+- Node.js 22.23.4 以上（22.x 系のみ）。正本の固定値は [`.nvmrc`](.nvmrc) です。
 - pnpm 11.17.0（Corepack）
 - Rust 1.89.0
 - macOS: Xcode Command Line Tools
 - Windows: Microsoft C++ Build Tools と WebView2 Runtime
+
+macOS / Linux で nvm を使う場合は、repository root で `nvm install` と `nvm use` を実行します。Windows では nvm を前提にせず、Node.js 22.23.4 以上の22.x系をインストールし、`node --version` で確認してください。Node.js の最低版を定めた理由と開発手順は [desktop platform contract](docs/engineering/desktop-platform-and-release.md) にあります。
 
 ```bash
 corepack enable
@@ -33,6 +35,8 @@ pnpm --dir apps/desktop tauri dev
 ## 検証
 
 変更範囲に応じて [`docs/testing/index.md`](docs/testing/index.md) のrisk laneから最小十分な組合せを選びます。次は横断変更・release・CI failure再現で使う一括候補であり、通常変更ですべてをlocal実行する必須listではありません。
+
+Node を使う検証は、先に `.nvmrc` の版を選択してください。nvm が使える環境では `nvm use`、Windows では同じ22.x系の Node.js を手動で選びます。`npm run verify:bootstrap` は使用中の Node.js 版も確認します。
 
 ```bash
 node scripts/validate-governance.mjs

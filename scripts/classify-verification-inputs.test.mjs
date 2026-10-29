@@ -57,14 +57,40 @@ test("native E2E and Rust paths remain native-only where possible", () => {
   }
 });
 
-test("root package and Dependabot policy are governance-only", () => {
-  const plan = classifyPaths(["package.json", ".github/dependabot.yml"]);
+test("root package includes dependency policy; Dependabot remains governance-only", () => {
+  const rootPackage = classifyPaths(["package.json"]);
+  assert.equal(rootPackage.classification_ok, true);
+  assert.equal(rootPackage.governance, true);
+  assert.equal(rootPackage.frontend, false);
+  assert.equal(rootPackage.native, false);
+  assert.equal(rootPackage.dependency, true);
 
-  assert.equal(plan.classification_ok, true);
-  assert.equal(plan.governance, true);
-  assert.equal(plan.frontend, false);
-  assert.equal(plan.native, false);
-  assert.equal(plan.dependency, false);
+  const dependabot = classifyPaths([".github/dependabot.yml"]);
+  assert.equal(dependabot.classification_ok, true);
+  assert.equal(dependabot.governance, true);
+  assert.equal(dependabot.frontend, false);
+  assert.equal(dependabot.native, false);
+  assert.equal(dependabot.dependency, false);
+});
+
+test("Node runtime controls select governance and dependency checks without product gates", () => {
+  for (const file of [".nvmrc", ".npmrc"]) {
+    const plan = classifyPaths([file]);
+    assert.equal(plan.classification_ok, true, file);
+    assert.equal(plan.governance, true, file);
+    assert.equal(plan.frontend, false, file);
+    assert.equal(plan.native, false, file);
+    assert.equal(plan.dependency, true, file);
+  }
+
+  for (const file of ["scripts/verify-node-runtime.mjs", "scripts/verify-node-runtime.test.mjs"]) {
+    const plan = classifyPaths([file]);
+    assert.equal(plan.classification_ok, true, file);
+    assert.equal(plan.governance, true, file);
+    assert.equal(plan.frontend, false, file);
+    assert.equal(plan.native, false, file);
+    assert.equal(plan.dependency, true, file);
+  }
 });
 
 test("product dependency and patch inputs select dependency gates", () => {

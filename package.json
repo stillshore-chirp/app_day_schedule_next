@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "description": "Local-first minute-precision day scheduling desktop app",
   "scripts": {
-    "verify:governance": "node scripts/validate-governance.mjs && node --test scripts/validate-governance.test.mjs scripts/classify-verification-inputs.test.mjs",
+    "verify:node-runtime": "node scripts/verify-node-runtime.mjs",
+    "verify:governance": "node scripts/validate-governance.mjs && node --test scripts/validate-governance.test.mjs scripts/classify-verification-inputs.test.mjs scripts/verify-node-runtime.test.mjs",
     "verify:docs": "node scripts/verify-doc-links.mjs",
     "verify:security-text": "node scripts/security-scan-text.mjs",
     "verify:boundaries": "node scripts/check-repository-boundaries.mjs",
     "verify:i18n": "node scripts/verify-i18n-keys.mjs",
     "verify:patched-dependencies": "node scripts/verify-patched-dependencies.mjs",
-    "verify:bootstrap": "npm run verify:governance && npm run verify:docs && npm run verify:security-text && npm run verify:boundaries && npm run verify:i18n",
+    "verify:bootstrap": "npm run verify:node-runtime && npm run verify:governance && npm run verify:docs && npm run verify:security-text && npm run verify:boundaries && npm run verify:i18n",
     "format:check": "pnpm --dir apps/desktop format:check",
     "lint": "pnpm --dir apps/desktop lint",
     "typecheck": "pnpm --dir apps/desktop typecheck",
@@ -22,7 +23,7 @@
     "verify": "npm run verify:bootstrap && pnpm verify:patched-dependencies && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test --workspace --all-features"
   },
   "engines": {
-    "node": ">=22"
+    "node": "^22.23.4"
   },
   "packageManager": "pnpm@11.17.0"
 }
