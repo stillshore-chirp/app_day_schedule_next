@@ -34,6 +34,8 @@ const GOVERNANCE_EXACT = new Set([
   "apps/desktop/src/AGENTS.md",
   "apps/desktop/src-tauri/AGENTS.md",
   "apps/desktop/tests/AGENTS.md",
+  "apps/desktop/package.json",
+  "pnpm-workspace.yaml",
   "scripts/check-repository-boundaries.mjs",
   "scripts/security-scan-text.mjs",
   "scripts/validate-governance.mjs",

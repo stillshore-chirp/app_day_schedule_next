@@ -96,10 +96,17 @@ test("Node runtime controls select governance and dependency checks without prod
 test("product dependency and patch inputs select dependency gates", () => {
   const desktopPackage = classifyPaths(["apps/desktop/package.json"]);
   assert.equal(desktopPackage.classification_ok, true);
-  assert.equal(desktopPackage.governance, false);
+  assert.equal(desktopPackage.governance, true);
   assert.equal(desktopPackage.frontend, true);
   assert.equal(desktopPackage.native, false);
   assert.equal(desktopPackage.dependency, true);
+
+  const workspaceConfig = classifyPaths(["pnpm-workspace.yaml"]);
+  assert.equal(workspaceConfig.classification_ok, true);
+  assert.equal(workspaceConfig.governance, true);
+  assert.equal(workspaceConfig.frontend, true);
+  assert.equal(workspaceConfig.native, true);
+  assert.equal(workspaceConfig.dependency, true);
 
   const plan = classifyPaths([
     "apps/desktop/package.json",
@@ -117,7 +124,7 @@ test("product dependency and patch inputs select dependency gates", () => {
   assert.equal(plan.dependency, true);
   assert.equal(plan.frontend, true);
   assert.equal(plan.native, true);
-  assert.equal(plan.governance, false);
+  assert.equal(plan.governance, true);
 });
 
 test("patched dependency verifier remains governance and dependency scoped", () => {

@@ -79,10 +79,12 @@ test("Node version source, package engine, and strict install policy agree", () 
   const nodeVersion = readRepositoryFile(".nvmrc").trim();
   const packageManifest = JSON.parse(readRepositoryFile("package.json"));
   const npmConfig = readRepositoryFile(".npmrc");
+  const workspaceConfig = readRepositoryFile("pnpm-workspace.yaml");
 
   assert.equal(nodeVersion, "22.23.4");
   assert.equal(packageManifest.engines?.node, "^22.23.4");
   assert.match(npmConfig, /^engine-strict=true\s*$/mu);
+  assert.match(workspaceConfig, /^engineStrict:\s*true\s*$/mu);
   assert.equal(supportsNodeRuntime(`v${nodeVersion}`), true);
   assert.match(packageManifest.scripts["verify:bootstrap"], /^npm run verify:node-runtime &&/u);
   const desktopManifest = JSON.parse(readRepositoryFile("apps/desktop/package.json"));
