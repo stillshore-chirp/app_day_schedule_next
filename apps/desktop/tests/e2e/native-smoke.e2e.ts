@@ -624,7 +624,7 @@ describe("Day Schedule Next native smoke", () => {
     expect(stripGeometry.blockHeights.every((height) => Math.abs(height - 60) <= 1)).toBe(true);
     expect(stripGeometry.overviewTickCount).toBe(25);
     expect(stripGeometry.overviewTickLabels).toEqual(
-      Array.from({ length: 25 }, (_, hour) => String(hour).padStart(2, "0")),
+      Array.from({ length: 25 }, (_, hour) => String(hour % 24).padStart(2, "0")),
     );
     expect(
       stripGeometry.trackBackgrounds.every(
