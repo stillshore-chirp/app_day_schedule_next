@@ -13,6 +13,8 @@ const OUTPUT_FIELDS = [
 ];
 
 const GOVERNANCE_EXACT = new Set([
+  ".nvmrc",
+  ".npmrc",
   ".editorconfig",
   ".env.example",
   ".gitattributes",
@@ -32,6 +34,8 @@ const GOVERNANCE_EXACT = new Set([
   "apps/desktop/src/AGENTS.md",
   "apps/desktop/src-tauri/AGENTS.md",
   "apps/desktop/tests/AGENTS.md",
+  "apps/desktop/package.json",
+  "pnpm-workspace.yaml",
   "scripts/check-repository-boundaries.mjs",
   "scripts/security-scan-text.mjs",
   "scripts/validate-governance.mjs",
@@ -76,6 +80,9 @@ const NATIVE_EXACT = new Set([
 ]);
 
 const DEPENDENCY_EXACT = new Set([
+  ".nvmrc",
+  ".npmrc",
+  "package.json",
   "apps/desktop/package.json",
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
@@ -85,6 +92,8 @@ const DEPENDENCY_EXACT = new Set([
   "rust-toolchain.toml",
   "deny.toml",
   "scripts/verify-patched-dependencies.mjs",
+  "scripts/verify-node-runtime.mjs",
+  "scripts/verify-node-runtime.test.mjs",
 ]);
 
 const SPECIAL_GOVERNANCE_PREFIXES = [
@@ -196,9 +205,7 @@ export function classifyPath(value) {
     classification.governance = true;
   }
 
-  // Workspace and lockfiles affect every install and native build. The root
-  // package only changes verification/control-plane scripts in this product;
-  // product dependency declarations live in the desktop package.
+  // Workspace and lockfiles affect every install and native build.
   if (
     normalized === "pnpm-workspace.yaml" ||
     normalized === "pnpm-lock.yaml"

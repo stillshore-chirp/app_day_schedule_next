@@ -12,11 +12,15 @@ Linux は対象外です。macOS / Windows は同じ domain、application、Reac
 
 ## 2. build contract
 
-- Node.js 22、pnpm 11.17.0、frozen `pnpm-lock.yaml`
+- Node.js 22.23.4 以上の22.x系、pnpm 11.17.0、frozen `pnpm-lock.yaml`。repository の正本 `.nvmrc` は22.23.4を固定し、local と CI の標準版にする。
 - Rust 1.89.0、edition 2024、`Cargo.lock`
 - app / bundle version: `0.1.0`
 - stable app identifier: `com.stillshorechirp.dayschedulenext`
 - release artifact は source commit と version を対応付け、git へ commit しない
+
+Node.js 22.23.4 は Node.js 22 系に対する [CVE-2026-111497 Brotli decoder security fix](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases) を含む最低版です。以降も22.x系を使い、他の major はこの repository の supported build line に含めません。
+
+macOS / Linux で nvm を利用する場合は repository root で `.nvmrc` に従い `nvm install`、`nvm use` を実行します。Windows は nvm の shell を必要とせず、Node.js 22.23.4 以上の22.x系を手動で導入して `node --version` で確認します。bootstrap と Native E2E の guard は現在の Node.js 版がこの契約を満たすことを確認します。
 
 ```bash
 corepack enable

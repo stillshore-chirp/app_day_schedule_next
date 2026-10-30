@@ -57,7 +57,7 @@ pnpm tauri:build:debug
 git diff --check
 ```
 
-`npm run verify:bootstrap` は中央governance validatorを起点に、agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎ、classifierの変更範囲別Quality gate選択とfail-closed条件を検証します。`pnpm verify:patched-dependencies` は、脆弱な `brace-expansion` 1.x / 2.x を修正版 5.0.8 へ統一するpatchが、利用中の全 `minimatch` majorでCommonJS / ESMのbrace展開互換性を保つことを確認します。
+`npm run verify:bootstrap` は中央governance validatorを起点に、agent harness、doc links、公開テキスト、repository boundary、i18n key audit、CI cost / platform routing policy を検証します。i18n audit は production UI の日本語 literal を禁止し、`shared/i18n/messages.ts` の型付き catalog へ集約します。workflow policy はPRのpush二重実行、常時3 platform matrix、常時artifact保存への後戻りを防ぎ、classifierの変更範囲別Quality gate選択とfail-closed条件を検証します。`pnpm verify:patched-dependencies` は、脆弱な `brace-expansion` 1.x / 2.x を修正版 5.0.12 へ統一するpatchが、利用中の全 `minimatch` majorでCommonJS / ESMのbrace展開互換性を保つことを確認します。
 
 この一括command群はlane S / R、release、横断変更、CI failureのlocal再現に使います。lane G / U / Nへ常に全commandを要求しません。
 

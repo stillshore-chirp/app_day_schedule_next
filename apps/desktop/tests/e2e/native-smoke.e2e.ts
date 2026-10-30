@@ -34,7 +34,6 @@ describe("Day Schedule Next native smoke", () => {
     await browser.setWindowSize(width, height);
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const viewport = await browser.execute(() => ({
-        devicePixelRatio: window.devicePixelRatio,
         height: window.innerHeight,
         width: window.innerWidth,
       }));
@@ -42,24 +41,26 @@ describe("Day Schedule Next native smoke", () => {
         return;
       }
       const outer = await browser.getWindowSize();
+      // WebDriver WindowRect and innerWidth/innerHeight are both CSS pixels.
       await browser.setWindowSize(
-        Math.max(
-          280,
-          Math.round(outer.width + (width - viewport.width) * viewport.devicePixelRatio),
-        ),
-        Math.max(
-          280,
-          Math.round(outer.height + (height - viewport.height) * viewport.devicePixelRatio),
-        ),
+        Math.max(280, Math.round(outer.width + width - viewport.width)),
+        Math.max(280, Math.round(outer.height + height - viewport.height)),
       );
     }
     const viewport = await browser.execute(() => ({
+      devicePixelRatio: window.devicePixelRatio,
       height: window.innerHeight,
+      screenAvailHeight: window.screen.availHeight,
+      screenAvailWidth: window.screen.availWidth,
       width: window.innerWidth,
     }));
+    const outer = await browser.getWindowSize();
     if (Math.abs(viewport.width - width) > 1 || Math.abs(viewport.height - height) > 1) {
       throw new Error(
-        `viewport did not reach ${width}x${height}: ${viewport.width}x${viewport.height}`,
+        `viewport did not reach ${width}x${height}: ${viewport.width}x${viewport.height}; ` +
+          `outerRect=${outer.width}x${outer.height}; ` +
+          `screenAvail=${viewport.screenAvailWidth}x${viewport.screenAvailHeight}; ` +
+          `devicePixelRatio=${viewport.devicePixelRatio}`,
       );
     }
   };
@@ -623,7 +624,7 @@ describe("Day Schedule Next native smoke", () => {
     expect(stripGeometry.blockHeights.every((height) => Math.abs(height - 60) <= 1)).toBe(true);
     expect(stripGeometry.overviewTickCount).toBe(25);
     expect(stripGeometry.overviewTickLabels).toEqual(
-      Array.from({ length: 25 }, (_, hour) => String(hour).padStart(2, "0")),
+      Array.from({ length: 25 }, (_, hour) => String(hour % 24).padStart(2, "0")),
     );
     expect(
       stripGeometry.trackBackgrounds.every(

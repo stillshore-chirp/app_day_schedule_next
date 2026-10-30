@@ -62,6 +62,8 @@ const MAX_VALIDATED_STRING_LENGTH = 1000;
 const MAX_VALIDATED_LIST_ITEMS = 50;
 
 const REQUIRED_FILES = Object.freeze([
+  ".nvmrc",
+  ".npmrc",
   "AGENTS.md",
   "CLAUDE.md",
   ...NESTED_RULES,
@@ -140,6 +142,8 @@ const REQUIRED_FILES = Object.freeze([
   "scripts/check-repository-boundaries.mjs",
   "scripts/verify-i18n-keys.mjs",
   "scripts/verify-patched-dependencies.mjs",
+  "scripts/verify-node-runtime.mjs",
+  "scripts/verify-node-runtime.test.mjs",
   "scripts/classify-verification-inputs.mjs",
   "scripts/classify-verification-inputs.test.mjs",
 ]);

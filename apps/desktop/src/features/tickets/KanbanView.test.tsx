@@ -18,6 +18,7 @@ vi.mock("./ticket-context-menu", () => ({
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   contextMenuMocks.show.mockReset();
 });
 
