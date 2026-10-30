@@ -53,6 +53,34 @@ describe("scheduleDraftSchema", () => {
     expect(scheduleDraftSchema.safeParse(valid).success).toBe(true);
   });
 
+  it("accepts an all-day range with an exclusive end date", () => {
+    expect(
+      scheduleDraftSchema.safeParse({
+        ...valid,
+        allDay: true,
+        allDayStartDate: "2026-08-03",
+        allDayEndDateExclusive: "2026-08-04",
+      }).success,
+    ).toBe(true);
+  });
+
+  it.each([
+    ["same-day end", "2026-08-03", "2026-08-03"],
+    ["reversed end", "2026-08-04", "2026-08-03"],
+  ])("rejects an all-day range with a %s", (_boundary, startDate, endDateExclusive) => {
+    const result = scheduleDraftSchema.safeParse({
+      ...valid,
+      allDay: true,
+      allDayStartDate: startDate,
+      allDayEndDateExclusive: endDateExclusive,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.success ? [] : result.error.issues.map((issue) => issue.path)).toContainEqual([
+      "allDayEndDateExclusive",
+    ]);
+  });
+
   it("rejects zero and negative durations", () => {
     expect(scheduleDraftSchema.safeParse({ ...valid, endUtc: valid.startUtc }).success).toBe(false);
     expect(
