@@ -71,6 +71,14 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Compile macOS E2E display helper
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/swift-module-cache"
+          swiftc -module-cache-path "${RUNNER_TEMP}/swift-module-cache" \
+            scripts/run-native-e2e-with-display.swift \
+            -o "${RUNNER_TEMP}/run-native-e2e-with-display"
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
@@ -93,7 +101,11 @@ jobs:
       - name: Build isolated WebdriverIO debug application
         shell: bash
         run: DAY_SCHEDULE_GOOGLE_OAUTH_CLIENT_ID=synthetic-native-e2e-client.apps.googleusercontent.com VITE_WDIO=true pnpm --dir apps/desktop tauri build --debug --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json
+      - name: Run native E2E with synthetic fixtures (macOS display)
+        if: runner.os == 'macOS'
+        run: '"${RUNNER_TEMP}/run-native-e2e-with-display" -- pnpm test:e2e'
       - name: Run native E2E with synthetic fixtures
+        if: runner.os == 'Windows'
         run: pnpm test:e2e
       - name: Compare macOS arm64 visual baselines
         if: matrix.label == 'macOS arm64'
