@@ -2458,61 +2458,61 @@ describe("Day Schedule Next native smoke", () => {
         },
       };
     }, ticketTitle);
-    await browser.execute(({ source }) => {
-      const button = document.elementFromPoint(source.x, source.y);
-      if (!(button instanceof HTMLElement)) throw new Error("ticket pointer source was not found");
-      button.dispatchEvent(
-        new MouseEvent("mousedown", {
-          bubbles: true,
-          button: 0,
-          buttons: 1,
-          clientX: source.x,
-          clientY: source.y,
-        }),
-      );
-      window.dispatchEvent(
-        new MouseEvent("mousemove", {
-          bubbles: true,
-          buttons: 1,
-          clientX: source.x + 40,
-          clientY: source.y,
-        }),
-      );
-    }, pointerPoints);
-    await browser.waitUntil(
-      async () => (await $(".ticket-board").getAttribute("data-dragging")) === "true",
-      { timeoutMsg: "native mouse movement did not start the ticket drag preview" },
-    );
-    await browser.saveScreenshot("./test-results/native-ticket-drag-preview.png");
     expect(
       await browser.execute(
-        ({ target }) =>
-          document
-            .elementFromPoint(target.x, target.y)
-            ?.closest(".ticket-column")
-            ?.querySelector("h2")
-            ?.textContent?.trim(),
+        ({ source }, titleText) => {
+          const sourceButton = document.querySelector<HTMLElement>(
+            `button[aria-label="${CSS.escape(titleText)}の詳細を開く"]`,
+          );
+          const hit = document.elementFromPoint(source.x, source.y);
+          return Boolean(sourceButton && hit && sourceButton.contains(hit));
+        },
         pointerPoints,
+        ticketTitle,
       ),
-    ).toBe("Backlog");
-    await browser.execute(({ target }) => {
-      window.dispatchEvent(
-        new MouseEvent("mousemove", {
-          bubbles: true,
-          buttons: 1,
-          clientX: target.x,
-          clientY: target.y,
-        }),
+    ).toBe(true);
+    try {
+      // Keep the pressed mouse source active across the preview check.
+      await browser
+        .action("pointer", {
+          id: "native-kanban-ticket-drag",
+          parameters: { pointerType: "mouse" },
+        })
+        .move({ origin: "viewport", x: pointerPoints.source.x, y: pointerPoints.source.y })
+        .down({ button: 0 })
+        .move({
+          origin: "viewport",
+          x: pointerPoints.source.x + 40,
+          y: pointerPoints.source.y,
+        })
+        .perform(true);
+      await browser.waitUntil(
+        async () => (await $(".ticket-board").getAttribute("data-dragging")) === "true",
+        { timeoutMsg: "native mouse movement did not start the ticket drag preview" },
       );
-      window.dispatchEvent(
-        new MouseEvent("mouseup", {
-          bubbles: true,
-          button: 0,
-          clientX: target.x,
-          clientY: target.y,
-        }),
-      );
-    }, pointerPoints);
+      await browser.saveScreenshot("./test-results/native-ticket-drag-preview.png");
+      expect(
+        await browser.execute(
+          ({ target }) =>
+            document
+              .elementFromPoint(target.x, target.y)
+              ?.closest(".ticket-column")
+              ?.querySelector("h2")
+              ?.textContent?.trim(),
+          pointerPoints,
+        ),
+      ).toBe("Backlog");
+      await browser
+        .action("pointer", {
+          id: "native-kanban-ticket-drag",
+          parameters: { pointerType: "mouse" },
+        })
+        .move({ origin: "viewport", x: pointerPoints.target.x, y: pointerPoints.target.y })
+        .up({ button: 0 })
+        .perform(true);
+    } finally {
+      await browser.releaseActions();
+    }
     await $(
       `//section[.//h2[normalize-space(.)="Backlog"]]//button[@aria-label="${ticketTitle}の詳細を開く"]`,
     ).waitForDisplayed({ timeoutMsg: "pointer drag did not move the ticket to Backlog" });
