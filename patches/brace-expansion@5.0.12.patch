@@ -1,16 +1,19 @@
 diff --git a/dist/commonjs/index.d.ts b/dist/commonjs/index.d.ts
+index 1d86e5ec52083b00be390eefad66a03f54c1bffa..8d4bc13621590d805a7dfa978e8cf008a00e7330 100644
 --- a/dist/commonjs/index.d.ts
 +++ b/dist/commonjs/index.d.ts
-@@ -4,4 +4,5 @@ export type BraceExpansionOptions = {
-     maxLength?: number;
+@@ -9,4 +9,5 @@ export type BraceExpansionOptions = {
+     maxRewrites?: number;
  };
  export declare function expand(str: string, options?: BraceExpansionOptions): string[];
 +export default expand;
  //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
 diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
+index 48cf0d3dabc885249c65909c4912712c834786f5..650b81f6915072f596747efa1fecbc627ffa6038 100644
 --- a/dist/commonjs/index.js
 +++ b/dist/commonjs/index.js
-@@ -285,4 +285,7 @@ function expand_(str, max, maxLength, isTop) {
+@@ -330,4 +330,7 @@ function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
      }
      return acc;
  }
@@ -18,19 +21,23 @@ diff --git a/dist/commonjs/index.js b/dist/commonjs/index.js
 +// retaining the named exports consumed by minimatch 10.
 +module.exports = Object.assign(expand, module.exports);
  //# sourceMappingURL=index.js.map
+\ No newline at end of file
 diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+index 1d86e5ec52083b00be390eefad66a03f54c1bffa..8d4bc13621590d805a7dfa978e8cf008a00e7330 100644
 --- a/dist/esm/index.d.ts
 +++ b/dist/esm/index.d.ts
-@@ -4,4 +4,5 @@ export type BraceExpansionOptions = {
-     maxLength?: number;
+@@ -9,4 +9,5 @@ export type BraceExpansionOptions = {
+     maxRewrites?: number;
  };
  export declare function expand(str: string, options?: BraceExpansionOptions): string[];
 +export default expand;
  //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
 diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 0e0cc962307eb697dc8139ef4c1f86b82380e5cc..cb998411b4385120919bf2970d131736d85f5c34 100644
 --- a/dist/esm/index.js
 +++ b/dist/esm/index.js
-@@ -281,4 +281,6 @@ function expand_(str, max, maxLength, isTop) {
+@@ -326,4 +326,6 @@ function expand_(str, max, maxLength, maxDepth, depth, maxRewrites, isTop) {
      }
      return acc;
  }

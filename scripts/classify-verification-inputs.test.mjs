@@ -117,7 +117,7 @@ test("product dependency and patch inputs select dependency gates", () => {
     "apps/desktop/src-tauri/Cargo.toml",
     "rust-toolchain.toml",
     "deny.toml",
-    "patches/brace-expansion@5.0.9.patch",
+    "patches/brace-expansion@5.0.12.patch",
   ]);
 
   assert.equal(plan.classification_ok, true);
